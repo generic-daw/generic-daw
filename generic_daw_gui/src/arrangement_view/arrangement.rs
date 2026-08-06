@@ -33,7 +33,7 @@ use std::{
 	mem::MaybeUninit,
 	num::NonZero,
 	path::Path,
-	sync::LazyLock,
+	sync::{Arc, LazyLock},
 };
 use utils::{NoClone, NoDebug, ShiftMoveExt as _, boxed_slice};
 
@@ -660,6 +660,10 @@ impl Arrangement {
 		let new_id = self.insert_channel(self.channel_of(id).unwrap() + 1);
 		let instructions = self.copy_node(id, new_id);
 		(new_id, instructions)
+	}
+
+	pub fn channel_name_changed(&mut self, id: NodeId, name: Arc<str>) {
+		self.node_mut(id).name = name;
 	}
 
 	pub fn add_track(&mut self) -> NodeId {

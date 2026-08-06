@@ -13,7 +13,7 @@ use iced::{
 	Center, Element, Fill, padding,
 	widget::{self, checkbox, column, container, radio, row, rule, space, text, value},
 };
-use std::{collections::BTreeMap, iter::once, time::Instant};
+use std::{collections::BTreeMap, iter::once, sync::Arc, time::Instant};
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,6 +27,7 @@ pub enum NodeType {
 pub struct Node {
 	pub ty: NodeType,
 	pub id: NodeId,
+	pub name: Arc<str>,
 	pub widget_id: widget::Id,
 	pub plugins: Vec<Plugin>,
 	pub utility: Utility,
@@ -43,12 +44,10 @@ impl Node {
 		Self {
 			ty,
 			id,
+			name: Arc::default(),
 			widget_id: widget::Id::unique(),
 			plugins: Vec::new(),
-			utility: Utility {
-				volume: 1.0,
-				pan: PanMode::Stereo(0.0),
-			},
+			utility: Utility::default(),
 			enabled: true,
 			bypassed: false,
 			outgoing: BTreeMap::new(),

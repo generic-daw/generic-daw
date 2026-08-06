@@ -102,13 +102,13 @@ impl MidiPattern {
 				}
 			}
 
-			for (key, entry) in playing
+			for (entry, key) in playing
 				.iter_mut()
-				.flat_map(|playing| playing.iter_mut().enumerate())
+				.flat_map(|playing| playing.iter_mut().zip(0..))
 			{
 				if let Entry::Some(start, vel) = std::mem::take(entry) {
 					notes.push(MidiNote {
-						key: MidiKey(key as u8),
+						key: MidiKey(key),
 						velocity: f32::from(vel.as_int()) / 127.0,
 						position: BeatRange::new(
 							midi_tick_to_musical_time(start.as_int()),

@@ -37,9 +37,9 @@ pub struct Project {
 	pub tracks: Vec<Track>,
 	#[prost(message, repeated)]
 	pub channels: Vec<Channel>,
-	#[prost(message)]
+	#[prost(message, optional)]
 	pub view: Option<ViewState>,
-	#[prost(message)]
+	#[prost(message, optional)]
 	pub solo: Option<TrackIndex>,
 }
 
@@ -49,7 +49,7 @@ pub struct Transport {
 	pub bpm: u32,
 	#[prost(uint32)]
 	pub numerator: u32,
-	#[prost(message)]
+	#[prost(message, optional)]
 	pub loop_range: Option<BeatRange>,
 }
 
@@ -121,6 +121,8 @@ pub struct Channel {
 	pub bypassed: bool,
 	#[prost(message, optional)]
 	pub output: Option<Channels>,
+	#[prost(string)]
+	pub name: String,
 }
 
 #[derive(Clone, Copy, Message, PartialEq)]

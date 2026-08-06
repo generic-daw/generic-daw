@@ -797,10 +797,10 @@ impl Daw {
 							container(
 								if self.state.show_seconds {
 									text!(
-										"{:02}:{:02}:{:02}",
+										"{:02}:{:02}:{:03.0}",
 										transport.position.second() / 60,
 										transport.position.second() % 60,
-										(transport.position.to_float().fract() * 100.0) as u8
+										(transport.position.to_float().fract() * 1000.0)
 									)
 								} else {
 									text!(

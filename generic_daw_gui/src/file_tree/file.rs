@@ -78,8 +78,8 @@ impl File {
 
 async fn file_kind(path: &Path) -> io::Result<FileKind> {
 	let mut file = smol::fs::File::open(path).await?;
-	let limit = file.metadata().await?.len() as usize;
-	let buf = &mut [0; 36][..limit.min(36)];
+	let limit = file.metadata().await?.len().min(36) as usize;
+	let buf = &mut [0; 36][..limit];
 	file.read_exact(buf).await?;
 	Ok(if is_midi(buf) {
 		FileKind::Midi

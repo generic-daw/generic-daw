@@ -48,6 +48,7 @@ impl Writer {
 		&mut self,
 		clips: impl IntoIterator<Item = proto::OptionClip>,
 		input: Option<proto::Channels>,
+		name: impl AsRef<str>,
 		plugins: impl IntoIterator<Item = proto::Plugin>,
 		volume: f32,
 		pan: proto::OptionPanMode,
@@ -58,6 +59,7 @@ impl Writer {
 		self.0.tracks.push(proto::Track {
 			clips: clips.into_iter().collect(),
 			channel: proto::Channel {
+				name: name.as_ref().to_owned(),
 				connections: Vec::new(),
 				plugins: plugins.into_iter().collect(),
 				volume,
@@ -81,6 +83,7 @@ impl Writer {
 	#[must_use]
 	pub fn push_channel(
 		&mut self,
+		name: impl AsRef<str>,
 		plugins: impl IntoIterator<Item = proto::Plugin>,
 		volume: f32,
 		pan: proto::OptionPanMode,
@@ -89,6 +92,7 @@ impl Writer {
 		output: Option<proto::Channels>,
 	) -> proto::ChannelIndex {
 		self.0.channels.push(proto::Channel {
+			name: name.as_ref().to_owned(),
 			connections: Vec::new(),
 			plugins: plugins.into_iter().collect(),
 			volume,

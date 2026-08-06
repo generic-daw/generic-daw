@@ -20,7 +20,6 @@ use std::{
 	fs::File,
 	iter::once,
 	num::NonZero,
-	ops::Deref as _,
 	path::Path,
 	sync::Arc,
 };
@@ -134,6 +133,7 @@ impl Arrangement {
 						enable_audio: track.input.enable_audio,
 						enable_midi: track.input.enable_midi,
 					}),
+					&node.name,
 					node.plugins.iter().map(|plugin| proto::Plugin {
 						id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
 						state: clap_host
@@ -165,13 +165,14 @@ impl Arrangement {
 		}
 
 		let mut channels = HashMap::new();
-		for channel in
+		for node in
 			once(self.master()).chain(self.channels().iter().map(|channel| self.node(channel.id)))
 		{
 			channels.insert(
-				channel.id,
+				node.id,
 				writer.push_channel(
-					self.node(channel.id)
+					&node.name,
+					self.node(node.id)
 						.plugins
 						.iter()
 						.map(|plugin| proto::Plugin {
@@ -182,19 +183,19 @@ impl Arrangement {
 							mix: plugin.mix,
 							active: plugin.active,
 						}),
-					channel.utility.volume,
-					match channel.utility.pan {
+					node.utility.volume,
+					match node.utility.pan {
 						PanMode::Stereo(pan) => proto::PanModeStereo { pan }.into(),
 						PanMode::SplitStereo(l, r) => proto::PanModeSplitStereo { l, r }.into(),
 					},
-					channel.enabled,
-					channel.bypassed,
-					(channel.output != output_base).then_some(proto::Channels {
-						left: channel.output.left.into(),
-						right: channel.output.right.into(),
-						midi: channel.output.midi.into(),
-						enable_audio: channel.output.enable_audio,
-						enable_midi: channel.output.enable_midi,
+					node.enabled,
+					node.bypassed,
+					(node.output != output_base).then_some(proto::Channels {
+						left: node.output.left.into(),
+						right: node.output.right.into(),
+						midi: node.output.midi.into(),
+						enable_audio: node.output.enable_audio,
+						enable_midi: node.output.enable_midi,
 					}),
 				),
 			);
@@ -387,7 +388,7 @@ impl Arrangement {
 					done.send((
 						index,
 						Feedback::Use(Err(daw::Message::CantFindSample(
-							sample.name.deref().into(),
+							sample.name.as_str().into(),
 							sender.into(),
 						))),
 					))
@@ -459,6 +460,8 @@ impl Arrangement {
 		let mut ignored_plugins = HashSet::new();
 
 		let mut load_channel = |arrangement: &mut Self, node: NodeId, channel: &proto::Channel| {
+			arrangement.channel_name_changed(node, channel.name.as_str().into());
+
 			if channel.volume != 1.0 {
 				arrangement.channel_volume_changed(node, channel.volume);
 			}

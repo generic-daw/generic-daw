@@ -15,8 +15,8 @@ use crate::{
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, scrollable_style, selectable_box,
 		slider_secondary, slider_with_radius, split_style, sweeten_column_style,
-		sweeten_column_with_radius, sweeten_row_style, sweeten_row_with_radius, weak_bordered_box,
-		weaker_bordered_box, weakest_bordered_box,
+		sweeten_column_with_radius, sweeten_row_style, sweeten_row_with_radius,
+		text_input_transparent, weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -44,7 +44,8 @@ use iced::{
 	time::every,
 	widget::{
 		button, center_x, center_y, column, combo_box, container, mouse_area, opaque,
-		operation::snap_to_end, row, rule, scrollable, slider, space, text, vertical_slider,
+		operation::snap_to_end, row, rule, scrollable, slider, space, text, text_input,
+		vertical_slider,
 	},
 	window::frames,
 };
@@ -108,6 +109,7 @@ pub enum Message {
 	ChannelMove(DragEvent),
 	ChannelSelect(NodeId),
 	ChannelDuplicate(NodeId),
+	ChannelNameChanged(NodeId, Arc<str>),
 	ChannelVolumeChanged(NodeId, f32),
 	ChannelPanChanged(NodeId, PanMode),
 	ChannelToggleEnabled(NodeId),
@@ -371,6 +373,9 @@ impl ArrangementView {
 						.map(Action::instruction)
 						.chain([self.update(Message::ChannelSelect(node), config, state)]),
 				);
+			}
+			Message::ChannelNameChanged(node, name) => {
+				self.arrangement.channel_name_changed(node, name);
 			}
 			Message::ChannelVolumeChanged(node, mut volume) => {
 				let db = amp_to_db(volume.abs());
@@ -1558,12 +1563,24 @@ impl ArrangementView {
 												row![
 													rule::vertical(1),
 													column![
-														text!("Track {}", i + 1)
-															.size(13)
-															.line_height(1.0)
+														center_y(
+															text_input(
+																format!("Track {}", i + 1),
+																&*node.name
+															)
+															.on_input(|name| {
+																Message::ChannelNameChanged(
+																	node.id,
+																	name.into(),
+																)
+															})
 															.width(55)
-															.height(35)
-															.center(),
+															.padding(0)
+															.size(13)
+															.align_x(Center)
+															.style(text_input_transparent)
+														)
+														.height(35),
 														(self.playlist.borrow().scale.y >= 85.0)
 															.then(|| track.inputs_toolbar(
 																enabled,
@@ -1963,7 +1980,7 @@ impl ArrangementView {
 	fn view_channel<'a>(
 		&'a self,
 		node: &'a Node,
-		name: impl text::IntoFragment<'a>,
+		placeholder: impl text::IntoFragment<'a>,
 		track: Option<&'a track::Track>,
 	) -> Element<'a, Message> {
 		let enabled = node.enabled
@@ -1991,7 +2008,12 @@ impl ArrangementView {
 			opaque(
 				mouse_area(ContextMenu::new(
 					column![
-						text(name).size(13).line_height(1.0),
+						text_input(placeholder, &*node.name)
+							.on_input(|name| Message::ChannelNameChanged(node.id, name.into()))
+							.padding(0)
+							.size(13)
+							.align_x(Center)
+							.style(text_input_transparent),
 						node.pan_knob(23.0, enabled),
 						row![
 							text_icon_button("M", button_style(soloed)).on_press(

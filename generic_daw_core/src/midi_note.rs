@@ -64,7 +64,7 @@ impl MidiKey {
 
 	#[must_use]
 	pub const fn octave(self) -> i8 {
-		self.0 as i8 / 12 - 2
+		self.0.cast_signed() / 12 - 2
 	}
 }
 

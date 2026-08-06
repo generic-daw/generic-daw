@@ -1,21 +1,9 @@
 use iced::{
 	Color, Theme, border,
 	overlay::menu,
-	widget::{button, container, pick_list, progress_bar, scrollable, slider},
+	widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input},
 };
 use sweeten::widget::{column, row};
-
-pub fn container_with_radius(
-	f: impl Fn(&Theme) -> container::Style,
-	r: impl Into<border::Radius>,
-) -> impl Fn(&Theme) -> container::Style {
-	let r = r.into();
-	move |t| {
-		let mut style = f(t);
-		style.border.radius = r;
-		style
-	}
-}
 
 pub fn button_warning_text(theme: &Theme, status: button::Status) -> button::Style {
 	let base = button::Style {
@@ -43,6 +31,18 @@ pub fn button_with_radius(
 	let r = r.into();
 	move |t, s| {
 		let mut style = f(t, s);
+		style.border.radius = r;
+		style
+	}
+}
+
+pub fn container_with_radius(
+	f: impl Fn(&Theme) -> container::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme) -> container::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
 		style.border.radius = r;
 		style
 	}
@@ -138,6 +138,25 @@ pub fn split_style(t: &Theme) -> iced_split::Style {
 	style
 }
 
+pub fn sweeten_column_style(t: &Theme) -> column::Style {
+	let mut style = column::default(t);
+	style.scale = 1.0;
+	style.moved_item_overlay = Color::TRANSPARENT;
+	style
+}
+
+pub fn sweeten_column_with_radius(
+	f: impl Fn(&Theme) -> column::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme) -> column::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
+		style.ghost_border.radius = r;
+		style
+	}
+}
+
 pub fn sweeten_row_style(t: &Theme) -> row::Style {
 	let mut style = row::default(t);
 	style.scale = 1.0;
@@ -157,22 +176,15 @@ pub fn sweeten_row_with_radius(
 	}
 }
 
-pub fn sweeten_column_style(t: &Theme) -> column::Style {
-	let mut style = column::default(t);
-	style.scale = 1.0;
-	style.moved_item_overlay = Color::TRANSPARENT;
-	style
-}
+pub fn text_input_transparent(theme: &Theme, _status: text_input::Status) -> text_input::Style {
+	let palette = theme.palette();
 
-pub fn sweeten_column_with_radius(
-	f: impl Fn(&Theme) -> column::Style,
-	r: impl Into<border::Radius>,
-) -> impl Fn(&Theme) -> column::Style {
-	let r = r.into();
-	move |t| {
-		let mut style = f(t);
-		style.ghost_border.radius = r;
-		style
+	text_input::Style {
+		background: Color::TRANSPARENT.into(),
+		border: border::width(0),
+		placeholder: palette.background.base.text.scale_alpha(0.8),
+		value: palette.background.base.text,
+		selection: palette.primary.weak.color,
 	}
 }
 
