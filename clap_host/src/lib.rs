@@ -1,10 +1,9 @@
 use clack_extensions::gui::GuiApiType;
 use std::{
-	collections::HashSet,
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 mod audio_buffers;
 mod audio_ports_config;
@@ -79,7 +78,6 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 pub fn find_plugin_paths(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
 ) -> impl Iterator<Item = PathBuf> {
-	let mut seen = HashSet::new();
 	paths
 		.into_iter()
 		.flat_map(|path| WalkDir::new(path).follow_links(true))
@@ -97,6 +95,5 @@ pub fn find_plugin_paths(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.filter_map(|dir_entry| dir_entry.path().canonicalize().ok())
-		.filter(move |path| seen.insert(path.clone()))
+		.map(DirEntry::into_path)
 }

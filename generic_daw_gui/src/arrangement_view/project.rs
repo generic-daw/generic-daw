@@ -24,7 +24,7 @@ use std::{
 	sync::Arc,
 };
 use utils::NoDebug;
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Clone, Debug)]
 pub enum Feedback<T> {
@@ -332,21 +332,19 @@ impl Arrangement {
 		let mut current_progress = 0.0;
 		let progress_per_audio = (reader.iter_samples().count() as f32).recip();
 
-		let mut seen = HashSet::new();
 		let mut paths = config
 			.sample_paths
 			.iter()
 			.flat_map(|path| WalkDir::new(path).follow_links(true))
 			.flatten()
 			.filter(|dir_entry| dir_entry.file_type().is_file())
-			.filter_map(|dir_entry| dir_entry.path().canonicalize().ok())
+			.map(DirEntry::into_path)
 			.filter_map(|path| {
 				path.file_name()
 					.and_then(|name| name.to_str())
 					.filter(|name| samples.contains_key(name))
 					.and_then(|name| std::fs::metadata(&path).ok().map(|meta| (name, meta.len())))
 					.filter(|(name, len)| samples[name].contains_key(len))
-					.filter(|_| seen.insert(path.clone()))
 					.and_then(|(name, len)| {
 						daw.try_send(daw::Message::Status(Some(path.to_string_lossy().into())))
 							.unwrap();
@@ -362,7 +360,6 @@ impl Arrangement {
 			})
 			.collect::<HashMap<_, _>>();
 
-		drop(seen);
 		drop(samples);
 
 		let mut samples = HashMap::new();
