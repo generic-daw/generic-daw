@@ -1,3 +1,4 @@
+use either::Either;
 use generic_daw_core::{Transition, Transport, time::SecondsTime};
 use iced::{
 	Color, Point, Rectangle, Transformation,
@@ -6,7 +7,7 @@ use iced::{
 		mesh::{Indexed, SolidVertex2D},
 	},
 };
-use utils::{NoDebug, left, right};
+use utils::NoDebug;
 
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;
@@ -204,14 +205,14 @@ fn mesh(
 
 	let base = saved_lod.map_or_else(
 		|| {
-			left(
+			Either::Left(
 				samples[lod_start..lod_end]
 					.chunks(lod_slices_per_mesh_slice)
 					.map(samples_min_max),
 			)
 		},
 		|saved_lod| {
-			right(
+			Either::Right(
 				lods[saved_lod].as_ref()[lod_start..lod_end]
 					.chunks(lod_slices_per_mesh_slice)
 					.map(lod_min_max),
@@ -220,9 +221,9 @@ fn mesh(
 	);
 
 	let base = if frames_per_px.is_sign_positive() {
-		left(base)
+		Either::Left(base)
 	} else {
-		right(base.rev())
+		Either::Right(base.rev())
 	};
 
 	let vertices = base
