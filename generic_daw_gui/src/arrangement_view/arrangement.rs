@@ -27,7 +27,7 @@ use log::warn;
 use rtrb::{Producer, PushError, RingBuffer};
 use smol::unblock;
 use std::{
-	collections::{BTreeMap, VecDeque},
+	collections::{BTreeMap, HashMap, VecDeque},
 	fs::File,
 	io::BufWriter,
 	mem::MaybeUninit,
@@ -58,7 +58,7 @@ pub struct Arrangement {
 	tracks: Vec<Track>,
 	channels: Vec<Channel>,
 	master: NodeId,
-	nodes: BTreeMap<NodeId, Node>,
+	nodes: HashMap<NodeId, Node>,
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
@@ -86,7 +86,7 @@ impl Arrangement {
 		);
 		p_sender.send(processor).unwrap();
 
-		let mut nodes = BTreeMap::new();
+		let mut nodes = HashMap::new();
 		nodes.insert(
 			master,
 			Node::new(
