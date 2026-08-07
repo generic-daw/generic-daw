@@ -69,7 +69,7 @@ impl<'a> Shared<'a> {
 			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
-			request_process: AtomicBool::new(true),
+			request_process: AtomicBool::new(false),
 			request_restart: AtomicBool::new(false),
 			request_flush: AtomicBool::new(false),
 		}
