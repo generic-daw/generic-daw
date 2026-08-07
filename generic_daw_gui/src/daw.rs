@@ -167,6 +167,7 @@ pub enum Message {
 	OpenConfigView,
 	CloseConfigView,
 	MergeConfig(Box<Config>),
+	ChangeConfig,
 
 	FileHovered,
 	FileDropped(Arc<Path>),
@@ -566,18 +567,19 @@ impl Daw {
 				}
 
 				if self.config.audio != config.audio || self.config.midi != config.midi {
-					let project = self.project;
-					fut = Task::batch([
-						fut,
-						self.arrangement_view
-							.change_config()
-							.map(move |message| Message::Arrangement(project, message)),
-					]);
+					fut = Task::batch([fut, self.update(Message::ChangeConfig)]);
 				}
 
 				self.config = *config;
 
 				return fut;
+			}
+			Message::ChangeConfig => {
+				let project = self.project;
+				return self
+					.arrangement_view
+					.change_config()
+					.map(move |message| Message::Arrangement(project, message));
 			}
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
@@ -743,12 +745,14 @@ impl Daw {
 					Menu::new(menu(), || container(column![
 						menu_entry(None, "New", "Ctrl+N").on_press(Message::NewFile),
 						menu_entry(None, "Open", "Ctrl+O").on_press(Message::OpenFileDialog),
-						menu_entry(None, "Open Last", "Ctrl+Shift+O")
+						menu_entry(None, "Open last", "Ctrl+Shift+O")
 							.on_press(Message::OpenLastFile),
 						menu_entry(None, "Save", "Ctrl+S").on_press(Message::SaveFile),
-						menu_entry(None, "Save As", "Ctrl+Shift+S")
+						menu_entry(None, "Save as", "Ctrl+Shift+S")
 							.on_press(Message::SaveAsFileDialog),
 						menu_entry(None, "Render", "Ctrl+R").on_press(Message::RenderFileDialog),
+						rule::horizontal(1),
+						menu_entry(None, "Reconnect devices", "").on_press(Message::ChangeConfig),
 						menu_entry(None, "Settings", "Ctrl+,").on_press(Message::OpenConfigView),
 					])
 					.width(200)
