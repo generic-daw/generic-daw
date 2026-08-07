@@ -1,6 +1,4 @@
 use clack_extensions::gui::GuiApiType;
-use clack_host::prelude::*;
-use log::warn;
 use std::{
 	collections::HashSet,
 	path::{Path, PathBuf},
@@ -78,12 +76,10 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 	paths.into_boxed_slice()
 });
 
-pub fn get_installed_plugins(
+pub fn find_plugin_paths(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
-	mut f: impl FnMut(PluginDescriptor),
-) {
+) -> impl Iterator<Item = PathBuf> {
 	let mut seen = HashSet::new();
-
 	paths
 		.into_iter()
 		.flat_map(|path| WalkDir::new(path).follow_links(true))
@@ -102,18 +98,5 @@ pub fn get_installed_plugins(
 				.is_some_and(|ext| ext == "clap")
 		})
 		.filter_map(|dir_entry| dir_entry.path().canonicalize().ok())
-		.filter(|path| seen.insert(path.clone()))
-		.for_each(|path| {
-			// SAFETY:
-			// Loading an external library object file is inherently unsafe.
-			if let Ok(entry) = unsafe { PluginEntry::load(&path) }
-				.inspect_err(|err| warn!("{}: {err}", path.display()))
-				&& let Some(factory) = entry.get_plugin_factory()
-			{
-				factory
-					.plugin_descriptors()
-					.filter_map(|d| PluginDescriptor::try_new(d, &path).ok())
-					.for_each(&mut f);
-			}
-		});
+		.filter(move |path| seen.insert(path.clone()))
 }

@@ -24,6 +24,7 @@ use raw_window_handle::HasWindowHandle;
 use std::{
 	io::Cursor,
 	num::NonZero,
+	path::Path,
 	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
 };
 use utils::{NoClone, NoDebug};
@@ -38,6 +39,24 @@ pub struct Plugin {
 }
 
 impl Plugin {
+	#[must_use]
+	pub fn descriptors(path: &Path) -> Option<Vec<PluginDescriptor>> {
+		// SAFETY:
+		// Loading an external library object file is inherently unsafe.
+		let entry = unsafe { PluginEntry::load(path) }
+			.inspect_err(|err| warn!("{}: {err}", path.display()))
+			.ok()?;
+
+		let factory = entry.get_plugin_factory()?;
+
+		Some(
+			factory
+				.plugin_descriptors()
+				.filter_map(|d| PluginDescriptor::try_new(d, path).ok())
+				.collect(),
+		)
+	}
+
 	#[must_use]
 	pub fn new(
 		descriptor: &PluginDescriptor,

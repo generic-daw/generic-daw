@@ -348,10 +348,10 @@ impl Arrangement {
 					.filter(|(name, len)| samples[name].contains_key(len))
 					.filter(|_| seen.insert(path.clone()))
 					.and_then(|(name, len)| {
-						daw.try_send(daw::Message::SetStatus(path.to_string_lossy().into()))
+						daw.try_send(daw::Message::Status(Some(path.to_string_lossy().into())))
 							.unwrap();
 						let crc = File::open(&path).ok().and_then(|file| crc(file).ok());
-						daw.try_send(daw::Message::ClearStatus).unwrap();
+						daw.try_send(daw::Message::Status(None)).unwrap();
 						crc.map(|crc| (name, crc, len))
 					})
 					.and_then(|(name, crc, len)| {

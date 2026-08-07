@@ -2727,9 +2727,7 @@ fn poll_consumer<T>(mut consumer: Consumer<T>) -> impl Stream<Item = T> {
 			let mut count = 0;
 			while let Ok(t) = consumer.pop() {
 				count += 1;
-				if sender.send(t).await.is_err() {
-					return;
-				}
+				sender.send(t).await.unwrap();
 			}
 			if consumer.is_abandoned() {
 				return;

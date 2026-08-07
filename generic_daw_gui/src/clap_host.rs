@@ -471,9 +471,7 @@ impl ClapHost {
 		Task::batch([
 			Task::future(unblock(move || {
 				for msg in receiver {
-					if sender.try_send(msg).is_err() {
-						return;
-					}
+					sender.try_send(msg).unwrap();
 				}
 			}))
 			.discard(),

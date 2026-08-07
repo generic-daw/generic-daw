@@ -32,7 +32,7 @@ use iced::{
 	time::every,
 	widget::{
 		bottom_center, button, center, column, combo_box, container, mouse_area, opaque,
-		progress_bar, row, rule, scrollable, space, stack, text,
+		progress_bar, right, row, rule, scrollable, space, stack, text,
 	},
 	window,
 };
@@ -136,8 +136,10 @@ pub enum Message {
 		Option<proto::ViewState>,
 	),
 
+	ScanProgress(Scan, f32),
+	ScanStatus(Scan, Option<Arc<str>>),
 	PluginScanned(Scan, PluginDescriptor),
-	PluginScanFinished(Scan),
+	ScanFinished(Scan),
 
 	NewFile,
 	OpenLastFile,
@@ -148,8 +150,7 @@ pub enum Message {
 	ToggleFullscreen,
 
 	Progress(f32),
-	SetStatus(Arc<str>),
-	ClearStatus,
+	Status(Option<Arc<str>>),
 
 	OpenFileDialog,
 	OpenFile(Arc<Path>),
@@ -167,7 +168,9 @@ pub enum Message {
 	OpenConfigView,
 	CloseConfigView,
 	MergeConfig(Box<Config>),
-	ChangeConfig,
+
+	RescanDevices,
+	RescanPlugins,
 
 	FileHovered,
 	FileDropped(Arc<Path>),
@@ -208,9 +211,12 @@ pub struct Daw {
 	missing_plugins: Vec<(Arc<CStr>, oneshot::Sender<Feedback<Infallible>>)>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
+	scan: Option<Scan>,
+	scan_progress: Option<f32>,
+	scan_status: Option<Arc<str>>,
+
 	main_window_id: window::Id,
 	project: Project,
-	scan: Option<Scan>,
 	files_hovered: bool,
 }
 
@@ -256,42 +262,43 @@ impl Daw {
 			Task::none()
 		};
 
-		let scan = Scan::unique();
-		let plugins = get_installed_plugins(&config);
+		let mut this = Self {
+			config,
+			state,
+			current_project: None,
+
+			arrangement_view,
+			clap_host,
+			file_tree,
+			config_view: None,
+
+			plugins: combo_box::State::default(),
+			bpm_tapper: BpmTapper::default(),
+
+			progress: None,
+			status: None,
+			missing_plugins: Vec::new(),
+			missing_samples: Vec::new(),
+
+			scan: None,
+			scan_progress: None,
+			scan_status: None,
+
+			main_window_id,
+			project,
+			files_hovered: false,
+		};
+
+		let scan = this.update(Message::RescanPlugins);
 
 		(
-			Self {
-				config,
-				state,
-				current_project: None,
-
-				arrangement_view,
-				clap_host,
-				file_tree,
-				config_view: None,
-
-				plugins: combo_box::State::default(),
-				bpm_tapper: BpmTapper::default(),
-
-				progress: None,
-				status: None,
-				missing_plugins: Vec::new(),
-				missing_samples: Vec::new(),
-
-				main_window_id,
-				project,
-				scan: Some(scan),
-				files_hovered: false,
-			},
+			this,
 			Task::batch([
 				window,
 				batches
 					.map(arrangement_view::Message::Batch)
 					.map(move |message| Message::Arrangement(project, message)),
-				plugins
-					.map(move |descriptor| Message::PluginScanned(scan, descriptor))
-					.chain(Task::done(Message::PluginScanFinished(scan)))
-					.chain(open),
+				scan.chain(open),
 			]),
 		)
 	}
@@ -359,6 +366,16 @@ impl Daw {
 				}))
 				.discard();
 			}
+			Message::ScanProgress(scan, progress) => {
+				if self.scan == Some(scan) {
+					self.scan_progress = Some(progress);
+				}
+			}
+			Message::ScanStatus(scan, status) => {
+				if self.scan == Some(scan) {
+					self.scan_status = status;
+				}
+			}
 			Message::PluginScanned(scan, descriptor) => {
 				if self.scan == Some(scan)
 					&& let Err(i) = self.plugins.options().binary_search_by(|d| {
@@ -367,9 +384,11 @@ impl Daw {
 					self.plugins.insert(i, descriptor);
 				}
 			}
-			Message::PluginScanFinished(scan) => {
+			Message::ScanFinished(scan) => {
 				if self.scan == Some(scan) {
 					self.scan = None;
+					self.scan_progress = None;
+					self.scan_status = None;
 				}
 			}
 			Message::NewFile => {
@@ -447,8 +466,7 @@ impl Daw {
 				});
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
-			Message::SetStatus(scanning) => self.status = Some(scanning),
-			Message::ClearStatus => self.status = None,
+			Message::Status(status) => self.status = status,
 			Message::OpenFileDialog => {
 				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
@@ -512,6 +530,7 @@ impl Daw {
 				}
 				self.progress = None;
 				self.status = None;
+				self.missing_plugins.clear();
 				self.missing_samples.clear();
 			}
 			Message::RenderFileDialog => {
@@ -554,12 +573,7 @@ impl Daw {
 				let mut fut = if self.config.clap_paths == config.clap_paths {
 					Task::none()
 				} else {
-					let scan = Scan::unique();
-					self.scan = Some(scan);
-					self.plugins = combo_box::State::default();
-					get_installed_plugins(&config)
-						.map(move |descriptor| Message::PluginScanned(scan, descriptor))
-						.chain(Task::done(Message::PluginScanFinished(scan)))
+					self.update(Message::RescanPlugins)
 				};
 
 				if self.config.sample_paths != config.sample_paths {
@@ -567,19 +581,65 @@ impl Daw {
 				}
 
 				if self.config.audio != config.audio || self.config.midi != config.midi {
-					fut = Task::batch([fut, self.update(Message::ChangeConfig)]);
+					fut = Task::batch([fut, self.update(Message::RescanDevices)]);
 				}
 
 				self.config = *config;
 
 				return fut;
 			}
-			Message::ChangeConfig => {
+			Message::RescanDevices => {
 				let project = self.project;
 				return self
 					.arrangement_view
 					.change_config()
 					.map(move |message| Message::Arrangement(project, message));
+			}
+			Message::RescanPlugins => {
+				let scan = Scan::unique();
+				self.plugins = combo_box::State::default();
+				self.scan = Some(scan);
+				self.scan_progress = Some(0.0);
+				self.scan_status = None;
+
+				let (sender, receiver) = smol::channel::unbounded();
+				let clap_paths = self.config.clap_paths.clone();
+
+				return Task::batch([
+					Task::future(unblock(move || {
+						let plugin_paths = clap_host::find_plugin_paths(
+							DEFAULT_CLAP_PATHS.iter().chain(&clap_paths),
+						)
+						.collect::<Vec<_>>();
+
+						let len = plugin_paths.len();
+						for (i, path) in plugin_paths.into_iter().enumerate() {
+							sender
+								.try_send(Message::ScanStatus(
+									scan,
+									path.file_name()
+										.map(|name| name.display().to_string().into()),
+								))
+								.unwrap();
+
+							if let Some(descriptors) = Plugin::descriptors(&path) {
+								for descriptor in descriptors {
+									sender
+										.try_send(Message::PluginScanned(scan, descriptor))
+										.unwrap();
+								}
+							}
+
+							sender
+								.try_send(Message::ScanProgress(scan, (i + 1) as f32 / len as f32))
+								.unwrap();
+						}
+
+						sender.try_send(Message::ScanFinished(scan)).unwrap();
+					}))
+					.discard(),
+					Task::stream(receiver),
+				]);
 			}
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
@@ -752,7 +812,8 @@ impl Daw {
 							.on_press(Message::SaveAsFileDialog),
 						menu_entry(None, "Render", "Ctrl+R").on_press(Message::RenderFileDialog),
 						rule::horizontal(1),
-						menu_entry(None, "Reconnect devices", "").on_press(Message::ChangeConfig),
+						menu_entry(None, "Reconnect devices", "").on_press(Message::RescanDevices),
+						menu_entry(None, "Rescan plugins", "").on_press(Message::RescanPlugins),
 						menu_entry(None, "Settings", "Ctrl+,").on_press(Message::OpenConfigView),
 					])
 					.width(200)
@@ -833,7 +894,21 @@ impl Daw {
 							.padding(5)
 							.on_press(Message::ToggleAutoscroll),
 					],
-					space::horizontal(),
+					right(self.scan_progress.map(|progress| {
+						column![
+							self.scan_status
+								.as_deref()
+								.map(|status| text!("scanning {}", status)
+									.size(13)
+									.wrapping(text::Wrapping::None)
+									.ellipsis(text::Ellipsis::End)),
+							progress_bar(0.0..=1.0, progress).girth(4).style(
+								progress_bar_with_radius(progress_bar::secondary, f32::INFINITY)
+							)
+						]
+						.spacing(5)
+						.width(Fill.max(200))
+					})),
 					row![
 						cpu(),
 						text!("{:.1}%", self.arrangement_view.arrangement.load() * 100.0)
@@ -918,12 +993,12 @@ impl Daw {
 			self.progress.map(|progress| mouse_area(
 				container(
 					column![
-						bottom_center(self.status.as_deref().map(|scanning| {
+						bottom_center(self.status.as_deref().map(|status| {
 							container(
 								row![
 									"scanning",
 									container(
-										text(scanning)
+										text(status)
 											.font(Font::MONOSPACE)
 											.wrapping(text::Wrapping::None)
 											.ellipsis(text::Ellipsis::Middle)
@@ -1204,20 +1279,4 @@ impl Daw {
 			_ => None,
 		}
 	}
-}
-
-fn get_installed_plugins(config: &Config) -> Task<PluginDescriptor> {
-	let (sender, receiver) = smol::channel::unbounded();
-	let clap_paths = config.clap_paths.clone();
-
-	Task::batch([
-		Task::future(unblock(move || {
-			generic_daw_core::clap_host::get_installed_plugins(
-				DEFAULT_CLAP_PATHS.iter().chain(&clap_paths),
-				|descriptor| _ = sender.try_send(descriptor),
-			);
-		}))
-		.discard(),
-		Task::stream(receiver),
-	])
 }
