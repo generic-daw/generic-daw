@@ -9,7 +9,7 @@ use crate::{
 	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
 };
 use generic_daw_core::{Channels, Clip, MidiAction, NodeId, Transport, time::BeatTime};
-use generic_daw_widget::menu::{Menu, Side};
+use generic_daw_widget::menu::Menu;
 use iced::{
 	Center, Element, Shrink,
 	widget::{Button, button, checkbox, column, container, radio, row, space, text, value},
@@ -224,7 +224,6 @@ impl Track {
 				.style(container_with_radius(weaker_bordered_box, 5))
 				.into())
 				.padding(1)
-				.side(Side::Bottom)
 				.style(button_with_radius(
 					if enabled {
 						button::primary
@@ -281,7 +280,6 @@ impl Track {
 				.style(container_with_radius(weaker_bordered_box, 5))
 				.into())
 				.padding(1)
-				.side(Side::Bottom)
 				.style(button_with_radius(
 					if enabled {
 						button::primary

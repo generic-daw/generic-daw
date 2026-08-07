@@ -24,7 +24,7 @@ use generic_daw_core::{
 	},
 };
 use generic_daw_project::proto;
-use generic_daw_widget::menu::{Menu, Side};
+use generic_daw_widget::menu::Menu;
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -819,7 +819,6 @@ impl Daw {
 					.width(200)
 					.style(container_with_radius(weaker_bordered_box, 5))
 					.into())
-					.side(Side::Bottom)
 					.style(button_with_radius(button::background, 5))
 					.padding(padding::horizontal(7).vertical(5)),
 					rule::vertical(1),

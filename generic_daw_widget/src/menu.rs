@@ -48,7 +48,7 @@ impl<'a, Message> Menu<'a, Message> {
 			width: Length::Fit,
 			height: Length::Fit,
 			padding: button::DEFAULT_PADDING,
-			side: Side::Right,
+			side: Side::Bottom,
 			spacing: 0.0,
 			class: <Theme as button::Catalog>::default(),
 			status: None,
