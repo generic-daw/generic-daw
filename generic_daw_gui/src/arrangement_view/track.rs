@@ -188,12 +188,10 @@ impl Track {
 									.into(),
 							)
 							.chain((0..transport.input_channels).map(|channel| {
-								radio("", channel, Some(self.input.left), |_| {
+								radio(channel, Some(self.input.left), |_| {
 									Message::InputChangeChannels(self.id, self.input.left(channel))
 								})
 								.size(15)
-								.text_size(1)
-								.spacing(0)
 								.into()
 							})),
 						)
@@ -206,12 +204,10 @@ impl Track {
 									.into(),
 							)
 							.chain((0..transport.input_channels).map(|channel| {
-								radio("", channel, Some(self.input.right), |_| {
+								radio(channel, Some(self.input.right), |_| {
 									Message::InputChangeChannels(self.id, self.input.right(channel))
 								})
 								.size(15)
-								.text_size(1)
-								.spacing(0)
 								.into()
 							})),
 						)

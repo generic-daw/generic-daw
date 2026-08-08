@@ -14,9 +14,9 @@ use crate::{
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, scrollable_style, selectable_box,
-		slider_secondary, slider_with_radius, split_style, sweeten_column_style,
-		sweeten_column_with_radius, sweeten_row_style, sweeten_row_with_radius,
-		text_input_transparent, weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
+		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
+		sweeten_row_style, sweeten_row_with_radius, text_input_transparent, weak_bordered_box,
+		weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -2114,9 +2114,9 @@ impl ArrangementView {
 								.handle((15, 20))
 								.style(slider_with_radius(
 									if enabled {
-										slider::default
+										slider::primary
 									} else {
-										slider_secondary
+										slider::secondary
 									},
 									5
 								)),
@@ -2191,9 +2191,9 @@ impl ArrangementView {
 												.handle((4, 4))
 												.height(14)
 												.style(if enabled {
-													slider::default
+													slider::primary
 												} else {
-													slider_secondary
+													slider::secondary
 												}),
 												move || {
 													container(

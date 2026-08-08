@@ -255,18 +255,14 @@ impl Node {
 			.chain((0..transport.output_channels.get()).map(|channel| {
 				column![
 					container(value(channel + 1).size(13).line_height(1.0)).padding(1),
-					radio("", channel, Some(self.output.left), |_| {
+					radio(channel, Some(self.output.left), |_| {
 						Message::OutputChangeChannels(self.id, self.output.left(channel))
 					})
-					.size(15)
-					.text_size(1)
-					.spacing(0),
-					radio("", channel, Some(self.output.right), |_| {
+					.size(15),
+					radio(channel, Some(self.output.right), |_| {
 						Message::OutputChangeChannels(self.id, self.output.right(channel))
 					})
 					.size(15)
-					.text_size(1)
-					.spacing(0)
 				]
 				.align_x(Center)
 				.spacing(5)

@@ -100,22 +100,6 @@ pub fn selectable_box(
 	}
 }
 
-pub fn slider_secondary(t: &Theme, s: slider::Status) -> slider::Style {
-	let palette = t.palette();
-
-	let color = match s {
-		slider::Status::Active => palette.secondary.base.color,
-		slider::Status::Hovered => palette.secondary.strong.color,
-		slider::Status::Dragged => palette.secondary.weak.color,
-	};
-
-	let mut style = slider::default(t, s);
-	style.rail.backgrounds.0 = color.into();
-	style.handle.background = color.into();
-
-	style
-}
-
 pub fn slider_with_radius(
 	f: impl Fn(&Theme, slider::Status) -> slider::Style,
 	r: impl Into<border::Radius>,
