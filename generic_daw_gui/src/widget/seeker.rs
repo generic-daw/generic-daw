@@ -813,8 +813,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.palette().primary.base.color,
 		);
 
-		let snap_step = beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
-			.bar_ceil(self.transport);
+		let snap_step =
+			beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport).beat_ceil();
 
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
@@ -823,11 +823,22 @@ impl<'a, Message> Seeker<'a, Message> {
 			self.scale,
 			self.transport,
 		);
-		beat = beat.floor(snap_step).bar_floor(self.transport);
+		beat = beat.floor(snap_step);
 
 		while beat <= end_beat {
+			let content = if snap_step == BeatTime::BEAT {
+				format!(
+					"{}:{:0digits$}",
+					beat.bar(self.transport) + 1,
+					beat.beat_in_bar(self.transport) + 1,
+					digits = self.transport.numerator.ilog10() as usize + 1,
+				)
+			} else {
+				format!("{}", beat.bar(self.transport) + 1)
+			};
+
 			let bar = Text {
-				content: (beat.bar(self.transport) + 1).to_string(),
+				content,
 				bounds: Size::new(f32::INFINITY, 0.0),
 				size: renderer.default_size(),
 				line_height: LineHeight::default(),
