@@ -765,7 +765,7 @@ impl Daw {
 			file_tree::Message::Action(id, action) => {
 				return self
 					.file_tree
-					.update(id, &action)
+					.update(id, action)
 					.unwrap_or_default()
 					.map(Message::FileTree);
 			}

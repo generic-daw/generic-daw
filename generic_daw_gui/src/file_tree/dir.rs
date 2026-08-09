@@ -59,9 +59,9 @@ impl Dir {
 		}
 	}
 
-	pub fn update(&mut self, id: DirId, action: &Action) -> Option<Task<Message>> {
+	pub fn update(&mut self, id: DirId, action: &mut Option<Action>) -> Option<Task<Message>> {
 		if id == self.id {
-			Some(match action {
+			Some(match action.take().unwrap() {
 				Action::ToggleOpen => {
 					if let Status::Loaded { open, .. } = &mut self.children {
 						*open ^= true;
@@ -73,68 +73,55 @@ impl Dir {
 						})
 					}
 				}
-				Action::Sync => {
-					if let Status::Loaded { dirs, files, open } = &mut self.children {
-						self.children = Status::Syncing {
-							dirs: std::mem::take(dirs),
-							files: std::mem::take(files),
+				Action::Sync => self.sync().unwrap_or_default(),
+				Action::Loaded(Ok((dirs, files))) => {
+					if let Status::Syncing {
+						dirs: old_dirs,
+						open,
+						..
+					} = &mut self.children
+					{
+						let mut tasks = Vec::new();
+
+						for (i, dir) in dirs.iter().enumerate() {
+							let j = old_dirs[i..]
+								.iter()
+								.position(|old_dir| old_dir.path() == dir.path())
+								.unwrap_or_default();
+							old_dirs.drain(i..i + j);
+
+							if let Some(old_dir) = old_dirs.get_mut(i) {
+								if old_dir.path() == dir.path() {
+									tasks.extend(old_dir.sync());
+								} else {
+									old_dirs.insert(i, dir.clone());
+								}
+							} else {
+								old_dirs.push(dir.clone());
+							}
+						}
+
+						old_dirs.truncate(dirs.len());
+
+						self.children = Status::Loaded {
+							dirs: std::mem::take(old_dirs),
+							files,
 							open: *open,
 						};
-
-						Task::perform(Self::load(self.path.clone()), move |res| {
-							Message::Action(id, Action::Loaded(res))
-						})
+						Task::batch(tasks)
 					} else {
+						self.children = Status::Loaded {
+							dirs,
+							files,
+							open: true,
+						};
 						Task::none()
 					}
 				}
-				Action::Loaded(res) => match res.clone() {
-					Ok((mut dirs, files)) => {
-						let mut tasks = Vec::new();
-						let mut open = true;
-
-						if let Status::Syncing {
-							dirs: old_dirs,
-							open: old_open,
-							..
-						} = &mut self.children
-						{
-							open = *old_open;
-
-							for (i, dir) in dirs.iter().enumerate() {
-								let j = old_dirs[i..]
-									.iter()
-									.position(|old_dir| old_dir.path() == dir.path())
-									.unwrap_or_default();
-								old_dirs.drain(i..i + j);
-
-								if let Some(old_dir) = old_dirs.get_mut(i) {
-									if old_dir.path() == dir.path() {
-										tasks.push(
-											old_dir.update(old_dir.id, &Action::Sync).unwrap(),
-										);
-									} else {
-										old_dirs.insert(i, dir.clone());
-									}
-								} else {
-									old_dirs.push(dir.clone());
-								}
-							}
-
-							old_dirs.truncate(dirs.len());
-
-							dirs = std::mem::take(old_dirs);
-						}
-
-						self.children = Status::Loaded { dirs, files, open };
-
-						Task::batch(tasks)
-					}
-					Err(err) => {
-						self.children = Status::Errored(err);
-						Task::none()
-					}
-				},
+				Action::Loaded(Err(err)) => {
+					self.children = Status::Errored(err);
+					Task::none()
+				}
 			})
 		} else if let Status::Loaded { dirs, .. } = &mut self.children {
 			dirs.iter_mut().find_map(|dir| dir.update(id, action))
@@ -238,6 +225,23 @@ impl Dir {
 			.into(),
 			height + LINE_HEIGHT + 2.0,
 		)
+	}
+
+	fn sync(&mut self) -> Option<Task<Message>> {
+		if let Status::Loaded { dirs, files, open } = &mut self.children {
+			self.children = Status::Syncing {
+				dirs: std::mem::take(dirs),
+				files: std::mem::take(files),
+				open: *open,
+			};
+
+			let id = self.id;
+			Some(Task::perform(Self::load(self.path.clone()), move |res| {
+				Message::Action(id, Action::Loaded(res))
+			}))
+		} else {
+			None
+		}
 	}
 
 	async fn load(path: Arc<Path>) -> Result<(Vec<Self>, Vec<File>), Arc<std::io::Error>> {

@@ -52,8 +52,11 @@ impl FileTree {
 		.into()
 	}
 
-	pub fn update(&mut self, id: DirId, action: &Action) -> Option<Task<Message>> {
-		self.dirs.iter_mut().find_map(|dir| dir.update(id, action))
+	pub fn update(&mut self, id: DirId, action: Action) -> Option<Task<Message>> {
+		let mut action = Some(action);
+		self.dirs
+			.iter_mut()
+			.find_map(|dir| dir.update(id, &mut action))
 	}
 
 	pub fn diff(&mut self, dirs: &[impl AsRef<Path>]) {
