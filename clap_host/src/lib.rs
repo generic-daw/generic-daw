@@ -65,7 +65,13 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 		}
 
 		paths.push(Path::new("/usr/lib/clap").into());
-		paths.push(Path::new("/usr/lib64/clap").into());
+
+		if std::fs::symlink_metadata("/usr/lib64").is_ok_and(|metadata| {
+			!metadata.is_symlink()
+				|| std::fs::canonicalize("/usr/lib64").is_ok_and(|path| &path != "/usr/lib")
+		}) {
+			paths.push(Path::new("/usr/lib64/clap").into());
+		}
 	}
 
 	if let Some(clap_path) = std::env::var_os("CLAP_PATH") {
