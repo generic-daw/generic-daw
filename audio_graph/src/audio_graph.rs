@@ -160,7 +160,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		buffers.audio[..self.curr_len].fill([0.0; 2]);
+		let mut buffers_init = false;
 		buffers.events.clear();
 
 		let max_latency = buffers
@@ -193,11 +193,17 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				&audio[..self.curr_len]
 			};
 
-			audio
+			let iter = audio
 				.as_flattened()
 				.iter()
-				.zip(buffers.audio[..self.curr_len].as_flattened_mut())
-				.for_each(|(&sample, buf)| *buf += *mix * sample);
+				.zip(buffers.audio[..self.curr_len].as_flattened_mut());
+
+			if buffers_init {
+				iter.for_each(|(&sample, buf)| *buf += *mix * sample);
+			} else {
+				iter.for_each(|(&sample, buf)| *buf = *mix * sample);
+				buffers_init = true;
+			}
 
 			events.extend(
 				dep_buffers
@@ -212,6 +218,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
+		}
+
+		if !buffers_init {
+			buffers.audio[..self.curr_len].fill([0.0; 2]);
 		}
 
 		entry.latency.store(
