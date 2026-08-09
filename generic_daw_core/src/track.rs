@@ -1,8 +1,6 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiAction, MidiNote, Node, NodeAction, NodeId, Update,
-	audio_thread::{Scratch, State},
-	midi_clip::VoiceId,
-	voice_alloc::VoiceAlloc,
+	audio_thread::State, midi_clip::VoiceId, scratch::Scratch, voice_alloc::VoiceAlloc,
 };
 use audio_graph::Injector;
 use clap_host::{RenderMode, events::Match};

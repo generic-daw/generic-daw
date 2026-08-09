@@ -1,6 +1,7 @@
 use crate::{
 	Channels, Event, Node, NodeAction, NodeId, Update,
-	audio_thread::{Inject, Scratch, State},
+	audio_thread::{Inject, State},
+	scratch::Scratch,
 };
 use audio_graph::Injector;
 use clap_host::AudioThread;

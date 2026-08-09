@@ -23,7 +23,7 @@ use std::{
 	num::NonZero,
 	time::{Duration, Instant},
 };
-use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
+use utils::{boxed_slice, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -260,12 +260,6 @@ impl State {
 				.map(|((channel, key), velocity)| MidiAction::NoteOff(channel, key, velocity)),
 		);
 	}
-}
-
-#[derive(Debug)]
-pub struct Scratch {
-	pub audio: NoDebug<Box<[[f32; 2]]>>,
-	pub events: Vec<Event>,
 }
 
 #[derive(Debug)]

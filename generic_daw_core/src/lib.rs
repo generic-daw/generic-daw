@@ -9,6 +9,7 @@ mod midi_note;
 mod midi_pattern;
 mod node;
 mod sample;
+mod scratch;
 mod stream;
 pub mod time;
 mod track;

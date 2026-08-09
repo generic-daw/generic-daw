@@ -1,5 +1,5 @@
-use crate::{EventImpl, NodeId};
-use std::{convert::Infallible, marker::PhantomData, num::NonZero};
+use crate::{EventImpl, NodeId, ScratchImpl};
+use std::{convert::Infallible, marker::PhantomData};
 use thread_pool::{Erased, WorkList};
 
 pub type Injector<Node> = thread_pool::Injector<Inject<Node>>;
@@ -16,10 +16,8 @@ impl<Node: NodeImpl> Erased for Inject<Node> {
 pub trait NodeImpl: Send + Sized + 'static {
 	type Event: EventImpl;
 	type State: Sync;
-	type Scratch: Send + Sync;
+	type Scratch: ScratchImpl;
 	type Inject<'a>: WorkList<Scratch = (), Inject = Infallible>;
-	#[must_use]
-	fn make_scratch(max_frames: NonZero<u32>) -> Self::Scratch;
 	#[must_use]
 	fn process(
 		&mut self,
