@@ -85,8 +85,8 @@ pub enum Devices {
 	Default,
 	WithHost {
 		host: HostId,
-		input: Option<Box<str>>,
-		output: Option<Box<str>>,
+		input: Option<Arc<str>>,
+		output: Option<Arc<str>>,
 	},
 }
 

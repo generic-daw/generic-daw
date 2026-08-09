@@ -80,12 +80,12 @@ pub enum Message {
 pub struct ConfigView {
 	config: Config,
 	last_config: Config,
-	hosts: Vec<HostId>,
+	hosts: Box<[HostId]>,
 	devices: HashMap<HostId, Devices>,
 	device_info: HashMap<DeviceId, DeviceDescription>,
-	input_ports: Vec<Arc<str>>,
+	input_ports: Box<[Arc<str>]>,
 	input_port_info: HashMap<Arc<str>, Arc<str>>,
-	output_ports: Vec<Arc<str>>,
+	output_ports: Box<[Arc<str>]>,
 	output_port_info: HashMap<Arc<str>, Arc<str>>,
 	main_window_id: window::Id,
 }
@@ -135,13 +135,13 @@ impl ConfigView {
 
 		devices.entry(*DEFAULT_HOST).or_default();
 
-		let mut hosts = devices.keys().copied().collect::<Vec<_>>();
+		let mut hosts = devices.keys().copied().collect::<Box<_>>();
 		hosts.sort_unstable_by(|l, r| natural_cmp(l.name().as_bytes(), r.name().as_bytes()));
 
-		let mut input_ports = input_port_info.keys().cloned().collect::<Vec<_>>();
+		let mut input_ports = input_port_info.keys().cloned().collect::<Box<_>>();
 		input_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
 
-		let mut output_ports = output_port_info.keys().cloned().collect::<Vec<_>>();
+		let mut output_ports = output_port_info.keys().cloned().collect::<Box<_>>();
 		output_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
 
 		let config = Config::read();

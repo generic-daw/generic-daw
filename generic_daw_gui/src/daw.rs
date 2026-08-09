@@ -610,7 +610,7 @@ impl Daw {
 						let plugin_paths = clap_host::find_plugin_paths(
 							DEFAULT_CLAP_PATHS.iter().chain(&clap_paths),
 						)
-						.collect::<Vec<_>>();
+						.collect::<Box<_>>();
 
 						let len = plugin_paths.len();
 						for (i, path) in plugin_paths.into_iter().enumerate() {

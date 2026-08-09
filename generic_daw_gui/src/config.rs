@@ -58,8 +58,8 @@ pub enum Devices {
 	Default,
 	WithHost {
 		host: HostId,
-		input: Option<Box<str>>,
-		output: Option<Box<str>>,
+		input: Option<Arc<str>>,
+		output: Option<Arc<str>>,
 	},
 }
 
@@ -215,12 +215,13 @@ impl Config {
 
 mod devices_serde {
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use std::sync::Arc;
 
 	#[derive(Deserialize, Serialize)]
 	struct Devices {
-		host: Box<str>,
-		input: Option<Box<str>>,
-		output: Option<Box<str>>,
+		host: Arc<str>,
+		input: Option<Arc<str>>,
+		output: Option<Arc<str>>,
 	}
 
 	impl Serialize for super::Devices {
