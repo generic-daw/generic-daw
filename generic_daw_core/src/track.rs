@@ -96,9 +96,15 @@ impl Track {
 				}
 			}
 
-			if self.input.fits_in(state.transport.input_channels)
-				&& (self.audio_producer.is_some() || self.input.enable_audio)
-			{
+			if self.input.fits_in(state.transport.input_channels) {
+				let audio = if self.input.enable_audio {
+					&mut *audio
+				} else if self.audio_producer.is_some() && state.transport.playing {
+					&mut scratch.audio[..audio.len()]
+				} else {
+					&mut []
+				};
+
 				for ([l, r], frame) in audio.iter_mut().zip(
 					state
 						.audio_input
@@ -108,17 +114,12 @@ impl Track {
 					*r = frame[usize::from(self.input.right)];
 				}
 
-				if let Some(producer) = &mut self.audio_producer {
-					if state.transport.playing
-						&& let (_, rest) = producer.push_partial_slice(audio)
-						&& !rest.is_empty()
-					{
-						warn!("full ring buffer");
-					}
-
-					if !self.input.enable_audio {
-						audio.fill([0.0; 2]);
-					}
+				if let Some(producer) = &mut self.audio_producer
+					&& state.transport.playing
+					&& let (_, rest) = producer.push_partial_slice(audio)
+					&& !rest.is_empty()
+				{
+					warn!("full ring buffer");
 				}
 			}
 		}
