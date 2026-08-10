@@ -1,8 +1,8 @@
 use crate::{
 	file_tree::FileKind,
+	state::Grid,
 	widget::{
-		ALPHA_1_3, Delta, LINE_HEIGHT, beats_snap_step, clip, frames_per_px, maybe_snap,
-		px_to_time, time_to_px, track::Track,
+		ALPHA_1_3, Delta, LINE_HEIGHT, clip, frames_per_px, px_to_time, time_to_px, track::Track,
 	},
 };
 use generic_daw_core::{Transport, time::BeatTime};
@@ -107,6 +107,7 @@ impl State {
 pub struct Playlist<'a, Message> {
 	state: &'a RefCell<State>,
 	transport: &'a Transport,
+	grid: &'a Grid,
 	tracks: Box<[Track<'a, Message>]>,
 	action: fn(Action) -> Message,
 }
@@ -199,7 +200,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
-		let snap_step = beats_snap_step(state.scale, self.transport);
+		let snap_step = self.grid.beats_snap_step(state.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
@@ -214,11 +215,15 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						return;
 					};
 
-					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					state.status = Status::Selecting(track, track, time, time);
 				} else if let Some(track) = track {
-					let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
 					state.primary.clear();
 					shell.publish((self.action)(Action::Add(None, Some(track), time)));
@@ -245,7 +250,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 				Status::Hovering(path, kind, time) => {
 					let track = track_index(&layout, *viewport, cursor);
 
-					let new_time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
+					let new_time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
 					let new_time = Some((track, new_time));
 
@@ -262,7 +269,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						return;
 					};
 
-					let end_pos = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let end_pos = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if end_track == last_end_track && end_pos == last_end_pos {
 						return;
@@ -313,9 +322,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						return;
 					};
 
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if new_track != track || abs_diff != BeatTime::ZERO {
 						let track_delta = if new_track > track {
@@ -336,9 +347,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					}
 				}
 				Status::TrimmingStart(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -357,9 +370,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -385,9 +400,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					shell.capture_event();
 				}
 				Status::FadingStartLen(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -421,9 +438,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					shell.publish((self.action)(Action::FadeStartP(Point::new(x, y))));
 				}
 				Status::FadingEndLen(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -458,7 +477,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					shell.publish((self.action)(Action::FadeEndP(Point::new(x, y))));
 				}
 				Status::DraggingSplit(time) => {
-					let new_time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let new_time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if new_time != time {
 						state.status = Status::DraggingSplit(new_time);
@@ -467,9 +488,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					}
 				}
 				Status::DraggingSlip(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -718,12 +741,14 @@ impl<'a, Message: 'a> Playlist<'a, Message> {
 	pub fn new(
 		state: &'a RefCell<State>,
 		transport: &'a Transport,
+		grid: &'a Grid,
 		tracks: impl IntoIterator<Item = Track<'a, Message>>,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			state,
 			transport,
+			grid,
 			tracks: tracks.into_iter().collect(),
 			action,
 		}

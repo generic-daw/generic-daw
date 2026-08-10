@@ -20,7 +20,7 @@ use crate::{
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
-		beats_snap_step, frames_per_px, piano_roll, playlist,
+		frames_per_px, piano_roll, playlist,
 	},
 };
 use generic_daw_core::{
@@ -655,7 +655,7 @@ impl ArrangementView {
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let snap_step = beats_snap_step(
+					let snap_step = state.grid.beats_snap_step(
 						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
@@ -675,7 +675,7 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let snap_step = beats_snap_step(
+					let snap_step = state.grid.beats_snap_step(
 						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
@@ -688,7 +688,7 @@ impl ArrangementView {
 			Message::ArrowRight => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let snap_step = beats_snap_step(
+					let snap_step = state.grid.beats_snap_step(
 						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
@@ -708,7 +708,7 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let snap_step = beats_snap_step(
+					let snap_step = state.grid.beats_snap_step(
 						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
@@ -748,10 +748,11 @@ impl ArrangementView {
 							self.arrangement.tracks()[track].clips[clip]
 								.end(self.arrangement.transport()),
 						)
-						.round(beats_snap_step(
-							playlist.scale,
-							self.arrangement.transport(),
-						));
+						.round(
+							state
+								.grid
+								.beats_snap_step(playlist.scale, self.arrangement.transport()),
+						);
 
 						self.arrangement.clip_trim_end_to(track, clip, pos.end());
 						self.arrangement
@@ -764,12 +765,13 @@ impl ArrangementView {
 					let piano_roll = self.piano_roll.get_mut();
 					piano_roll.finish();
 					for &note in &piano_roll.primary {
-						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
-							.position
-							.round(beats_snap_step(
-								piano_roll.scale,
-								self.arrangement.transport(),
-							));
+						let pos =
+							self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+								.position
+								.round(state.grid.beats_snap_step(
+									piano_roll.scale,
+									self.arrangement.transport(),
+								));
 
 						self.arrangement
 							.note_trim_end_to(clip.pattern, note, pos.end());
@@ -1368,7 +1370,7 @@ impl ArrangementView {
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: BeatRange::new(pos, pos + BeatTime::new(1, 0)),
+						position: BeatRange::new(pos, pos + BeatTime::BEAT),
 						id: MidiNoteId::unique(),
 					},
 				);
@@ -1502,15 +1504,16 @@ impl ArrangementView {
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		match self.tab {
-			Tab::Playlist => self.view_playlist(),
+			Tab::Playlist => self.view_playlist(state),
 			Tab::Mixer => self.view_mixer(state, plugins),
-			Tab::PianoRoll => self.view_piano_roll(),
+			Tab::PianoRoll => self.view_piano_roll(state),
 		}
 	}
 
-	fn view_playlist(&self) -> Element<'_, Message> {
+	fn view_playlist<'a>(&'a self, state: &'a State) -> Element<'a, Message> {
 		Seeker::new(
 			self.arrangement.transport(),
+			&state.grid,
 			self.playlist.borrow().position,
 			self.playlist.borrow().scale,
 			column![
@@ -1695,6 +1698,7 @@ impl ArrangementView {
 			Playlist::new(
 				&self.playlist,
 				self.arrangement.transport(),
+				&state.grid,
 				self.arrangement
 					.tracks()
 					.iter()
@@ -1719,6 +1723,7 @@ impl ArrangementView {
 										},
 										&self.playlist,
 										self.arrangement.transport(),
+										&state.grid,
 										enabled,
 										Message::PlaylistAction,
 									),
@@ -1731,6 +1736,7 @@ impl ArrangementView {
 										},
 										&self.playlist,
 										self.arrangement.transport(),
+										&state.grid,
 										enabled,
 										Message::PlaylistAction,
 									),
@@ -1740,6 +1746,7 @@ impl ArrangementView {
 										recording,
 										&self.playlist,
 										self.arrangement.transport(),
+										&state.grid,
 										enabled,
 										Message::PlaylistAction,
 									)
@@ -1749,6 +1756,7 @@ impl ArrangementView {
 										recording,
 										&self.playlist,
 										self.arrangement.transport(),
+										&state.grid,
 										enabled,
 										Message::PlaylistAction,
 									)
@@ -2304,11 +2312,12 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn view_piano_roll(&self) -> Element<'_, Message> {
+	fn view_piano_roll<'a>(&'a self, state: &'a State) -> Element<'a, Message> {
 		let clip = self.midi_clip().unwrap();
 
 		Seeker::new(
 			self.arrangement.transport(),
+			&state.grid,
 			self.piano_roll.borrow().position,
 			self.piano_roll.borrow().scale,
 			Piano::new(
@@ -2318,6 +2327,7 @@ impl ArrangementView {
 			PianoRoll::new(
 				&self.piano_roll,
 				self.arrangement.transport(),
+				&state.grid,
 				self.arrangement.midi_patterns()[&clip.pattern]
 					.notes
 					.iter()
@@ -2328,6 +2338,7 @@ impl ArrangementView {
 							note,
 							&self.piano_roll,
 							self.arrangement.transport(),
+							&state.grid,
 							Message::PianoRollAction,
 						)
 					}),

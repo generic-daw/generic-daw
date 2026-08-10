@@ -1,7 +1,10 @@
-use crate::widget::{
-	ALPHA_1_3, ALPHA_2_3, beats_snap_step, key_to_px, maybe_snap,
-	piano_roll::{self, Action, Status},
-	px_to_time, time_to_px,
+use crate::{
+	state::Grid,
+	widget::{
+		ALPHA_1_3, ALPHA_2_3, key_to_px,
+		piano_roll::{self, Action, Status},
+		px_to_time, time_to_px,
+	},
 };
 use generic_daw_core::{MidiNote, Transport};
 use iced::{
@@ -29,6 +32,7 @@ pub struct Note<'a, Message> {
 	pub(super) note: &'a MidiNote,
 	piano_roll: &'a RefCell<piano_roll::State>,
 	transport: &'a Transport,
+	grid: &'a Grid,
 	f: fn(Action) -> Message,
 }
 
@@ -112,8 +116,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 					}
 					(true, false) => {
 						clear = false;
-						let time = maybe_snap(time, *modifiers, |time| {
-							time.round(beats_snap_step(piano_roll.scale, self.transport))
+						let time = self.grid.maybe_snap(time, *modifiers, |time| {
+							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
 						});
 						Status::Selecting(self.note.key, self.note.key, time, time)
 					}
@@ -122,8 +126,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						Status::Dragging(self.note.key, time)
 					}
 					(true, true) => {
-						let time = maybe_snap(time, *modifiers, |time| {
-							time.round(beats_snap_step(piano_roll.scale, self.transport))
+						let time = self.grid.maybe_snap(time, *modifiers, |time| {
+							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
 						});
 						shell.publish((self.f)(Action::SplitAt(time)));
 						Status::DraggingSplit(time)
@@ -275,6 +279,7 @@ impl<'a, Message> Note<'a, Message> {
 		note: &'a MidiNote,
 		piano_roll: &'a RefCell<piano_roll::State>,
 		transport: &'a Transport,
+		grid: &'a Grid,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
@@ -282,6 +287,7 @@ impl<'a, Message> Note<'a, Message> {
 			note,
 			piano_roll,
 			transport,
+			grid,
 			f,
 		}
 	}

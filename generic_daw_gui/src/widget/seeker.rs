@@ -1,5 +1,6 @@
-use crate::widget::{
-	ALPHA_1_3, LINE_HEIGHT, beats_snap_step, maybe_snap, px_to_time, seconds_snap_step, time_to_px,
+use crate::{
+	state::Grid,
+	widget::{ALPHA_1_3, LINE_HEIGHT, px_to_time, time_to_px},
 };
 use generic_daw_core::{
 	Transport,
@@ -46,6 +47,7 @@ struct State {
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
 	transport: &'a Transport,
+	grid: &'a Grid,
 	position: Vector,
 	scale: Vector,
 	offset: f32,
@@ -227,8 +229,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {
 				Status::SeekingBeats(last_time) => {
-					let time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(self.scale, self.transport))
+					let time = self.grid.maybe_snap(new_time, *modifiers, |time| {
+						time.round(self.grid.beats_snap_step(self.scale, self.transport))
 					});
 
 					if last_time != time {
@@ -238,8 +240,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 				}
 				Status::DraggingLoopBeats(last_time) => {
-					let time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(self.scale, self.transport))
+					let time = self.grid.maybe_snap(new_time, *modifiers, |time| {
+						time.round(self.grid.beats_snap_step(self.scale, self.transport))
 					});
 
 					let loop_range = (last_time != time).then(|| {
@@ -254,10 +256,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 				}
 				Status::SeekingSeconds(last_time) => {
-					let time = maybe_snap(
+					let time = self.grid.maybe_snap(
 						new_time.to_seconds_time(self.transport),
 						*modifiers,
-						|time| time.round(seconds_snap_step(self.scale)),
+						|time| time.round(self.grid.seconds_snap_step(self.scale)),
 					);
 
 					if last_time != time {
@@ -267,10 +269,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 				}
 				Status::DraggingLoopSeconds(last_time) => {
-					let time = maybe_snap(
+					let time = self.grid.maybe_snap(
 						new_time.to_seconds_time(self.transport),
 						*modifiers,
-						|time| time.round(seconds_snap_step(self.scale)),
+						|time| time.round(self.grid.seconds_snap_step(self.scale)),
 					);
 
 					let loop_range = (last_time != time).then(|| {
@@ -324,15 +326,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) => {
 				if cursor.y < LINE_HEIGHT {
-					let snap_step = beats_snap_step(self.scale, self.transport);
-					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let snap_step = self.grid.beats_snap_step(self.scale, self.transport);
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 					state.status = if modifiers.command() {
 						if let Some(loop_range) = self.transport.loop_range {
 							let (start, end) = (loop_range.start(), loop_range.end());
-							if time == maybe_snap(start, *modifiers, |time| time.round(snap_step)) {
+							if time
+								== self
+									.grid
+									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
+							{
 								Status::DraggingLoopBeats(end)
 							} else if time
-								== maybe_snap(end, *modifiers, |time| time.round(snap_step))
+								== self
+									.grid
+									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
 							{
 								Status::DraggingLoopBeats(start)
 							} else {
@@ -348,8 +358,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					};
 					shell.capture_event();
 				} else if cursor.y > layout.bounds().height - LINE_HEIGHT {
-					let snap_step = seconds_snap_step(self.scale);
-					let time = maybe_snap(
+					let snap_step = self.grid.seconds_snap_step(self.scale);
+					let time = self.grid.maybe_snap(
 						new_time.to_seconds_time(self.transport),
 						*modifiers,
 						|time| time.round(snap_step),
@@ -360,10 +370,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 								loop_range.start().to_seconds_time(self.transport),
 								loop_range.end().to_seconds_time(self.transport),
 							);
-							if time == maybe_snap(start, *modifiers, |time| time.round(snap_step)) {
+							if time
+								== self
+									.grid
+									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
+							{
 								Status::DraggingLoopSeconds(end)
 							} else if time
-								== maybe_snap(end, *modifiers, |time| time.round(snap_step))
+								== self
+									.grid
+									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
 							{
 								Status::DraggingLoopSeconds(start)
 							} else {
@@ -572,6 +588,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 impl<'a, Message> Seeker<'a, Message> {
 	pub fn new(
 		transport: &'a Transport,
+		grid: &'a Grid,
 		position: Vector,
 		scale: Vector,
 		left: impl Into<Element<'a, Message>>,
@@ -583,6 +600,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	) -> Self {
 		Self {
 			transport,
+			grid,
 			position,
 			scale,
 			offset: 0.0,
@@ -624,7 +642,9 @@ impl<'a, Message> Seeker<'a, Message> {
 				)
 		};
 
-		let snap_step = beats_snap_step(self.scale + Vector::new(1.0, 0.0), self.transport);
+		let snap_step = self
+			.grid
+			.beats_snap_step(self.scale + Vector::new(1.0, 0.0), self.transport);
 
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
@@ -635,7 +655,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		);
 		beat = beat.floor(snap_step);
 
-		let background_step = BeatTime::new(8 * u64::from(self.transport.numerator.get()), 0);
+		let background_step = BeatTime::new(u64::from(self.transport.numerator.get()), 0) * 8;
 		let mut background_beat = beat.round(background_step);
 		let background_width =
 			time_to_px(background_step, Vector::ZERO, self.scale, self.transport);
@@ -813,8 +833,12 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.palette().primary.base.color,
 		);
 
-		let snap_step =
-			beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport).beat_ceil();
+		let mut numbering_grid = Grid::default();
+		numbering_grid.size = numbering_grid.size.max(self.grid.size);
+
+		let snap_step = numbering_grid
+			.beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
+			.beat_ceil();
 
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
@@ -861,7 +885,9 @@ impl<'a, Message> Seeker<'a, Message> {
 			beat += snap_step;
 		}
 
-		let snap_step = seconds_snap_step(self.scale + Vector::new(3.0, 0.0)).second_ceil();
+		let snap_step = numbering_grid
+			.seconds_snap_step(self.scale + Vector::new(3.0, 0.0))
+			.second_ceil();
 
 		let mut second = px_to_time(self.offset, self.position, self.scale, self.transport)
 			.to_seconds_time(self.transport);

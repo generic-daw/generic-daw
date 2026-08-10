@@ -38,6 +38,7 @@ static GLYPHS: &[(&str, char)] = &[
 	icon!(power_off = 57865),
 	icon!(folder_open = 57927),
 	icon!(hourglass = 58006),
+	icon!(magnet = 58037),
 	icon!(file_headphone = 58138),
 	icon!(file_play = 58145),
 	icon!(circle_ellipsis = 58182),

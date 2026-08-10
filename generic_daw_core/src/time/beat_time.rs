@@ -2,7 +2,9 @@ use crate::{
 	Transport,
 	time::{SecondsTime, fixed_point::FixedPoint},
 };
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{
+	Add, AddAssign, Div, DivAssign, Mul, MulAssign, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BeatTime(FixedPoint);
@@ -154,7 +156,7 @@ impl Add for BeatTime {
 
 impl AddAssign for BeatTime {
 	fn add_assign(&mut self, rhs: Self) {
-		*self = *self + rhs;
+		self.0 += rhs.0;
 	}
 }
 
@@ -168,7 +170,21 @@ impl Sub for BeatTime {
 
 impl SubAssign for BeatTime {
 	fn sub_assign(&mut self, rhs: Self) {
-		*self = *self - rhs;
+		self.0 -= rhs.0;
+	}
+}
+
+impl Mul<u64> for BeatTime {
+	type Output = Self;
+
+	fn mul(self, rhs: u64) -> Self::Output {
+		Self(self.0 * rhs)
+	}
+}
+
+impl MulAssign<u64> for BeatTime {
+	fn mul_assign(&mut self, rhs: u64) {
+		self.0 *= rhs;
 	}
 }
 
@@ -182,7 +198,21 @@ impl Mul<f64> for BeatTime {
 
 impl MulAssign<f64> for BeatTime {
 	fn mul_assign(&mut self, rhs: f64) {
-		*self = *self * rhs;
+		self.0 *= rhs;
+	}
+}
+
+impl Div<u64> for BeatTime {
+	type Output = Self;
+
+	fn div(self, rhs: u64) -> Self::Output {
+		Self(self.0 / rhs)
+	}
+}
+
+impl DivAssign<u64> for BeatTime {
+	fn div_assign(&mut self, rhs: u64) {
+		self.0 /= rhs;
 	}
 }
 
@@ -196,7 +226,7 @@ impl Div<f64> for BeatTime {
 
 impl DivAssign<f64> for BeatTime {
 	fn div_assign(&mut self, rhs: f64) {
-		*self = *self / rhs;
+		self.0 /= rhs;
 	}
 }
 
@@ -205,5 +235,33 @@ impl Div for BeatTime {
 
 	fn div(self, rhs: Self) -> Self::Output {
 		self.0 / rhs.0
+	}
+}
+
+impl Shl<u8> for BeatTime {
+	type Output = Self;
+
+	fn shl(self, rhs: u8) -> Self {
+		Self(self.0 << rhs)
+	}
+}
+
+impl ShlAssign<u8> for BeatTime {
+	fn shl_assign(&mut self, rhs: u8) {
+		self.0 <<= rhs;
+	}
+}
+
+impl Shr<u8> for BeatTime {
+	type Output = Self;
+
+	fn shr(self, rhs: u8) -> Self::Output {
+		Self(self.0 >> rhs)
+	}
+}
+
+impl ShrAssign<u8> for BeatTime {
+	fn shr_assign(&mut self, rhs: u8) {
+		self.0 >>= rhs;
 	}
 }

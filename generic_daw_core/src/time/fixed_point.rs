@@ -1,6 +1,9 @@
 use std::{
 	fmt::{Debug, Formatter},
-	ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+	ops::{
+		Add, AddAssign, Div, DivAssign, Mul, MulAssign, Shl, ShlAssign, Shr, ShrAssign, Sub,
+		SubAssign,
+	},
 };
 
 #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -109,7 +112,7 @@ impl Add for FixedPoint {
 
 impl AddAssign for FixedPoint {
 	fn add_assign(&mut self, rhs: Self) {
-		*self = *self + rhs;
+		self.0 += rhs.0;
 	}
 }
 
@@ -123,7 +126,21 @@ impl Sub for FixedPoint {
 
 impl SubAssign for FixedPoint {
 	fn sub_assign(&mut self, rhs: Self) {
-		*self = *self - rhs;
+		self.0 -= rhs.0;
+	}
+}
+
+impl Mul<u64> for FixedPoint {
+	type Output = Self;
+
+	fn mul(self, rhs: u64) -> Self::Output {
+		Self(self.0 * rhs)
+	}
+}
+
+impl MulAssign<u64> for FixedPoint {
+	fn mul_assign(&mut self, rhs: u64) {
+		self.0 *= rhs;
 	}
 }
 
@@ -138,6 +155,20 @@ impl Mul<f64> for FixedPoint {
 impl MulAssign<f64> for FixedPoint {
 	fn mul_assign(&mut self, rhs: f64) {
 		*self = *self * rhs;
+	}
+}
+
+impl Div<u64> for FixedPoint {
+	type Output = Self;
+
+	fn div(self, rhs: u64) -> Self::Output {
+		Self(self.0 / rhs)
+	}
+}
+
+impl DivAssign<u64> for FixedPoint {
+	fn div_assign(&mut self, rhs: u64) {
+		self.0 /= rhs;
 	}
 }
 
@@ -160,5 +191,33 @@ impl Div for FixedPoint {
 
 	fn div(self, rhs: Self) -> Self::Output {
 		self.0 as f64 / rhs.0 as f64
+	}
+}
+
+impl Shl<u8> for FixedPoint {
+	type Output = Self;
+
+	fn shl(self, rhs: u8) -> Self {
+		Self(self.0 << rhs)
+	}
+}
+
+impl ShlAssign<u8> for FixedPoint {
+	fn shl_assign(&mut self, rhs: u8) {
+		self.0 <<= rhs;
+	}
+}
+
+impl Shr<u8> for FixedPoint {
+	type Output = Self;
+
+	fn shr(self, rhs: u8) -> Self::Output {
+		Self(self.0 >> rhs)
+	}
+}
+
+impl ShrAssign<u8> for FixedPoint {
+	fn shr_assign(&mut self, rhs: u8) {
+		self.0 >>= rhs;
 	}
 }

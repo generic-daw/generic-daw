@@ -6,8 +6,8 @@ use crate::{
 	config_view::{self, ConfigView},
 	file_tree::{self, FileKind, FileTree},
 	icons::{
-		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, menu, metronome, pause,
-		play, plus, sliders_vertical, square,
+		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, magnet, menu, metronome,
+		pause, play, plus, sliders_vertical, square,
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -31,8 +31,8 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		bottom_center, button, center, column, combo_box, container, mouse_area, opaque,
-		progress_bar, right, row, rule, scrollable, space, stack, text,
+		bottom_center, button, center, checkbox, column, combo_box, container, mouse_area, opaque,
+		progress_bar, right, row, rule, scrollable, slider, space, stack, text,
 	},
 	window,
 };
@@ -184,6 +184,11 @@ pub enum Message {
 	TappedBpm,
 	ChangedBpm(Option<u16>),
 	ChangedNumerator(Option<u8>),
+	ChangedGridSize(f32),
+	NarrowedGrid,
+	WidenedGrid,
+	ToggleGridTriplets,
+	ToggleGrid,
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -464,6 +469,24 @@ impl Daw {
 					window::Mode::Fullscreen => window::set_mode(id, window::Mode::Windowed),
 					window::Mode::Hidden => Task::none(),
 				});
+			}
+			Message::ChangedGridSize(size) => {
+				self.state.grid.size = size.clamp(0.5, 4.5);
+				self.state.write();
+			}
+			Message::NarrowedGrid => {
+				return self.update(Message::ChangedGridSize(self.state.grid.size - 1.0));
+			}
+			Message::WidenedGrid => {
+				return self.update(Message::ChangedGridSize(self.state.grid.size + 1.0));
+			}
+			Message::ToggleGridTriplets => {
+				self.state.grid.triplets ^= true;
+				self.state.write();
+			}
+			Message::ToggleGrid => {
+				self.state.grid.enabled ^= true;
+				self.state.write();
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
 			Message::Status(status) => self.status = status,
@@ -893,6 +916,46 @@ impl Daw {
 							.padding(5)
 							.on_press(Message::ToggleAutoscroll),
 					],
+					Menu::new(magnet(), || container(
+						column![
+							checkbox(self.state.grid.enabled)
+								.label("Grid enabled")
+								.on_toggle(|_| Message::ToggleGrid)
+								.style(if self.state.grid.enabled {
+									checkbox::primary
+								} else {
+									checkbox::secondary
+								}),
+							checkbox(self.state.grid.triplets)
+								.label("Triplet grid")
+								.on_toggle(|_| Message::ToggleGridTriplets)
+								.style(if self.state.grid.enabled {
+									checkbox::primary
+								} else {
+									checkbox::secondary
+								}),
+							slider(0.5..=4.5, self.state.grid.size, Message::ChangedGridSize)
+								.style(if self.state.grid.enabled {
+									slider::primary
+								} else {
+									slider::secondary
+								})
+						]
+						.width(Shrink)
+						.spacing(5)
+					)
+					.padding(5)
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into())
+					.padding(5)
+					.style(button_with_radius(
+						if self.state.grid.enabled {
+							button::primary
+						} else {
+							button::secondary
+						},
+						5
+					)),
 					right(self.scan_progress.map(|progress| {
 						column![
 							self.scan_status
@@ -1264,6 +1327,10 @@ impl Daw {
 				Some('o') => Some(Message::OpenFileDialog),
 				Some('r') => Some(Message::RenderFileDialog),
 				Some('s') => Some(Message::SaveFile),
+				Some('1') => Some(Message::NarrowedGrid),
+				Some('2') => Some(Message::WidenedGrid),
+				Some('3') => Some(Message::ToggleGridTriplets),
+				Some('4') => Some(Message::ToggleGrid),
 				_ => None,
 			},
 			(false, true, false, false) => match key.as_ref() {

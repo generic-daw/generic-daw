@@ -1,7 +1,8 @@
 use crate::{
 	arrangement_view::{AudioClipRef, AudioRecording, MidiClipRef, MidiRecording, format_db},
+	state::Grid,
 	widget::{
-		ALPHA_1_3, ALPHA_2_3, LINE_HEIGHT, beats_snap_step, frames_per_px, maybe_snap,
+		ALPHA_1_3, ALPHA_2_3, LINE_HEIGHT, frames_per_px,
 		playlist::{self, Action, Status},
 		px_to_time, time_to_px,
 	},
@@ -112,6 +113,7 @@ pub struct Clip<'a, Message> {
 	pub(super) inner: Inner<'a>,
 	playlist: &'a RefCell<playlist::State>,
 	transport: &'a Transport,
+	grid: &'a Grid,
 	enabled: bool,
 	f: fn(Action) -> Message,
 }
@@ -452,8 +454,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					(false, _, false, true, _) => Status::TrimmingEnd(time),
 					(true, false, _, _, _) => {
 						clear = false;
-						let time = maybe_snap(time, *modifiers, |time| {
-							time.round(beats_snap_step(playlist.scale, self.transport))
+						let time = self.grid.maybe_snap(time, *modifiers, |time| {
+							time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
 						});
 						Status::Selecting(index.0, index.0, time, time)
 					}
@@ -463,8 +465,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					}
 					(true, true, _, _, false) => Status::DraggingSlip(time),
 					(true, true, _, _, true) => {
-						let time = maybe_snap(time, *modifiers, |time| {
-							time.round(beats_snap_step(playlist.scale, self.transport))
+						let time = self.grid.maybe_snap(time, *modifiers, |time| {
+							time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
 						});
 						shell.publish((self.f)(Action::SplitAt(time)));
 						Status::DraggingSplit(time)
@@ -1052,6 +1054,7 @@ impl<'a, Message> Clip<'a, Message> {
 		inner: impl Into<Inner<'a>>,
 		playlist: &'a RefCell<playlist::State>,
 		transport: &'a Transport,
+		grid: &'a Grid,
 		enabled: bool,
 		f: fn(Action) -> Message,
 	) -> Self {
@@ -1059,6 +1062,7 @@ impl<'a, Message> Clip<'a, Message> {
 			inner: inner.into(),
 			playlist,
 			transport,
+			grid,
 			enabled,
 			f,
 		}

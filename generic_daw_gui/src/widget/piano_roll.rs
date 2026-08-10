@@ -1,6 +1,6 @@
-use crate::widget::{
-	ALPHA_1_3, Delta, beats_snap_step, key_to_px, maybe_snap, note::Note, px_to_key, px_to_time,
-	time_to_px,
+use crate::{
+	state::Grid,
+	widget::{ALPHA_1_3, Delta, key_to_px, note::Note, px_to_key, px_to_time, time_to_px},
 };
 use generic_daw_core::{MidiKey, Transport, time::BeatTime};
 use iced::{
@@ -79,6 +79,7 @@ impl State {
 pub struct PianoRoll<'a, Message> {
 	state: &'a RefCell<State>,
 	transport: &'a Transport,
+	grid: &'a Grid,
 	notes: Box<[Note<'a, Message>]>,
 	action: fn(Action) -> Message,
 }
@@ -155,7 +156,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
-		let snap_step = beats_snap_step(state.scale, self.transport);
+		let snap_step = self.grid.beats_snap_step(state.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
@@ -165,11 +166,15 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				let key = px_to_key(cursor.y, state.position, state.scale);
 
 				if modifiers.command() {
-					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					state.status = Status::Selecting(key, key, time, time);
 				} else {
-					let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
 					state.primary.clear();
 					shell.publish((self.action)(Action::Add(key, time)));
@@ -194,7 +199,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
 					let end_key = px_to_key(cursor.y, state.position, state.scale);
 
-					let end_pos = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let end_pos = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if end_key == last_end_key && end_pos == last_end_pos {
 						return;
@@ -221,9 +228,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				Status::Dragging(key, time) => {
 					let new_key = px_to_key(cursor.y, state.position, state.scale);
 
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if new_key != key || abs_diff != BeatTime::ZERO {
 						let key_delta = if new_key > key {
@@ -244,9 +253,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					}
 				}
 				Status::TrimmingStart(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -261,9 +272,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step)
-					});
+					let abs_diff =
+						self.grid
+							.maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+								abs_diff.round(snap_step)
+							});
 
 					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
@@ -278,7 +291,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					}
 				}
 				Status::DraggingSplit(time) => {
-					let new_time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let new_time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if new_time != time {
 						state.status = Status::DraggingSplit(new_time);
@@ -292,9 +307,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
 							/ (note_bounds.width - 2.0 * border - 1.0);
 
-						let new_val = maybe_snap(new_val.clamp(0.0, 1.0), *modifiers, |val| {
-							(val * 127.0).round() / 127.0
-						});
+						let new_val =
+							self.grid
+								.maybe_snap(new_val.clamp(0.0, 1.0), *modifiers, |val| {
+									(val * 127.0).round() / 127.0
+								});
 						if val != new_val {
 							state.status = Status::DraggingVelocity(note, new_val);
 							shell.publish((self.action)(Action::DragVelocity(new_val)));
@@ -460,13 +477,15 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	pub fn new(
 		state: &'a RefCell<State>,
 		transport: &'a Transport,
+		grid: &'a Grid,
 		notes: impl IntoIterator<Item = Note<'a, Message>>,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			state,
-			notes: notes.into_iter().collect(),
 			transport,
+			grid,
+			notes: notes.into_iter().collect(),
 			action,
 		}
 	}
