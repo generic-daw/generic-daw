@@ -99,27 +99,31 @@ impl<T> Neg for Delta<T> {
 
 pub fn beats_snap_step(mut scale: Vector, transport: &Transport) -> BeatTime {
 	scale.x += 2.5 + (f32::from(transport.bpm.get()) / 60.0).log2();
-	if scale.x < 0.0 {
-		BeatTime::new(0, BeatTime::FACTOR >> -scale.x.max(-9.0) as u8)
-	} else {
+	if scale.x > 0.0 {
 		BeatTime::new(
 			u64::from(transport.numerator.get())
 				<< (scale.x - f32::from(transport.numerator.get()).log2()).ceil() as u8,
 			0,
 		)
+	} else if scale.x > -1.0 {
+		BeatTime::new(1, 0)
+	} else {
+		BeatTime::new(0, BeatTime::FACTOR >> -scale.x.max(-9.0) as u8)
 	}
 }
 
 pub fn seconds_snap_step(mut scale: Vector) -> SecondsTime {
 	scale.x += 2.5;
-	if scale.x < 0.0 {
-		SecondsTime::new(0, SecondsTime::FACTOR >> -scale.x.max(-9.0) as u8)
-	} else {
-		let seconds = [2, 5, 10, 15, 20, 30]
+	if scale.x > 0.0 {
+		let seconds = [2, 3, 4, 5, 6, 10, 12, 15, 20, 30]
 			.into_iter()
 			.find(|&step| scale.x < f32::from(step).log2())
 			.unwrap_or(60u8);
 		SecondsTime::new(seconds.into(), 0)
+	} else if scale.x > -1.0 {
+		SecondsTime::new(1, 0)
+	} else {
+		SecondsTime::new(0, SecondsTime::FACTOR >> -scale.x.max(-9.0) as u8)
 	}
 }
 

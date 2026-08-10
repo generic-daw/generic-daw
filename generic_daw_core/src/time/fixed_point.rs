@@ -20,8 +20,8 @@ impl FixedPoint {
 
 	#[must_use]
 	pub const fn new(unit: u64, tick: u64) -> Self {
-		debug_assert!(tick <= Self::FACTOR);
-		debug_assert!(unit <= u64::MAX / Self::FACTOR);
+		debug_assert!(tick < Self::FACTOR);
+		debug_assert!(unit < u64::MAX / Self::FACTOR);
 
 		Self(unit * Self::FACTOR + tick)
 	}
