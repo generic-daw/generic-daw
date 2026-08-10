@@ -1,8 +1,7 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Element, Event, Layout, Point, Rectangle, Renderer as _, Shell, Size, Theme, Vector,
-		keyboard,
+		Element, Event, Layout, Point, Rectangle, Shell, Size, Theme, Vector, keyboard,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction},
 		overlay,
@@ -53,17 +52,15 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for MenuOverlay<'_, '_,
 		layout: Layout<'_>,
 		cursor: Cursor,
 	) {
-		renderer.with_layer(layout.bounds(), |renderer| {
-			self.content.as_widget().draw(
-				self.tree,
-				renderer,
-				theme,
-				style,
-				layout,
-				cursor,
-				&layout.bounds(),
-			);
-		});
+		self.content.as_widget().draw(
+			self.tree,
+			renderer,
+			theme,
+			style,
+			layout,
+			cursor,
+			&layout.bounds(),
+		);
 	}
 
 	fn operate(&mut self, layout: Layout<'_>, renderer: &Renderer, operation: &mut dyn Operation) {

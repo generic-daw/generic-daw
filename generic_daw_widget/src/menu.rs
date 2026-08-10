@@ -18,12 +18,6 @@ use iced_widget::{
 	},
 };
 
-#[derive(Clone, Copy, Debug)]
-pub enum Side {
-	Bottom,
-	Right,
-}
-
 pub struct Menu<'a, Message> {
 	content: Element<'a, Message, Theme, Renderer>,
 	#[expect(clippy::struct_field_names)]
@@ -31,7 +25,6 @@ pub struct Menu<'a, Message> {
 	width: Length,
 	height: Length,
 	padding: Padding,
-	side: Side,
 	spacing: f32,
 	class: <Theme as button::Catalog>::Class<'a>,
 	status: Option<button::Status>,
@@ -48,7 +41,6 @@ impl<'a, Message> Menu<'a, Message> {
 			width: Length::Fit,
 			height: Length::Fit,
 			padding: button::DEFAULT_PADDING,
-			side: Side::Bottom,
 			spacing: 0.0,
 			class: <Theme as button::Catalog>::default(),
 			status: None,
@@ -70,12 +62,6 @@ impl<'a, Message> Menu<'a, Message> {
 	#[must_use]
 	pub fn padding<P: Into<Padding>>(mut self, padding: P) -> Self {
 		self.padding = padding.into();
-		self
-	}
-
-	#[must_use]
-	pub fn side(mut self, side: Side) -> Self {
-		self.side = side;
 		self
 	}
 
@@ -307,22 +293,13 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 			content: &mut self.menu,
 			tree: second,
 			state: &mut state.position,
-			bounds: match self.side {
-				Side::Right => Rectangle::new(
-					layout.position() + Vector::new(layout.bounds().width, 0.0),
-					Size::new(
-						-layout.bounds().width - self.spacing,
-						layout.bounds().height + self.spacing,
-					),
+			bounds: Rectangle::new(
+				layout.position() + Vector::new(0.0, layout.bounds().height),
+				Size::new(
+					layout.bounds().width + self.spacing,
+					-layout.bounds().height - self.spacing,
 				),
-				Side::Bottom => Rectangle::new(
-					layout.position() + Vector::new(0.0, layout.bounds().height),
-					Size::new(
-						layout.bounds().width + self.spacing,
-						-layout.bounds().height - self.spacing,
-					),
-				),
-			},
+			),
 		}));
 
 		let Some(content_overlay) =
