@@ -1272,9 +1272,10 @@ impl Arrangement {
 				p_sender.send(processor).unwrap();
 			}))
 			.discard(),
-			Task::stream(progress_receiver)
-				.map(|progress| daw::Message::Progress(progress as f32))
-				.chain(Task::done(daw::Message::RenderedFile)),
+			Task::run(progress_receiver, |progress| {
+				daw::Message::Progress(progress as f32)
+			})
+			.chain(Task::done(daw::Message::RenderedFile)),
 		])
 	}
 
@@ -1328,9 +1329,10 @@ impl Arrangement {
 					),
 				)
 			})),
-			Task::stream(progress_receiver)
-				.map(|progress| daw::Message::Progress(progress as f32))
-				.chain(Task::done(daw::Message::RenderedFile)),
+			Task::run(progress_receiver, |progress| {
+				daw::Message::Progress(progress as f32)
+			})
+			.chain(Task::done(daw::Message::RenderedFile)),
 		])
 	}
 }
