@@ -4,19 +4,12 @@ static LUCIDE_BYTES: &[u8] = include_bytes!("../Lucide.ttf");
 
 macro_rules! icon {
 	($name:ident = $icon:literal) => {
-		icon!($name = $icon + 0.05)
-	};
-	($name:ident = $icon:literal + $offset:literal) => {
-		(
-			stringify!($name),
-			const { char::from_u32($icon).unwrap() },
-			$offset,
-		)
+		(stringify!($name), const { char::from_u32($icon).unwrap() })
 	};
 }
 
 // https://unpkg.com/lucide-static@latest/font/codepoints.json
-static GLYPHS: &[(&str, char, f32)] = &[
+static GLYPHS: &[(&str, char)] = &[
 	icon!(arrow_down_wide_narrow = 57415),
 	icon!(chevron_down = 57453),
 	icon!(chevron_right = 57455),
@@ -31,7 +24,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(mic = 57624),
 	icon!(pause = 57646),
 	icon!(play = 57660),
-	icon!(plus = 57661 + 0.025),
+	icon!(plus = 57661),
 	icon!(power = 57664),
 	icon!(rotate_ccw = 57672),
 	icon!(save = 57677),
@@ -40,7 +33,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(square = 57703),
 	icon!(triangle_alert = 57747),
 	icon!(x = 57778),
-	icon!(move_vertical = 57799 + 0.025),
+	icon!(move_vertical = 57799),
 	icon!(arrow_big_right = 57827),
 	icon!(power_off = 57865),
 	icon!(folder_open = 57927),
@@ -58,7 +51,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(between_horizontal_start = 58770),
 	icon!(between_vertical_start = 58772),
 	icon!(chevrons_left_right_ellipsis = 58911),
-	icon!(metronome = 59068 + 0.025),
+	icon!(metronome = 59068),
 	icon!(square_arrow_right_enter = 59075),
 ];
 
@@ -79,7 +72,7 @@ pub static LUCIDE_FONT: iced::Font = iced::Font::new("lucide");
 
 	let mut subset = BTreeSet::new();
 
-	for &(name, glyph, offset) in GLYPHS {
+	for &(name, glyph) in GLYPHS {
 		subset.insert(glyph);
 		icons_rs
 			.write_all(
@@ -89,7 +82,6 @@ pub const fn {name}() -> Icon {{
 	Icon {{
 		glyph: {glyph:?},
 		size: crate::widget::LINE_HEIGHT,
-		offset: {offset},
 	}}
 }}
 "

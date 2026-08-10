@@ -9,7 +9,6 @@ use iced::{
 pub struct Icon {
 	glyph: char,
 	size: f32,
-	offset: f32,
 }
 
 impl Icon {
@@ -32,7 +31,7 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 				.size(value.size)
 				.line_height(1.0),
 		)
-		.padding(padding::top(value.offset * value.size).bottom(-value.offset * value.size))
+		.padding(padding::top(0.045 * value.size).bottom(-0.045 * value.size))
 		.center(value.size)
 		.into()
 	}
