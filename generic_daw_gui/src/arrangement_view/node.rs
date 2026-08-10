@@ -14,7 +14,6 @@ use iced::{
 	widget::{self, checkbox, column, container, radio, row, rule, space, text, value},
 };
 use std::{collections::BTreeMap, iter::once, sync::Arc, time::Instant};
-use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
@@ -35,7 +34,7 @@ pub struct Node {
 	pub bypassed: bool,
 	pub outgoing: BTreeMap<NodeId, f32>,
 	pub output: Channels,
-	pub peaks: NoDebug<[peak_meter::State; 2]>,
+	pub peaks: [peak_meter::State; 2],
 	pub polyphony: usize,
 }
 
@@ -52,7 +51,7 @@ impl Node {
 			bypassed: false,
 			outgoing: BTreeMap::new(),
 			output,
-			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
+			peaks: [peak_meter::State::default(), peak_meter::State::default()],
 			polyphony: 0,
 		}
 	}

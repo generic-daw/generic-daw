@@ -23,7 +23,7 @@ use std::{
 	path::Path,
 	sync::Arc,
 };
-use utils::NoDebug;
+use utils::{NoClone, NoDebug};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Clone, Debug)]
@@ -236,7 +236,7 @@ impl Arrangement {
 
 		Task::done(daw::Message::ProjectLoaded(
 			project,
-			Box::new(arrangement).into(),
+			NoClone(NoDebug(Box::new(arrangement))),
 			p_receiver.into(),
 			None,
 		))
@@ -728,7 +728,7 @@ impl Arrangement {
 		Some(
 			Task::done(daw::Message::ProjectLoaded(
 				project,
-				Box::new(arrangement).into(),
+				NoClone(NoDebug(Box::new(arrangement))),
 				p_receiver.into(),
 				view,
 			))

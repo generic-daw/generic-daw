@@ -35,7 +35,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoClone, NoDebug, ShiftMoveExt as _, boxed_slice};
+use utils::{NoDebug, ShiftMoveExt as _, boxed_slice};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -131,7 +131,7 @@ impl Arrangement {
 		p_receiver
 	}
 
-	pub fn change_config(&mut self, NoClone(mut processor): NoClone<AudioThread>, config: &Config) {
+	pub fn change_config(&mut self, mut processor: AudioThread, config: &Config) {
 		self.interrupted();
 
 		self.replace_stream(None);

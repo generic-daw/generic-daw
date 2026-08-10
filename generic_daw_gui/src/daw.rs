@@ -131,7 +131,7 @@ pub enum Message {
 	CloseRequested(window::Id),
 	ProjectLoaded(
 		Project,
-		NoClone<Box<Arrangement>>,
+		NoClone<NoDebug<Box<Arrangement>>>,
 		NoClone<oneshot::Receiver<AudioThread>>,
 		Option<proto::ViewState>,
 	),
@@ -343,7 +343,7 @@ impl Daw {
 			}
 			Message::ProjectLoaded(
 				project,
-				NoClone(mut arrangement),
+				NoClone(NoDebug(mut arrangement)),
 				NoClone(a_receiver),
 				view,
 			) => {

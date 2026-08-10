@@ -88,7 +88,7 @@ pub use project::Feedback;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	ChangeConfig(Box<NoClone<AudioThread>>),
+	ChangeConfig(NoClone<Box<AudioThread>>),
 	Batch(Batch),
 	DrainQueue,
 	RequestUpdate,
@@ -252,7 +252,9 @@ impl ArrangementView {
 		state: &mut State,
 	) -> Action<daw::Instruction, Message> {
 		match message {
-			Message::ChangeConfig(processor) => self.arrangement.change_config(*processor, config),
+			Message::ChangeConfig(NoClone(processor)) => {
+				self.arrangement.change_config(*processor, config);
+			}
 			Message::Batch(msg) => {
 				let before = self.arrangement.transport().position;
 
@@ -2485,8 +2487,8 @@ impl ArrangementView {
 			Result::ok,
 		)
 		.and_then(Task::done)
-		.map(NoClone)
 		.map(Box::new)
+		.map(NoClone)
 		.map(Message::ChangeConfig)
 	}
 
