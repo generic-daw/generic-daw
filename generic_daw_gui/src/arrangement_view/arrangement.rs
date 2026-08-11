@@ -35,7 +35,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoDebug, ShiftMoveExt as _, boxed_slice};
+use utils::{NoDebug, ShiftMoveExt as _, boxed_slice, sanitize_filename_chars};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -1307,7 +1307,11 @@ impl Arrangement {
 
 		let Ok(mut recording) = AudioRecording::new(
 			FREEZES_DIR
-				.join(format!("{} {}.wav", format_now(), name))
+				.join(format!(
+					"{} {}.wav",
+					sanitize_filename_chars(&name),
+					format_now(),
+				))
 				.into(),
 			&self.transport,
 		)

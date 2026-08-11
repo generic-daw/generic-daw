@@ -17,6 +17,7 @@ use iced::{
 use log::warn;
 use rtrb::Consumer;
 use std::{iter::once, mem::MaybeUninit};
+use utils::sanitize_filename_chars;
 
 #[derive(Debug)]
 pub struct Track {
@@ -65,7 +66,11 @@ impl Track {
 		if self.audio_recording.is_none() {
 			self.audio_recording = AudioRecording::new(
 				RECORDINGS_DIR
-					.join(format!("{} {}.wav", format_now(), name))
+					.join(format!(
+						"{} {}.wav",
+						sanitize_filename_chars(name),
+						format_now(),
+					))
 					.into(),
 				transport,
 			)
@@ -96,7 +101,7 @@ impl Track {
 
 		self.midi_recording
 			.get_or_insert_with(|| {
-				MidiRecording::new(format!("{} {}", format_now(), name).into(), transport)
+				MidiRecording::new(format!("{} {}", name, format_now()).into(), transport)
 			})
 			.recorded(actions, transport);
 	}

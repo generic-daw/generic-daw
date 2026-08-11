@@ -45,7 +45,7 @@ const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwr
 pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 	let mut paths = Vec::new();
 
-	if cfg!(target_os = "windows") {
+	if cfg!(windows) {
 		if let Some(path) = std::env::var_os("COMMONPROGRAMFILES").map(PathBuf::from) {
 			paths.push(path.join("CLAP").into());
 		}
