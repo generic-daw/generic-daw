@@ -50,12 +50,7 @@ impl Track {
 			.unwrap_or_default()
 	}
 
-	pub fn audio_recorded(
-		&mut self,
-		samples: &mut [[f32; 2]],
-		transport: &Transport,
-		track: usize,
-	) {
+	pub fn audio_recorded(&mut self, samples: &mut [[f32; 2]], transport: &Transport, name: &str) {
 		let Some(audio_consumer) = &mut self.audio_consumer else {
 			return;
 		};
@@ -67,16 +62,20 @@ impl Track {
 			rest.fill([0.0; 2]);
 		}
 
-		self.audio_recording
-			.get_or_insert_with(|| {
-				AudioRecording::new(
-					RECORDINGS_DIR
-						.join(format!("{} T{}.wav", format_now(), track + 1))
-						.into(),
-					transport,
-				)
-			})
-			.recorded(samples);
+		if self.audio_recording.is_none() {
+			self.audio_recording = AudioRecording::new(
+				RECORDINGS_DIR
+					.join(format!("{} {}.wav", format_now(), name))
+					.into(),
+				transport,
+			)
+			.inspect_err(|err| warn!("{err}"))
+			.ok();
+		}
+
+		if let Some(audio_recording) = &mut self.audio_recording {
+			audio_recording.recorded(samples);
+		}
 	}
 
 	pub fn audio_finalize(&mut self) -> Option<(BeatTime, SamplePair)> {
@@ -87,7 +86,7 @@ impl Track {
 		&mut self,
 		actions: &mut [MaybeUninit<MidiAction>],
 		transport: &Transport,
-		track: usize,
+		name: &str,
 	) {
 		let Some(midi_consumer) = &mut self.midi_consumer else {
 			return;
@@ -97,7 +96,7 @@ impl Track {
 
 		self.midi_recording
 			.get_or_insert_with(|| {
-				MidiRecording::new(format!("{} T{}", format_now(), track + 1).into(), transport)
+				MidiRecording::new(format!("{} {}", format_now(), name).into(), transport)
 			})
 			.recorded(actions, transport);
 	}

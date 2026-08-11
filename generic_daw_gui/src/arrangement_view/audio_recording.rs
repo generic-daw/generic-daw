@@ -1,7 +1,13 @@
 use crate::{arrangement_view::sample::SamplePair, lod::LodsBuilder};
 use generic_daw_core::{Sample, SampleId, Transport, time::BeatTime};
 use hound::{WavSpec, WavWriter};
-use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
+use std::{
+	fs::File,
+	io::{self, BufWriter},
+	num::NonZero,
+	path::Path,
+	sync::Arc,
+};
 use utils::NoDebug;
 
 #[derive(Debug)]
@@ -15,11 +21,11 @@ pub struct AudioRecording {
 }
 
 impl AudioRecording {
-	pub fn new(path: Arc<Path>, transport: &Transport) -> Self {
+	pub fn new(path: Arc<Path>, transport: &Transport) -> io::Result<Self> {
 		let name = path.file_name().unwrap().to_str().unwrap().into();
 
 		let writer = WavWriter::new(
-			BufWriter::new(File::create(&path).unwrap()),
+			BufWriter::new(File::create_new(&path)?),
 			WavSpec {
 				bits_per_sample: 32,
 				channels: 2,
@@ -30,14 +36,14 @@ impl AudioRecording {
 		.unwrap()
 		.into();
 
-		Self {
+		Ok(Self {
 			writer,
 			samples: Vec::new(),
 			lods: LodsBuilder::default(),
 			position: transport.position.to_beat_time(transport),
 			path,
 			name,
-		}
+		})
 	}
 
 	pub fn end(&self, transport: &Transport) -> BeatTime {

@@ -166,8 +166,12 @@ impl Arrangement {
 					let mut samples = boxed_slice![[0.0; 2]; frames];
 					let mut events = boxed_slice![MaybeUninit::uninit(); 256];
 					for track in 0..self.tracks.len() {
-						self.tracks[track].audio_recorded(&mut samples, &self.transport, track);
-						self.tracks[track].midi_recorded(&mut events, &self.transport, track);
+						let mut name = self.node(self.tracks[track].id).name.clone();
+						if name.is_empty() {
+							name = format!("T{}", track + 1).into();
+						}
+						self.tracks[track].audio_recorded(&mut samples, &self.transport, &name);
+						self.tracks[track].midi_recorded(&mut events, &self.transport, &name);
 					}
 				}
 				Update::Interrupted(position) => {
@@ -1296,15 +1300,24 @@ impl Arrangement {
 			BeatRange::new(start, end)
 		};
 
+		let mut name = self.node(self.tracks[track].id).name.clone();
+		if name.is_empty() {
+			name = format!("T{}", track + 1).into();
+		}
+
+		let Ok(mut recording) = AudioRecording::new(
+			FREEZES_DIR
+				.join(format!("{} {}.wav", format_now(), name))
+				.into(),
+			&self.transport,
+		)
+		.inspect_err(|err| warn!("{err}")) else {
+			return Task::done(daw::Message::RenderedFile);
+		};
+
 		self.interrupted();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-		let mut recording = AudioRecording::new(
-			FREEZES_DIR
-				.join(format!("{} T{}.wav", format_now(), track + 1))
-				.into(),
-			&self.transport,
-		);
 
 		let (p_sender, a_receiver) = oneshot::channel();
 		let p_receiver = self.request_processor(a_receiver);
