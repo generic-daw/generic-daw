@@ -166,10 +166,12 @@ impl Arrangement {
 					let mut samples = boxed_slice![[0.0; 2]; frames];
 					let mut events = boxed_slice![MaybeUninit::uninit(); 256];
 					for track in 0..self.tracks.len() {
-						let mut name = self.node(self.tracks[track].id).name.clone();
-						if name.is_empty() {
-							name = format!("T{}", track + 1).into();
-						}
+						let name = &self.node(self.tracks[track].id).name;
+						let name = if name.is_empty() {
+							format!("T{}", track + 1)
+						} else {
+							sanitize_filename_chars(name)
+						};
 						self.tracks[track].audio_recorded(&mut samples, &self.transport, &name);
 						self.tracks[track].midi_recorded(&mut events, &self.transport, &name);
 					}
@@ -1300,18 +1302,16 @@ impl Arrangement {
 			BeatRange::new(start, end)
 		};
 
-		let mut name = self.node(self.tracks[track].id).name.clone();
-		if name.is_empty() {
-			name = format!("T{}", track + 1).into();
-		}
+		let name = &self.node(self.tracks[track].id).name;
+		let name = if name.is_empty() {
+			format!("T{}", track + 1)
+		} else {
+			sanitize_filename_chars(name)
+		};
 
 		let Ok(mut recording) = AudioRecording::new(
 			FREEZES_DIR
-				.join(format!(
-					"{} {}.wav",
-					sanitize_filename_chars(&name),
-					format_now(),
-				))
+				.join(format!("{name} {}.wav", format_now()))
 				.into(),
 			&self.transport,
 		)
