@@ -839,8 +839,7 @@ impl ArrangementView {
 					}
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected).ty {
-					NodeType::Master => {}
-					NodeType::Channel => {
+					NodeType::Master | NodeType::Channel => {
 						return self.update(
 							Message::ChannelToggleEnabled(self.selected),
 							config,
