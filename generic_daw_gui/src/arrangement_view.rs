@@ -742,21 +742,15 @@ impl ArrangementView {
 				Tab::Playlist => {
 					let playlist = self.playlist.get_mut();
 					playlist.finish();
+					let snap_step = state
+						.grid
+						.beats_snap_step(playlist.scale, self.arrangement.transport());
 					for &(track, clip) in &playlist.primary {
-						let pos = BeatRange::new(
-							self.arrangement.tracks()[track].clips[clip].start(),
-							self.arrangement.tracks()[track].clips[clip]
-								.end(self.arrangement.transport()),
-						)
-						.round(
-							state
-								.grid
-								.beats_snap_step(playlist.scale, self.arrangement.transport()),
-						);
+						let pos = self.arrangement.tracks()[track].clips[clip]
+							.start()
+							.round(snap_step);
 
-						self.arrangement.clip_trim_end_to(track, clip, pos.end());
-						self.arrangement
-							.clip_trim_start_to(track, clip, pos.start());
+						self.arrangement.clip_move_to(track, clip, pos);
 					}
 				}
 				Tab::Mixer => {}
@@ -764,14 +758,13 @@ impl ArrangementView {
 					let clip = self.midi_clip().unwrap();
 					let piano_roll = self.piano_roll.get_mut();
 					piano_roll.finish();
+					let snap_step = state
+						.grid
+						.beats_snap_step(piano_roll.scale, self.arrangement.transport());
 					for &note in &piano_roll.primary {
-						let pos =
-							self.arrangement.midi_patterns()[&clip.pattern].notes[note]
-								.position
-								.round(state.grid.beats_snap_step(
-									piano_roll.scale,
-									self.arrangement.transport(),
-								));
+						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+							.position
+							.round(snap_step);
 
 						self.arrangement
 							.note_trim_end_to(clip.pattern, note, pos.end());
