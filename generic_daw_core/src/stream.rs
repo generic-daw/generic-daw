@@ -4,7 +4,7 @@ use crate::{
 };
 use cpal::{
 	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
-	SampleFormat, StreamConfig, U24,
+	SampleFormat, StreamConfig, SupportedBufferSize, U24,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, warn};
@@ -190,8 +190,21 @@ pub fn build_streams(
 		.unwrap();
 
 	let sample_rate = sample_rate
+		.filter(|sample_rate| {
+			output_device
+				.supported_output_configs()
+				.unwrap()
+				.any(|config| config.contains_rate(sample_rate.get()))
+		})
 		.or_else(|| NonZero::new(output_device.default_output_config().unwrap().sample_rate()))
 		.unwrap();
+
+	let frames = frames.filter(|frames| {
+		output_device
+			.supported_output_configs()
+			.unwrap()
+			.any(|config| matches!(config.buffer_size(), &SupportedBufferSize::Range { min, max } if (min..=max).contains(&frames.get())))
+	});
 
 	let (audio_input_stream, input_channels, audio_consumer) =
 		build_audio_input_stream(input_device.as_ref(), sample_rate, frames);
