@@ -16,13 +16,15 @@ use std::{
 pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| STATE_DIR.join("state.toml").into());
 
 pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
+pub const DEFAULT_BOTTOM_PANE_POSITON: f32 = 400.0;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
 	pub last_project: Option<Arc<Path>>,
 	pub file_tree_split_at: f32,
-	pub plugins_panel_split_at: f32,
+	pub plugins_pane_split_at: f32,
+	pub bottom_pane_split_at: f32,
 	pub show_seconds: bool,
 	pub metronome: bool,
 	pub autoscroll: bool,
@@ -34,7 +36,8 @@ impl Default for State {
 		Self {
 			last_project: None,
 			file_tree_split_at: DEFAULT_SPLIT_POSITION,
-			plugins_panel_split_at: DEFAULT_SPLIT_POSITION,
+			plugins_pane_split_at: DEFAULT_SPLIT_POSITION,
+			bottom_pane_split_at: DEFAULT_BOTTOM_PANE_POSITON,
 			show_seconds: false,
 			metronome: false,
 			autoscroll: false,

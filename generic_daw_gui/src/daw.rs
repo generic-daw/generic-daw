@@ -1,5 +1,5 @@
 use crate::{
-	arrangement_view::{self, Arrangement, ArrangementView, Feedback, Tab},
+	arrangement_view::{self, Arrangement, ArrangementView, Feedback},
 	clap_host::{self, ClapHost},
 	components::{menu_entry, number_input},
 	config::Config,
@@ -7,12 +7,12 @@ use crate::{
 	file_tree::{self, FileKind, FileTree},
 	icons::{
 		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, magnet, menu, metronome,
-		pause, play, plus, sliders_vertical, square,
+		panel_bottom_dashed, pause, play, plus, sliders_vertical, square,
 	},
-	state::{DEFAULT_SPLIT_POSITION, State},
+	state::{DEFAULT_BOTTOM_PANE_POSITON, DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		button_with_radius, container_with_radius, progress_bar_with_radius, split_style,
-		weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
+		button_with_radius, container_with_radius, progress_bar_with_radius, selectable_box,
+		split_style, weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::ALPHA_2_3,
 };
@@ -24,7 +24,7 @@ use generic_daw_core::{
 	},
 };
 use generic_daw_project::proto;
-use generic_daw_widget::menu::Menu;
+use generic_daw_widget::{context_menu::ContextMenu, menu::Menu, select_area::SelectArea};
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -36,7 +36,7 @@ use iced::{
 	},
 	window,
 };
-use iced_split::{Strategy, vertical_split};
+use iced_split::{Strategy, horizontal_split, vertical_split};
 use log::{trace, warn};
 use rfd::AsyncFileDialog;
 use scan::Id as Scan;
@@ -190,12 +190,76 @@ pub enum Message {
 	ToggleGridTriplets,
 	ToggleGrid,
 
-	OnDrag(f32),
-	OnDragEnd,
-	OnDoubleClick,
+	CycleForwards,
+	CycleBackwards,
+	TopPane(Tab),
+	BottomPane(Tab),
+	BottomSelected(bool),
+	MovePaneUp,
+	MovePaneDown,
+
+	OnFileTreeDrag(f32),
+	OnBottomPaneDrag(f32),
+	OnBottomPaneDragEnd,
+	OnFileTreeDragEnd,
+	OnFileTreeDoubleClick,
+	OnBottomPaneDoubleClick,
 }
 
 const _: () = assert!(size_of::<Message>() == 72);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Tab {
+	Playlist,
+	Mixer,
+	PianoRoll,
+}
+
+impl Tab {
+	fn tab<'a>(self, top_pane: Self, bottom_pane: Option<Self>) -> Element<'a, Message> {
+		ContextMenu::new(
+			button(match self {
+				Self::Playlist => chart_no_axes_gantt(),
+				Self::Mixer => sliders_vertical(),
+				Self::PianoRoll => keyboard_music(),
+			})
+			.style(button_with_radius(
+				if bottom_pane == Some(self) {
+					button::secondary
+				} else {
+					button::primary
+				},
+				match self {
+					Self::Playlist => border::left(5),
+					Self::Mixer => border::radius(0),
+					Self::PianoRoll => border::right(5),
+				},
+			))
+			.padding(padding::horizontal(7).vertical(5))
+			.on_press_maybe(
+				(top_pane != self && bottom_pane != Some(self)).then_some(Message::TopPane(self)),
+			),
+			move || {
+				container(
+					menu_entry(panel_bottom_dashed(), "Detach", "").on_press_maybe(
+						(bottom_pane != Some(self)).then_some(Message::BottomPane(self)),
+					),
+				)
+				.width(160)
+				.style(container_with_radius(weaker_bordered_box, 5))
+				.into()
+			},
+		)
+		.into()
+	}
+
+	fn radius(self) -> border::Radius {
+		match self {
+			Self::Playlist | Self::PianoRoll => border::left(5),
+			Self::Mixer => border::top(5),
+		}
+	}
+}
 
 #[derive(Debug)]
 pub struct Daw {
@@ -219,6 +283,10 @@ pub struct Daw {
 	scan: Option<Scan>,
 	scan_progress: Option<f32>,
 	scan_status: Option<Arc<str>>,
+
+	top_pane: Tab,
+	bottom_pane: Option<Tab>,
+	bottom_selected: bool,
 
 	main_window_id: window::Id,
 	project: Project,
@@ -260,6 +328,7 @@ impl Daw {
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
+		let bottom_pane = state.bottom_pane_split_at != 0.0;
 
 		let open = if config.open_last_project {
 			Task::done(Message::OpenLastFile)
@@ -288,6 +357,10 @@ impl Daw {
 			scan: None,
 			scan_progress: None,
 			scan_status: None,
+
+			top_pane: Tab::Playlist,
+			bottom_pane: bottom_pane.then_some(Tab::Mixer),
+			bottom_selected: false,
 
 			main_window_id,
 			project,
@@ -352,7 +425,10 @@ impl Daw {
 				NoClone(a_receiver),
 				view,
 			) => {
+				self.top_pane = Tab::Playlist;
+				self.bottom_pane = self.bottom_pane.map(|_| Tab::Mixer);
 				self.project = project;
+
 				arrangement.replace_stream(self.arrangement_view.arrangement.replace_stream(None));
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
@@ -719,18 +795,141 @@ impl Daw {
 						.set_numerator(NonZero::new(numerator.clamp(1, 99)).unwrap());
 				}
 			}
-			Message::OnDrag(split_at) => {
+			Message::CycleForwards => {
+				let (message, this, other): (fn(_) -> _, _, _) = if let Some(bottom_pane) =
+					self.bottom_pane
+					&& self.bottom_selected
+				{
+					(Message::BottomPane, bottom_pane, Some(self.top_pane))
+				} else {
+					(Message::TopPane, self.top_pane, self.bottom_pane)
+				};
+
+				return self.update(message(match this {
+					Tab::Playlist if other != Some(Tab::Mixer) => Tab::Mixer,
+					Tab::Playlist | Tab::Mixer if other != Some(Tab::PianoRoll) => Tab::PianoRoll,
+					Tab::Mixer | Tab::PianoRoll if other != Some(Tab::Playlist) => Tab::Playlist,
+					Tab::PianoRoll if other != Some(Tab::Mixer) => Tab::Mixer,
+					_ => this,
+				}));
+			}
+			Message::CycleBackwards => {
+				let (message, this, other): (fn(_) -> _, _, _) = if let Some(bottom_pane) =
+					self.bottom_pane
+					&& self.bottom_selected
+				{
+					(Message::BottomPane, bottom_pane, Some(self.top_pane))
+				} else {
+					(Message::TopPane, self.top_pane, self.bottom_pane)
+				};
+
+				return self.update(message(match this {
+					Tab::PianoRoll if other != Some(Tab::Mixer) => Tab::Mixer,
+					Tab::Mixer | Tab::PianoRoll if other != Some(Tab::Playlist) => Tab::Playlist,
+					Tab::Playlist | Tab::Mixer if other != Some(Tab::PianoRoll) => Tab::PianoRoll,
+					Tab::Playlist if other != Some(Tab::Mixer) => Tab::Mixer,
+					_ => this,
+				}));
+			}
+			Message::TopPane(top_pane) => {
+				if self.bottom_pane == Some(top_pane) {
+					return self.update(Message::BottomSelected(true));
+				} else if self.top_pane != top_pane {
+					self.arrangement_view.finish(self.top_pane);
+					self.top_pane = top_pane;
+				}
+			}
+			Message::BottomPane(bottom_pane) => {
+				if self.state.bottom_pane_split_at == 0.0 {
+					self.state.bottom_pane_split_at = DEFAULT_BOTTOM_PANE_POSITON;
+					self.state.write();
+				}
+
+				let fut = if self.top_pane == bottom_pane {
+					if let Some(bottom_pane) = self.bottom_pane {
+						self.top_pane = bottom_pane;
+						self.bottom_selected ^= true;
+						Task::none()
+					} else {
+						self.bottom_selected = true;
+						self.update(Message::CycleForwards)
+					}
+				} else {
+					self.update(Message::BottomSelected(true))
+				};
+
+				self.bottom_pane = Some(bottom_pane);
+
+				return fut;
+			}
+			Message::BottomSelected(bottom_selected) => {
+				if self.bottom_selected != bottom_selected
+					&& let Some(bottom_pane) = self.bottom_pane
+				{
+					self.bottom_selected = bottom_selected;
+					self.arrangement_view.unselect_all(if self.bottom_selected {
+						self.top_pane
+					} else {
+						bottom_pane
+					});
+				}
+			}
+			Message::MovePaneUp => {
+				return if self.bottom_pane.is_none() {
+					Task::batch([
+						self.update(Message::BottomPane(self.top_pane)),
+						self.update(Message::BottomPane(self.top_pane)),
+					])
+				} else if self.bottom_selected {
+					self.update(Message::BottomPane(self.top_pane))
+				} else {
+					Task::batch([
+						self.update(Message::OnBottomPaneDrag(0.0)),
+						self.update(Message::OnBottomPaneDragEnd),
+					])
+				};
+			}
+			Message::MovePaneDown => {
+				return if self.bottom_pane.is_none() || !self.bottom_selected {
+					self.update(Message::BottomPane(self.top_pane))
+				} else {
+					Task::batch([
+						self.update(Message::BottomPane(self.top_pane)),
+						self.update(Message::MovePaneUp),
+					])
+				};
+			}
+			Message::OnFileTreeDrag(split_at) => {
 				self.state.file_tree_split_at = if split_at >= 20.0 {
 					split_at.clamp(200.0, 1000.0)
 				} else {
 					0.0
 				};
 			}
-			Message::OnDragEnd => self.state.write(),
-			Message::OnDoubleClick => {
+			Message::OnBottomPaneDrag(split_at) => {
+				self.state.bottom_pane_split_at = if split_at >= 30.0 {
+					split_at.clamp(300.0, 1000.0)
+				} else {
+					0.0
+				};
+			}
+			Message::OnBottomPaneDragEnd => {
+				if self.state.bottom_pane_split_at == 0.0 {
+					self.bottom_pane = None;
+				}
+				self.state.write();
+			}
+			Message::OnFileTreeDragEnd => self.state.write(),
+			Message::OnFileTreeDoubleClick => {
 				return Task::batch([
-					self.update(Message::OnDrag(DEFAULT_SPLIT_POSITION)),
-					self.update(Message::OnDragEnd),
+					self.update(Message::OnFileTreeDrag(DEFAULT_SPLIT_POSITION)),
+					self.update(Message::OnFileTreeDragEnd),
+				]);
+			}
+			Message::OnBottomPaneDoubleClick => {
+				return Task::batch([
+					self.update(Message::OnBottomPaneDrag(DEFAULT_BOTTOM_PANE_POSITON)),
+					self.update(Message::OnFileTreeDragEnd),
 				]);
 			}
 		}
@@ -978,44 +1177,9 @@ impl Daw {
 					]
 					.spacing(5),
 					row![
-						button(chart_no_axes_gantt())
-							.style(button_with_radius(button::primary, border::left(5)))
-							.padding(padding::horizontal(7).vertical(5))
-							.on_press_maybe(
-								(self.arrangement_view.tab() != Tab::Playlist).then_some(
-									Message::Arrangement(
-										self.project,
-										arrangement_view::Message::ChangedTab(Tab::Playlist)
-									)
-								)
-							),
-						button(sliders_vertical())
-							.style(button_with_radius(button::primary, 0))
-							.padding(padding::horizontal(7).vertical(5))
-							.on_press_maybe((self.arrangement_view.tab() != Tab::Mixer).then_some(
-								Message::Arrangement(
-									self.project,
-									arrangement_view::Message::ChangedTab(Tab::Mixer)
-								)
-							)),
-						button(keyboard_music())
-							.style(button_with_radius(
-								if self.arrangement_view.midi_clip().is_some() {
-									button::primary
-								} else {
-									button::secondary
-								},
-								border::right(5)
-							))
-							.padding(padding::horizontal(7).vertical(5))
-							.on_press_maybe(
-								(self.arrangement_view.midi_clip().is_some()
-									&& self.arrangement_view.tab() != Tab::PianoRoll)
-									.then_some(Message::Arrangement(
-										self.project,
-										arrangement_view::Message::ChangedTab(Tab::PianoRoll)
-									))
-							),
+						Tab::Playlist.tab(self.top_pane, self.bottom_pane),
+						Tab::Mixer.tab(self.top_pane, self.bottom_pane),
+						Tab::PianoRoll.tab(self.top_pane, self.bottom_pane),
 					],
 				]
 				.height(Shrink)
@@ -1027,14 +1191,58 @@ impl Daw {
 						self.files_hovered.then(|| center(plus().size(40.0))
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
-					self.arrangement_view
-						.view(&self.state, &self.plugins)
-						.map(|message| Message::Arrangement(self.project, message)),
+					self.bottom_pane.map_or_else(
+						|| self
+							.arrangement_view
+							.view(self.top_pane, &self.state, &self.plugins)
+							.map(|message| Message::Arrangement(self.project, message)),
+						|bottom_pane| horizontal_split(
+							SelectArea::new(
+								container(
+									self.arrangement_view
+										.view(self.top_pane, &self.state, &self.plugins)
+										.map(|message| Message::Arrangement(self.project, message))
+								)
+								.padding(5)
+								.style(container_with_radius(
+									selectable_box(container::transparent, !self.bottom_selected),
+									self.top_pane.radius()
+								))
+							)
+							.on_select_maybe(
+								self.bottom_selected
+									.then_some(Message::BottomSelected(false))
+							),
+							SelectArea::new(
+								container(
+									self.arrangement_view
+										.view(bottom_pane, &self.state, &self.plugins)
+										.map(|message| Message::Arrangement(self.project, message))
+								)
+								.padding(5)
+								.style(container_with_radius(
+									selectable_box(container::transparent, self.bottom_selected),
+									bottom_pane.radius()
+								))
+							)
+							.on_select_maybe(
+								(!self.bottom_selected).then_some(Message::BottomSelected(true))
+							),
+							self.state.bottom_pane_split_at,
+							Message::OnBottomPaneDrag,
+						)
+						.on_drag_end(Message::OnBottomPaneDragEnd)
+						.on_double_click(Message::OnBottomPaneDoubleClick)
+						.strategy(Strategy::End)
+						.focus_delay(Duration::ZERO)
+						.style(split_style)
+						.into()
+					),
 					self.state.file_tree_split_at,
-					Message::OnDrag
+					Message::OnFileTreeDrag
 				)
-				.on_drag_end(Message::OnDragEnd)
-				.on_double_click(Message::OnDoubleClick)
+				.on_drag_end(Message::OnFileTreeDragEnd)
+				.on_double_click(Message::OnFileTreeDoubleClick)
 				.strategy(Strategy::Start)
 				.focus_delay(Duration::ZERO)
 				.style(split_style)
@@ -1245,54 +1453,55 @@ impl Daw {
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
-		let autosave = if self.config.autosave.enabled {
-			every(Duration::from_secs(
-				self.config.autosave.interval.get().into(),
-			))
-			.map(|_| Message::AutosaveFile)
-		} else {
-			Subscription::none()
-		};
-
-		let keybinds = if self.progress.is_some() {
-			Subscription::none()
-		} else if self.config_view.is_some() {
-			keyboard::listen().filter_map(|event| match event {
-				keyboard::Event::KeyPressed {
-					key,
-					physical_key,
-					modifiers,
-					repeat,
-					..
-				} => ConfigView::keybinds(&key, modifiers, repeat)
-					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-				_ => None,
-			})
-		} else {
-			keyboard::listen()
-				.with(self.project)
-				.filter_map(|(project, event)| match event {
-					keyboard::Event::KeyPressed {
-						key,
-						physical_key,
-						modifiers,
-						repeat,
-						..
-					} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
-						.map(|message| Message::Arrangement(project, message))
-						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-					_ => None,
-				})
-		};
-
 		Subscription::batch([
 			self.arrangement_view
 				.subscription()
 				.with(self.project)
 				.map(|(project, message)| Message::Arrangement(project, message)),
 			self.clap_host.subscription().map(Message::ClapHost),
-			autosave,
-			keybinds,
+			if self.config.autosave.enabled {
+				every(Duration::from_secs(
+					self.config.autosave.interval.get().into(),
+				))
+				.map(|_| Message::AutosaveFile)
+			} else {
+				Subscription::none()
+			},
+			if self.progress.is_some() {
+				Subscription::none()
+			} else if self.config_view.is_some() {
+				keyboard::listen().filter_map(|event| match event {
+					keyboard::Event::KeyPressed {
+						key,
+						physical_key,
+						modifiers,
+						repeat,
+						..
+					} => ConfigView::keybinds(&key, modifiers, repeat)
+						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
+					_ => None,
+				})
+			} else {
+				keyboard::listen()
+					.with((
+						self.project,
+						self.bottom_pane
+							.filter(|_| self.bottom_selected)
+							.unwrap_or(self.top_pane),
+					))
+					.filter_map(|((project, tab), event)| match event {
+						keyboard::Event::KeyPressed {
+							key,
+							physical_key,
+							modifiers,
+							repeat,
+							..
+						} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
+							.map(|message| Message::Arrangement(project, message(tab)))
+							.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
+						_ => None,
+					})
+			},
 			window::events().filter_map(|(window, event)| match event {
 				window::Event::CloseRequested => Some(Message::CloseRequested(window)),
 				window::Event::FileHovered(..) => Some(Message::FileHovered),
@@ -1318,6 +1527,7 @@ impl Daw {
 			(false, false, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::TogglePlayback),
 				keyboard::Key::Named(keyboard::key::Named::F11) => Some(Message::ToggleFullscreen),
+				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleForwards),
 				_ => None,
 			},
 			(true, false, false, false) => match key.to_latin(physical_key) {
@@ -1335,11 +1545,29 @@ impl Daw {
 			},
 			(false, true, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Stop),
+				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleBackwards),
+
 				_ => None,
 			},
 			(true, true, false, false) => match key.to_latin(physical_key) {
 				Some('o') => Some(Message::OpenLastFile),
 				Some('s') => Some(Message::SaveAsFileDialog),
+				_ => None,
+			},
+			(false, false, true, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+					Some(Message::BottomSelected(false))
+				}
+				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+					Some(Message::BottomSelected(true))
+				}
+				_ => None,
+			},
+			(false, true, true, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::MovePaneUp),
+				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+					Some(Message::MovePaneDown)
+				}
 				_ => None,
 			},
 			_ => None,

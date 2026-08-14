@@ -173,6 +173,18 @@ pub fn text_input_transparent(t: &Theme, _s: text_input::Status) -> text_input::
 	}
 }
 
+pub fn text_input_with_radius(
+	f: impl Fn(&Theme, text_input::Status) -> text_input::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+	let r = r.into();
+	move |t, s| {
+		let mut style = f(t, s);
+		style.border.radius = r;
+		style
+	}
+}
+
 pub fn weak_bordered_box(t: &Theme) -> container::Style {
 	container::background(t.palette().background.weak.color)
 		.border(border::width(1).color(t.palette().background.strong.color))

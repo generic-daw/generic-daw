@@ -3,7 +3,10 @@ use crate::{
 	components::menu_entry,
 	daw,
 	icons::rotate_ccw,
-	stylefns::{container_with_radius, scrollable_style, weaker_bordered_box},
+	stylefns::{
+		container_with_radius, menu_style, scrollable_style, text_input_with_radius,
+		weaker_bordered_box,
+	},
 	widget::LINE_HEIGHT,
 };
 use fragile::Fragile;
@@ -13,7 +16,7 @@ use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
 	time::every,
-	widget::{column, combo_box, container, row, rule, scrollable, space, text},
+	widget::{column, combo_box, container, row, rule, scrollable, space, text, text_input},
 	window,
 };
 use log::info;
@@ -373,7 +376,9 @@ impl ClapHost {
 						"Load Preset",
 						self.preset_of_plugin.get(&id),
 						move |preset| Message::LoadPreset(id, preset)
-					)),
+					)
+					.input_style(text_input_with_radius(text_input::default, 5))
+					.menu_style(menu_style)),
 				]
 				.align_y(Center),
 				container(rule::horizontal(1)).padding(padding::vertical(5)),

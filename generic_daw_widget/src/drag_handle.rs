@@ -19,7 +19,7 @@ struct State {
 }
 
 pub struct DragHandle<'a, Message> {
-	child: Element<'a, Message, Theme, Renderer>,
+	content: Element<'a, Message, Theme, Renderer>,
 	range: RangeInclusive<usize>,
 	value: usize,
 	default: usize,
@@ -29,13 +29,13 @@ pub struct DragHandle<'a, Message> {
 impl<'a, Message> DragHandle<'a, Message> {
 	#[must_use]
 	pub fn new(
-		child: impl Into<Element<'a, Message, Theme, Renderer>>,
+		content: impl Into<Element<'a, Message, Theme, Renderer>>,
 		range: RangeInclusive<usize>,
 		value: usize,
 		f: impl Fn(usize) -> Message + 'a,
 	) -> Self {
 		Self {
-			child: child.into(),
+			content: content.into(),
 			range: range.clone(),
 			value,
 			default: *range.end(),
@@ -52,7 +52,7 @@ impl<'a, Message> DragHandle<'a, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	fn size(&self) -> Size<Length> {
-		self.child.as_widget().size()
+		self.content.as_widget().size()
 	}
 
 	fn tag(&self) -> tree::Tag {
@@ -64,11 +64,11 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 
 	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut self.child]);
+		tree.diff_children(&mut [&mut self.content]);
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		self.child
+		self.content
 			.as_widget_mut()
 			.layout(&mut tree.children[0], renderer, limits)
 	}
@@ -83,7 +83,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		self.child.as_widget_mut().update(
+		self.content.as_widget_mut().update(
 			&mut tree.children[0],
 			event,
 			layout,
@@ -177,7 +177,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		self.child.as_widget().draw(
+		self.content.as_widget().draw(
 			&tree.children[0],
 			renderer,
 			theme,
@@ -201,7 +201,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		if state.dragging.is_some() {
 			Interaction::ResizingVertically
 		} else if state.hovering {
-			let interaction = self.child.as_widget().mouse_interaction(
+			let interaction = self.content.as_widget().mouse_interaction(
 				&tree.children[0],
 				layout,
 				cursor,
@@ -227,7 +227,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-		self.child.as_widget_mut().overlay(
+		self.content.as_widget_mut().overlay(
 			&mut tree.children[0],
 			layout,
 			renderer,
@@ -245,9 +245,12 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	) {
 		operation.container(None, layout.bounds());
 		operation.traverse(&mut |operation| {
-			self.child
-				.as_widget_mut()
-				.operate(&mut tree.children[0], layout, renderer, operation);
+			self.content.as_widget_mut().operate(
+				&mut tree.children[0],
+				layout,
+				renderer,
+				operation,
+			);
 		});
 	}
 }
