@@ -318,8 +318,8 @@ impl AudioThread {
 				midi_patterns: HashMap::new(),
 				render_mode: RenderMode::Realtime,
 				audio_input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
-				midi_input: Vec::with_capacity(3 * 128),
-				playing: HashMap::with_capacity(16 * 128),
+				midi_input: Vec::with_capacity(2048),
+				playing: HashMap::with_capacity(2048),
 			},
 			transport.frames,
 		);
@@ -465,22 +465,24 @@ impl AudioThread {
 		for &action in midi_input {
 			trace!("{action:?}");
 
-			if let Some(velocity) = match action {
+			match action {
 				MidiAction::NoteOn(channel, key, velocity) => {
-					self.state_mut().playing.insert((channel, key), velocity)
+					if let Some(velocity) =
+						self.state_mut().playing.insert((channel, key), velocity)
+					{
+						self.state_mut()
+							.midi_input
+							.push(MidiAction::NoteOff(channel, key, velocity));
+					}
+
+					self.state_mut().midi_input.push(action);
 				}
 				MidiAction::NoteOff(channel, key, _) => {
-					self.state_mut().playing.remove(&(channel, key))
+					if self.state_mut().playing.remove(&(channel, key)).is_some() {
+						self.state_mut().midi_input.push(action);
+					}
 				}
-			} {
-				self.state_mut().midi_input.push(MidiAction::NoteOff(
-					action.channel(),
-					action.key(),
-					velocity,
-				));
 			}
-
-			self.state_mut().midi_input.push(action);
 		}
 
 		if let Some((sender, receiver)) = self.recv_events() {

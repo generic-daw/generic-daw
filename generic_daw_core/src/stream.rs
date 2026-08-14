@@ -246,7 +246,7 @@ fn build_midi_input_connection(
 
 		input.ignore(Ignore::All);
 
-		let (producer, consumer) = RingBuffer::new(256);
+		let (producer, consumer) = RingBuffer::new(2048);
 
 		Some((
 			input

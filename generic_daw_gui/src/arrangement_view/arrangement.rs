@@ -73,8 +73,8 @@ impl Arrangement {
 		frames: NonZero<u32>,
 		p_sender: oneshot::Sender<AudioThread>,
 	) -> (Self, Task<Batch>) {
-		let (p_producer, consumer) = RingBuffer::new(2048);
-		let (producer, p_consumer) = RingBuffer::new(2048);
+		let (p_producer, consumer) = RingBuffer::new(6000);
+		let (producer, p_consumer) = RingBuffer::new(6000);
 
 		let (processor, master, transport) = AudioThread::create(
 			input_channels,
@@ -164,7 +164,7 @@ impl Arrangement {
 			match update {
 				Update::Recorded(frames) => {
 					let mut samples = boxed_slice![[0.0; 2]; frames];
-					let mut events = boxed_slice![MaybeUninit::uninit(); 256];
+					let mut events = boxed_slice![MaybeUninit::uninit(); 2048];
 					for track in 0..self.tracks.len() {
 						let name = &self.node(self.tracks[track].id).name;
 						let name = if name.is_empty() {
@@ -786,7 +786,7 @@ impl Arrangement {
 		if self.tracks[track].audio_consumer.take().is_some() {
 			self.node_action(id, NodeAction::InputSetAudioRecording(None));
 		} else {
-			let (producer, consumer) = RingBuffer::new(4096);
+			let (producer, consumer) = RingBuffer::new(192_000);
 			self.tracks[track].audio_consumer = Some(consumer);
 			self.node_action(id, NodeAction::InputSetAudioRecording(Some(producer)));
 		}
@@ -797,7 +797,7 @@ impl Arrangement {
 		if self.tracks[track].midi_consumer.take().is_some() {
 			self.node_action(id, NodeAction::InputSetMidiRecording(None));
 		} else {
-			let (producer, consumer) = RingBuffer::new(256);
+			let (producer, consumer) = RingBuffer::new(2048);
 			self.tracks[track].midi_consumer = Some(consumer);
 			self.node_action(id, NodeAction::InputSetMidiRecording(Some(producer)));
 		}
