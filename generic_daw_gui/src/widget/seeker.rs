@@ -453,7 +453,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		cursor: Cursor,
 		_viewport: &Rectangle,
 	) {
-		self.grid(renderer, Self::right_viewport(layout), theme);
+		self.bottom_layer(renderer, Self::right_viewport(layout), theme);
 
 		renderer.with_layer(
 			layout.bounds().shrink(padding::vertical(LINE_HEIGHT)),
@@ -482,11 +482,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		);
 
 		renderer.with_layer(Rectangle::INFINITE, |renderer| {
-			self.seeker(
-				renderer,
-				Self::right_viewport(layout).expand(padding::vertical(LINE_HEIGHT)),
-				theme,
-			);
+			self.top_layer(renderer, Self::right_viewport(layout), theme);
 		});
 	}
 
@@ -633,7 +629,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			.shrink(padding::left(layout.child(0).bounds().width).vertical(LINE_HEIGHT))
 	}
 
-	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+	fn bottom_layer(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
@@ -711,9 +707,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			},
 			Color::TRANSPARENT,
 		);
-	}
 
-	fn seeker(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+		let bounds = bounds.expand(padding::vertical(LINE_HEIGHT));
 		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
@@ -778,6 +773,153 @@ impl<'a, Message> Seeker<'a, Message> {
 				},
 				theme.palette().primary.base.color,
 			);
+		}
+
+		let mut numbering_grid = Grid::default();
+		numbering_grid.size = numbering_grid.size.max(self.grid.size);
+
+		let snap_step = numbering_grid
+			.beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
+			.beat_ceil();
+
+		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
+		let end_beat = px_to_time(
+			self.offset + bounds.width,
+			self.position,
+			self.scale,
+			self.transport,
+		);
+		beat = beat.floor(snap_step);
+
+		while beat <= end_beat {
+			let content = if snap_step == BeatTime::BEAT {
+				format!(
+					"{}:{:0digits$}",
+					beat.bar(self.transport) + 1,
+					beat.beat_in_bar(self.transport) + 1,
+					digits = self.transport.numerator.ilog10() as usize + 1,
+				)
+			} else {
+				format!("{}", beat.bar(self.transport) + 1)
+			};
+
+			let bar = Text {
+				content,
+				bounds: Size::new(f32::INFINITY, 0.0),
+				size: renderer.default_size(),
+				line_height: LineHeight::default(),
+				font: Font::MONOSPACE,
+				align_x: Alignment::Left,
+				align_y: Vertical::Bottom,
+				shaping: Shaping::Basic,
+				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
+				hint_factor: renderer.hint_factor(),
+			};
+
+			let pos = offset_time(beat) + Vector::new(0.0, LINE_HEIGHT);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						pos - Vector::new(0.0, LINE_HEIGHT / 3.0),
+						Size::new(1.5, LINE_HEIGHT / 3.0),
+					)
+					.intersection(&bounds)
+					.unwrap_or_default(),
+					..Quad::default()
+				},
+				theme.palette().primary.base.text,
+			);
+
+			renderer.fill_text(
+				bar,
+				pos + Vector::new(3.0, 0.0),
+				theme.palette().primary.base.text,
+				bounds,
+			);
+
+			beat += snap_step;
+		}
+
+		let snap_step = numbering_grid
+			.seconds_snap_step(self.scale + Vector::new(3.0, 0.0))
+			.second_ceil();
+
+		let mut second = px_to_time(self.offset, self.position, self.scale, self.transport)
+			.to_seconds_time(self.transport);
+		let end_second = px_to_time(
+			self.offset + bounds.width,
+			self.position,
+			self.scale,
+			self.transport,
+		)
+		.to_seconds_time(self.transport);
+		second = second.floor(snap_step).second_floor();
+
+		while second <= end_second {
+			let bar = Text {
+				content: format!("{}:{:02}", second.second() / 60, second.second() % 60),
+				bounds: Size::new(f32::INFINITY, 0.0),
+				size: renderer.default_size(),
+				line_height: LineHeight::default(),
+				font: Font::MONOSPACE,
+				align_x: Alignment::Left,
+				align_y: Vertical::Top,
+				shaping: Shaping::Basic,
+				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
+				hint_factor: renderer.hint_factor(),
+			};
+
+			let pos = offset_time(second.to_beat_time(self.transport)) + offset;
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(pos, Size::new(1.5, LINE_HEIGHT / 3.0))
+						.intersection(&bounds)
+						.unwrap_or_default(),
+					..Quad::default()
+				},
+				theme.palette().primary.base.text,
+			);
+
+			renderer.fill_text(
+				bar,
+				pos + Vector::new(3.0, 0.0),
+				theme.palette().primary.base.text,
+				bounds,
+			);
+
+			second += snap_step;
+		}
+	}
+
+	fn top_layer(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+		let offset_time = |time: BeatTime| {
+			bounds.position()
+				+ Vector::new(
+					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
+					0.0,
+				)
+		};
+
+		renderer.fill_quad(
+			Quad {
+				bounds: Rectangle::new(
+					offset_time(self.transport.position.to_beat_time(self.transport)),
+					Size::new(1.5, bounds.height),
+				)
+				.intersection(&bounds)
+				.unwrap_or_default(),
+				..Quad::default()
+			},
+			theme.palette().primary.base.color,
+		);
+
+		if let Some(loop_range) = self.transport.loop_range {
+			let start = offset_time(loop_range.start());
+			let end = offset_time(loop_range.end());
 
 			renderer.fill_quad(
 				Quad {
@@ -818,111 +960,6 @@ impl<'a, Message> Seeker<'a, Message> {
 				},
 				theme.palette().secondary.base.color.scale_alpha(ALPHA_1_3),
 			);
-		}
-
-		renderer.fill_quad(
-			Quad {
-				bounds: Rectangle::new(
-					offset_time(self.transport.position.to_beat_time(self.transport)),
-					Size::new(1.5, bounds.height),
-				)
-				.intersection(&bounds)
-				.unwrap_or_default(),
-				..Quad::default()
-			},
-			theme.palette().primary.base.color,
-		);
-
-		let mut numbering_grid = Grid::default();
-		numbering_grid.size = numbering_grid.size.max(self.grid.size);
-
-		let snap_step = numbering_grid
-			.beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
-			.beat_ceil();
-
-		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
-		let end_beat = px_to_time(
-			self.offset + bounds.width,
-			self.position,
-			self.scale,
-			self.transport,
-		);
-		beat = beat.floor(snap_step);
-
-		while beat <= end_beat {
-			let content = if snap_step == BeatTime::BEAT {
-				format!(
-					"{}:{:0digits$}",
-					beat.bar(self.transport) + 1,
-					beat.beat_in_bar(self.transport) + 1,
-					digits = self.transport.numerator.ilog10() as usize + 1,
-				)
-			} else {
-				format!("{}", beat.bar(self.transport) + 1)
-			};
-
-			let bar = Text {
-				content,
-				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
-				font: Font::MONOSPACE,
-				align_x: Alignment::Left,
-				align_y: Vertical::Top,
-				shaping: Shaping::Basic,
-				wrapping: Wrapping::None,
-				ellipsis: Ellipsis::None,
-				hint_factor: renderer.hint_factor(),
-			};
-
-			renderer.fill_text(
-				bar,
-				offset_time(beat) + Vector::new(3.0, 0.0),
-				theme.palette().primary.base.text,
-				bounds,
-			);
-
-			beat += snap_step;
-		}
-
-		let snap_step = numbering_grid
-			.seconds_snap_step(self.scale + Vector::new(3.0, 0.0))
-			.second_ceil();
-
-		let mut second = px_to_time(self.offset, self.position, self.scale, self.transport)
-			.to_seconds_time(self.transport);
-		let end_second = px_to_time(
-			self.offset + bounds.width,
-			self.position,
-			self.scale,
-			self.transport,
-		)
-		.to_seconds_time(self.transport);
-		second = second.floor(snap_step).second_floor();
-
-		while second <= end_second {
-			let bar = Text {
-				content: format!("{}:{:02}", second.second() / 60, second.second() % 60),
-				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
-				font: Font::MONOSPACE,
-				align_x: Alignment::Left,
-				align_y: Vertical::Top,
-				shaping: Shaping::Basic,
-				wrapping: Wrapping::None,
-				ellipsis: Ellipsis::None,
-				hint_factor: renderer.hint_factor(),
-			};
-
-			renderer.fill_text(
-				bar,
-				offset_time(second.to_beat_time(self.transport)) + offset + Vector::new(3.0, 0.0),
-				theme.palette().primary.base.text,
-				bounds,
-			);
-
-			second += snap_step;
 		}
 	}
 }
