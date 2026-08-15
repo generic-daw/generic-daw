@@ -98,8 +98,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						let border = 10f32.min(note_bounds.width / 3.0);
 						match (start_offset < border, end_offset < border) {
 							(false, false) => {
-								let bounds = layout.bounds().intersection(viewport).unwrap()
-									- Vector::new(viewport.x, viewport.y);
+								let bounds =
+									layout.bounds().intersection(viewport).unwrap_or_default()
+										- Vector::new(viewport.x, viewport.y);
 								let vel_pixel = bounds.x
 									+ border + self.note.velocity
 									* (bounds.width - 2.0 * border);
@@ -257,7 +258,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 		let border = 10f32.min(layout.bounds().width / 3.0);
 		match (cursor.x < border, layout.bounds().width - cursor.x < border) {
 			(false, false) => {
-				let bounds = layout.bounds().intersection(viewport).unwrap()
+				let bounds = layout.bounds().intersection(viewport).unwrap_or_default()
 					- Vector::new(layout.position().x, layout.position().y);
 				let vel_pixel =
 					bounds.x + border + self.note.velocity * (bounds.width - 2.0 * border);

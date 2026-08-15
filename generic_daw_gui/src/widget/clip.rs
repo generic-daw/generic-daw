@@ -324,7 +324,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				match self.inner {
 					Inner::AudioClip(inner) => 'block: {
-						if cursor.y - clip_bounds.y.max(0.0) < header_height {
+						if cursor.y - clip_bounds.y < header_height {
 							break 'block;
 						}
 
@@ -338,15 +338,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
 							clip_bounds.y
 								+ header_height + (1.0 - inner.clip.fade_start.p.y)
-								* (layout.bounds().height - header_height),
+								* (clip_bounds.height - header_height),
 						);
 
 						let fade_end_control = Point::new(
 							clip_bounds.x
-								+ layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
+								+ clip_bounds.width + inner.clip.fade_end.p.x * fade_end_px,
 							clip_bounds.y
 								+ header_height + (1.0 - inner.clip.fade_end.p.y)
-								* (layout.bounds().height - header_height),
+								* (clip_bounds.height - header_height),
 						);
 
 						let fade_start_control_dist = cursor.distance(fade_start_control);
@@ -375,10 +375,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								return;
 							}
 							(false, false, _) => {
-								let bounds = layout.bounds().intersection(viewport).unwrap()
-									- Vector::new(viewport.x, viewport.y);
-								let volume_control = bounds.position()
-									+ Vector::new(bounds.width / 2.0, bounds.height);
+								let bounds =
+									layout.bounds().intersection(viewport).unwrap_or_default();
+								let volume_control = Point::new(
+									bounds.x + bounds.width / 2.0 - viewport.x,
+									clip_bounds.y + clip_bounds.height,
+								);
 								if bounds.width >= 8.0 && cursor.distance(volume_control) <= 10.0 {
 									if new_click.kind() == Kind::Double {
 										shell.publish((self.f)(Action::InvertPolarity));
@@ -396,13 +398,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 						let fade_start_tab_dist =
 							(clip_bounds.x + fade_start_px + 4.0 - cursor.x).abs();
-						let fade_end_tab_dist =
-							(clip_bounds.x + layout.bounds().width + fade_end_px - 4.0 - cursor.x)
-								.abs();
+						let fade_end_tab_dist = (clip_bounds.x + clip_bounds.width + fade_end_px
+							- 4.0 - cursor.x)
+							.abs();
 
 						let left_of_start_tab = clip_bounds.x + fade_start_px > cursor.x;
 						let left_of_end_tab =
-							clip_bounds.x + layout.bounds().width + fade_end_px > cursor.x;
+							clip_bounds.x + clip_bounds.width + fade_end_px > cursor.x;
 
 						let use_start = match (fade_start_tab_dist <= 6.0, fade_end_tab_dist <= 6.0)
 						{
@@ -608,11 +610,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		let playlist = self.playlist.borrow();
 		let frames_per_px = frames_per_px(playlist.scale, self.transport);
+		let unclipped_bounds = layout.bounds().shrink(padding::top(header_height));
 
 		match self.inner {
 			Inner::AudioClip(inner) => {
-				let unclipped_bounds = layout.bounds().shrink(padding::top(header_height));
-
 				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform", || {
 						let resample_ratio = inner.sample.resample_ratio(self.transport);
@@ -714,6 +715,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						);
 					}
 
+					let lower_edge = unclipped_bounds.y + unclipped_bounds.height - lower_bounds.y;
+
 					if state.show_controls {
 						frame.fill(
 							&Path::new(|b| {
@@ -736,7 +739,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						);
 
 						if lower_bounds.width >= 8.0 {
-							let control = Point::new(lower_bounds.width / 2.0, lower_bounds.height);
+							let control = Point::new(lower_bounds.width / 2.0, lower_edge);
 
 							frame.fill(
 								&Path::circle(control, 4.0),
@@ -778,11 +781,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					if state.show_controls || state.volume_text.content() != "0.0 dB" {
 						let size = state.volume_text.min_bounds().expand((4.0, 4.0));
 
-						if lower_bounds.width >= size.width
-							&& lower_bounds.height >= size.height + 5.0
-						{
-							let control =
-								Point::new(lower_bounds.width / 2.0, lower_bounds.height - 6.0);
+						if lower_bounds.width >= size.width && lower_edge >= size.height + 5.0 {
+							let control = Point::new(lower_bounds.width / 2.0, lower_edge - 6.0);
 
 							frame.fill(
 								&Path::rounded_rectangle(
@@ -837,8 +837,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					.map(|note| note.key.0)
 					.fold((255, 0), |(min, max), key| (key.min(min), key.max(max)));
 
-				let note_height =
-					(layout.bounds().height - header_height) / f32::from(max - min + 3);
+				let note_height = unclipped_bounds.height / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + header_height);
 
 				for note in &inner.pattern.notes {
@@ -882,7 +881,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							self.transport,
 							frames_per_px,
 							theme.palette().background.strong.text,
-							layout.bounds().shrink(padding::top(header_height)),
+							unclipped_bounds,
 							lower_bounds,
 						)
 					}) {
@@ -909,8 +908,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					.chain(inner.playing.keys().map(|(_, key)| key.as_int()))
 					.fold((255, 0), |(min, max), key| (key.min(min), key.max(max)));
 
-				let note_height =
-					(layout.bounds().height - header_height) / f32::from(max - min + 3);
+				let note_height = unclipped_bounds.height / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + header_height);
 
 				for note in &inner.notes {
@@ -986,7 +984,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		match self.inner {
 			Inner::AudioClip(inner) => 'block: {
-				if cursor.y - (viewport.y - layout.position().y).max(0.0) < header_height {
+				if cursor.y + layout.position().y - viewport.y < header_height {
 					break 'block;
 				}
 
@@ -1014,10 +1012,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					return Interaction::Crosshair;
 				}
 
-				let bounds = layout.bounds().intersection(viewport).unwrap()
-					- Vector::new(layout.position().x, layout.position().y);
-				let volume_control =
-					bounds.position() + Vector::new(bounds.width / 2.0, bounds.height);
+				let bounds = layout.bounds().intersection(viewport).unwrap_or_default();
+				let volume_control = Point::new(
+					bounds.x + bounds.width / 2.0 - layout.position().x,
+					layout.bounds().height,
+				);
 				if bounds.width >= 8.0 && cursor.distance(volume_control) <= 10.0 {
 					return Interaction::ResizingVertically;
 				}
