@@ -73,16 +73,14 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for SelectArea<'_, Message
 
 		if let Event::Mouse(mouse::Event::ButtonPressed { .. }) = event
 			&& cursor.is_over(layout.bounds())
+			&& let Some(message) = &self.on_select
 		{
 			let mut block = Block(false);
 			self.content
 				.as_widget_mut()
 				.operate(tree, layout, renderer, &mut block);
-
-			if !block.0
-				&& let Some(message) = self.on_select.clone()
-			{
-				shell.publish(message);
+			if !block.0 {
+				shell.publish(message.clone());
 			}
 		}
 	}
@@ -164,8 +162,8 @@ impl Operation for Block {
 		_bounds: Rectangle,
 		state: &mut dyn std::any::Any,
 	) {
-		if let Some(Self(blocked)) = state.downcast_mut() {
-			self.0 |= std::mem::take(blocked);
+		if let Some(Self(block)) = state.downcast_ref() {
+			self.0 |= block;
 		}
 	}
 }
@@ -216,12 +214,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Blocker<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		if let Event::Mouse(mouse::Event::ButtonPressed { .. }) = event
-			&& cursor.is_over(layout.bounds())
-		{
-			self.block.0 = true;
-		}
-
+		self.block.0 = matches!(event, Event::Mouse(mouse::Event::ButtonPressed { .. }))
+			&& cursor.is_over(layout.bounds());
 		self.content
 			.as_widget_mut()
 			.update(tree, event, layout, cursor, renderer, shell, viewport);
