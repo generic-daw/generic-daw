@@ -34,7 +34,7 @@ use generic_daw_widget::{
 	context_menu::ContextMenu,
 	knob::Knob,
 	peak_meter::{MAX_VOL, PeakMeter},
-	select_area::SelectArea,
+	select_area::{self, SelectArea},
 };
 use iced::{
 	Center, Element, Fill, Shrink, Subscription, Task, Vector, border,
@@ -2116,43 +2116,47 @@ impl ArrangementView {
 									self.arrangement.node(self.selected).outgoing.get(&node.id);
 
 								let down = |r: border::Radius| {
-									button(chevron_down())
-										.padding(0)
-										.style(button_with_radius(
-											if enabled && incoming.is_some() {
-												button::primary
+									select_area::Blocker::new(
+										button(chevron_down())
+											.padding(0)
+											.style(button_with_radius(
+												if enabled && incoming.is_some() {
+													button::primary
+												} else {
+													button::secondary
+												},
+												r,
+											))
+											.on_press_maybe(if outgoing.is_some() {
+												None
+											} else if incoming.is_some() {
+												Some(Message::Disconnect(node.id, self.selected))
 											} else {
-												button::secondary
-											},
-											r,
-										))
-										.on_press_maybe(if outgoing.is_some() {
-											None
-										} else if incoming.is_some() {
-											Some(Message::Disconnect(node.id, self.selected))
-										} else {
-											Some(Message::Connect(node.id, self.selected))
-										})
+												Some(Message::Connect(node.id, self.selected))
+											}),
+									)
 								};
 
 								let up = |r: border::Radius| {
-									button(chevron_up())
-										.padding(0)
-										.style(button_with_radius(
-											if enabled && outgoing.is_some() {
-												button::primary
+									select_area::Blocker::new(
+										button(chevron_up())
+											.padding(0)
+											.style(button_with_radius(
+												if enabled && outgoing.is_some() {
+													button::primary
+												} else {
+													button::secondary
+												},
+												r,
+											))
+											.on_press_maybe(if incoming.is_some() {
+												None
+											} else if outgoing.is_some() {
+												Some(Message::Disconnect(self.selected, node.id))
 											} else {
-												button::secondary
-											},
-											r,
-										))
-										.on_press_maybe(if incoming.is_some() {
-											None
-										} else if outgoing.is_some() {
-											Some(Message::Disconnect(self.selected, node.id))
-										} else {
-											Some(Message::Connect(self.selected, node.id))
-										})
+												Some(Message::Connect(self.selected, node.id))
+											}),
+									)
 								};
 
 								column![
@@ -2171,7 +2175,7 @@ impl ArrangementView {
 										.map_or_else(
 											|| Element::new(space::vertical().height(14)),
 											|(val, from, to)| {
-												ContextMenu::new(
+												select_area::Blocker::new(ContextMenu::new(
 													slider(0.0..=1.0, val.cbrt(), move |val| {
 														Message::SetMix(from, to, val.powi(3))
 													})
@@ -2202,7 +2206,7 @@ impl ArrangementView {
 														))
 														.into()
 													},
-												)
+												))
 												.into()
 											}
 										),
