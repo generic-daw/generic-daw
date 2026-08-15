@@ -552,26 +552,57 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 
 		let allocs = layout
 			.children()
-			.map(|layout| Track::<Message>::alloc_layers(active, layout, viewport))
+			.map(|layout| layout.children().enumerate())
+			.map(|children| {
+				active.clear();
+
+				let mut result = Vec::<Vec<_>>::new();
+
+				for (i, layout) in children {
+					let Some(bounds) = layout.bounds().intersection(viewport) else {
+						continue;
+					};
+
+					active.retain(|&(_, e)| e > bounds.x);
+					let layer = active.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
+					active.push((layer, bounds.x + bounds.width));
+
+					if layer == result.len() {
+						result.push(Vec::new());
+					}
+
+					result[layer].push(i);
+				}
+
+				result
+			})
 			.collect::<Vec<_>>();
 
 		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {
-			renderer.with_layer(Rectangle::INFINITE, |renderer| {
-				self.tracks
-					.iter()
-					.zip(&tree.children)
-					.zip(layout.children())
-					.zip(&allocs)
-					.filter(|(_, alloc)| i < alloc.len())
-					.for_each(|(((child, tree), layout), alloc)| {
-						alloc[i]
-							.iter()
-							.map(|&i| ((&child.clips[i], &tree.children[i]), layout.child(i)))
-							.for_each(|((child, tree), layout)| {
-								child.draw(tree, renderer, theme, style, layout, cursor, viewport);
-							});
-					});
-			});
+			if i != 0 {
+				renderer.start_layer(Rectangle::INFINITE);
+			}
+
+			allocs
+				.iter()
+				.zip(&self.tracks)
+				.zip(&tree.children)
+				.zip(layout.children())
+				.filter_map(|(((alloc, track), tree), layout)| {
+					Some((alloc.get(i)?, track, tree, layout))
+				})
+				.flat_map(|(alloc, track, tree, layout)| {
+					alloc
+						.iter()
+						.map(move |&i| ((&track.clips[i], &tree.children[i]), layout.child(i)))
+				})
+				.for_each(|((child, tree), layout)| {
+					child.draw(tree, renderer, theme, style, layout, cursor, viewport);
+				});
+
+			if i != 0 {
+				renderer.end_layer();
+			}
 		}
 
 		renderer.with_layer(*viewport, |renderer| match state.status {

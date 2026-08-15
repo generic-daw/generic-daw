@@ -361,15 +361,62 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			);
 		}
 
-		self.notes
-			.iter()
-			.zip(&tree.children)
-			.zip(layout.children())
-			.for_each(|((child, tree), layout)| {
-				renderer.with_layer(Rectangle::INFINITE, |renderer| {
+		let active = &mut Vec::new();
+
+		let allocs = (0..128)
+			.map(|note| {
+				self.notes
+					.iter()
+					.enumerate()
+					.zip(layout.children())
+					.filter_map(move |((i, n), l)| (n.note.key.0 == note).then_some((i, l)))
+			})
+			.map(|children| {
+				active.clear();
+
+				let mut result = Vec::<Vec<_>>::new();
+
+				for (i, layout) in children {
+					let Some(bounds) = layout.bounds().intersection(viewport) else {
+						continue;
+					};
+
+					active.retain(|&(_, e)| e > bounds.x);
+					let layer = active.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
+					active.push((layer, bounds.x + bounds.width));
+
+					if layer == result.len() {
+						result.push(Vec::new());
+					}
+
+					result[layer].push(i);
+				}
+
+				result
+			})
+			.collect::<Vec<_>>();
+
+		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {
+			if i != 0 {
+				renderer.start_layer(Rectangle::INFINITE);
+			}
+
+			allocs
+				.iter()
+				.filter_map(|alloc| alloc.get(i))
+				.flat_map(|alloc| {
+					alloc
+						.iter()
+						.map(|&i| ((&self.notes[i], &tree.children[i]), layout.child(i)))
+				})
+				.for_each(|((child, tree), layout)| {
 					child.draw(tree, renderer, theme, style, layout, cursor, viewport);
 				});
-			});
+
+			if i != 0 {
+				renderer.end_layer();
+			}
+		}
 
 		if let Status::Selecting(start_key, end_key, start_pos, end_pos) = state.status
 			&& start_pos != end_pos

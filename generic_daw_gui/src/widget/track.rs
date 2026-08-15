@@ -146,34 +146,6 @@ impl<'a, Message> Track<'a, Message> {
 			clips: children.into_iter().collect(),
 		}
 	}
-
-	pub(super) fn alloc_layers(
-		active: &mut Vec<(usize, f32)>,
-		layout: Layout<'_>,
-		viewport: &Rectangle,
-	) -> Vec<Vec<usize>> {
-		active.clear();
-
-		let mut result = Vec::<Vec<_>>::new();
-
-		for (i, layout) in layout.children().enumerate() {
-			let Some(bounds) = layout.bounds().intersection(viewport) else {
-				continue;
-			};
-
-			active.retain(|&(_, e)| e > bounds.x);
-			let layer = active.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
-			active.push((layer, bounds.x + bounds.width));
-
-			if layer == result.len() {
-				result.push(Vec::new());
-			}
-
-			result[layer].push(i);
-		}
-
-		result
-	}
 }
 
 impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message> {
