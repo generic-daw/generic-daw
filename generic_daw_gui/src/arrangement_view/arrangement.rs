@@ -784,6 +784,7 @@ impl Arrangement {
 	pub fn input_toggle_audio_recording(&mut self, id: NodeId) {
 		let track = self.track_of(id).unwrap();
 		if self.tracks[track].audio_consumer.take().is_some() {
+			self.audio_interrupted(id);
 			self.node_action(id, NodeAction::InputSetAudioRecording(None));
 		} else {
 			let (producer, consumer) = RingBuffer::new(192_000);
@@ -795,6 +796,7 @@ impl Arrangement {
 	pub fn input_toggle_midi_recording(&mut self, id: NodeId) {
 		let track = self.track_of(id).unwrap();
 		if self.tracks[track].midi_consumer.take().is_some() {
+			self.midi_interrupted(id);
 			self.node_action(id, NodeAction::InputSetMidiRecording(None));
 		} else {
 			let (producer, consumer) = RingBuffer::new(2048);
