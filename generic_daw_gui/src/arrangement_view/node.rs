@@ -10,10 +10,10 @@ use crate::{
 use generic_daw_core::{Channels, NodeId, PanMode, Transport, Utility};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
 use iced::{
-	Center, Element, Fill, padding,
-	widget::{self, checkbox, column, container, radio, row, rule, space, text, value},
+	Center, Element, Fill, Fit, padding,
+	widget::{self, checkbox, column, container, radio, row, rule, scrollable, space, text, value},
 };
-use std::{collections::BTreeMap, iter::once, sync::Arc, time::Instant};
+use std::{collections::BTreeMap, sync::Arc, time::Instant};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
@@ -241,32 +241,38 @@ impl Node {
 
 	pub fn audio_output_context_menu(&self, transport: &Transport) -> Element<'_, Message> {
 		container(
-			row(once(
+			row![
 				column![
 					space().width(15).height(15),
 					container(text("L").size(13).line_height(1.0)).padding(1),
 					container(text("R").size(13).line_height(1.0)).padding(1),
 				]
 				.align_x(Center)
-				.spacing(5)
-				.into(),
-			)
-			.chain((0..transport.output_channels.get()).map(|channel| {
-				column![
-					container(value(channel + 1).size(13).line_height(1.0)).padding(1),
-					radio(channel, Some(self.output.left), |_| {
-						Message::OutputChangeChannels(self.id, self.output.left(channel))
-					})
-					.size(15),
-					radio(channel, Some(self.output.right), |_| {
-						Message::OutputChangeChannels(self.id, self.output.right(channel))
-					})
-					.size(15)
-				]
-				.align_x(Center)
-				.spacing(5)
-				.into()
-			})))
+				.spacing(5),
+				scrollable(
+					row((0..transport.output_channels.get()).map(|channel| {
+						column![
+							container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+							radio(channel, Some(self.output.left), |_| {
+								Message::OutputChangeChannels(self.id, self.output.left(channel))
+							})
+							.size(15),
+							radio(channel, Some(self.output.right), |_| {
+								Message::OutputChangeChannels(self.id, self.output.right(channel))
+							})
+							.size(15)
+						]
+						.align_x(Center)
+						.spacing(5)
+						.into()
+					}))
+					.spacing(5)
+				)
+				.direction(scrollable::Direction::Horizontal(
+					scrollable::Scrollbar::hidden(),
+				))
+				.width(Fit.max(328))
+			]
 			.spacing(5),
 		)
 		.padding(5)
@@ -276,23 +282,28 @@ impl Node {
 
 	pub fn midi_output_context_menu(&self) -> Element<'_, Message> {
 		container(
-			row((0..16).map(|channel| {
-				column![
-					container(value(channel + 1).size(13).line_height(1.0)).padding(1),
-					checkbox(self.output.midi & (1 << channel) != 0)
-						.on_toggle(move |_| {
-							Message::OutputChangeChannels(
-								self.id,
-								self.output.midi(self.output.midi ^ (1 << channel)),
-							)
-						})
-						.size(15)
-				]
-				.align_x(Center)
-				.spacing(5)
-				.into()
-			}))
-			.spacing(5),
+			scrollable(
+				row((0..16).map(|channel| {
+					column![
+						container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+						checkbox(self.output.midi & (1 << channel) != 0)
+							.on_toggle(move |_| {
+								Message::OutputChangeChannels(
+									self.id,
+									self.output.midi(self.output.midi ^ (1 << channel)),
+								)
+							})
+							.size(15)
+					]
+					.align_x(Center)
+					.spacing(5)
+					.into()
+				}))
+				.spacing(5),
+			)
+			.direction(scrollable::Direction::Horizontal(
+				scrollable::Scrollbar::hidden(),
+			)),
 		)
 		.padding(5)
 		.style(container_with_radius(weaker_bordered_box, 5))

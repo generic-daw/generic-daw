@@ -26,7 +26,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for MenuOverlay<'_, '_,
 			.layout(
 				self.tree,
 				renderer,
-				&Limits::new(Size::ZERO, size.max(bounds - size + self.bounds.size())),
+				&Limits::new(Size::ZERO, (size + self.bounds.size()).max(bounds - size)),
 			)
 			.move_to(self.bounds.position());
 

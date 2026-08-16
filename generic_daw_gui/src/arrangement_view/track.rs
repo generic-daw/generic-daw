@@ -11,12 +11,14 @@ use crate::{
 use generic_daw_core::{Channels, Clip, MidiAction, NodeId, Transport, time::BeatTime};
 use generic_daw_widget::menu::Menu;
 use iced::{
-	Center, Element, Shrink,
-	widget::{Button, button, checkbox, column, container, radio, row, space, text, value},
+	Center, Element, Fit, Shrink,
+	widget::{
+		Button, button, checkbox, column, container, radio, row, scrollable, space, text, value,
+	},
 };
 use log::warn;
 use rtrb::Consumer;
-use std::{iter::once, mem::MaybeUninit};
+use std::mem::MaybeUninit;
 
 #[derive(Debug)]
 pub struct Track {
@@ -170,50 +172,58 @@ impl Track {
 		column![
 			row![
 				Menu::new(mic().size(13.0), move || container(
-					row![
-						column(once(space().height(15).into()).chain(
-							(0..transport.input_channels).map(|channel| {
-								container(value(channel + 1).size(13).line_height(1.0))
-									.padding(1)
+					column![
+						row![
+							space::horizontal().height(15),
+							container(text("L").size(13).line_height(1.0))
+								.center(15)
+								.padding(1),
+							container(text("R").size(13).line_height(1.0))
+								.center(15)
+								.padding(1)
+						]
+						.spacing(5),
+						scrollable(
+							row![
+								column((0..transport.input_channels).map(|channel| {
+									container(value(channel + 1).size(13).line_height(1.0))
+										.padding(1)
+										.into()
+								}))
+								.spacing(5)
+								.align_x(Center),
+								column((0..transport.input_channels).map(|channel| {
+									radio(channel, Some(self.input.left), |_| {
+										Message::InputChangeChannels(
+											self.id,
+											self.input.left(channel),
+										)
+									})
+									.size(15)
 									.into()
-							})
+								}))
+								.spacing(5),
+								column((0..transport.input_channels).map(|channel| {
+									radio(channel, Some(self.input.right), |_| {
+										Message::InputChangeChannels(
+											self.id,
+											self.input.right(channel),
+										)
+									})
+									.size(15)
+									.into()
+								}))
+								.spacing(5),
+							]
+							.spacing(5),
+						)
+						.direction(scrollable::Direction::Vertical(
+							scrollable::Scrollbar::hidden(),
 						))
-						.spacing(5)
-						.align_x(Center),
-						column(
-							once(
-								container(text("L").size(13).line_height(1.0))
-									.padding(1)
-									.into(),
-							)
-							.chain((0..transport.input_channels).map(|channel| {
-								radio(channel, Some(self.input.left), |_| {
-									Message::InputChangeChannels(self.id, self.input.left(channel))
-								})
-								.size(15)
-								.into()
-							})),
-						)
-						.spacing(5)
-						.align_x(Center),
-						column(
-							once(
-								container(text("R").size(13).line_height(1.0))
-									.padding(1)
-									.into(),
-							)
-							.chain((0..transport.input_channels).map(|channel| {
-								radio(channel, Some(self.input.right), |_| {
-									Message::InputChangeChannels(self.id, self.input.right(channel))
-								})
-								.size(15)
-								.into()
-							})),
-						)
-						.spacing(5)
-						.align_x(Center),
+						.height(Fit.max(315))
 					]
-					.spacing(5),
+					.width(Shrink)
+					.spacing(5)
 				)
 				.padding(5)
 				.style(container_with_radius(weaker_bordered_box, 5))
@@ -247,29 +257,34 @@ impl Track {
 			.height(Shrink),
 			row![
 				Menu::new(keyboard_music().size(13.0), move || container(
-					row![
-						column((0..16).map(|channel| {
-							container(value(channel + 1).size(13).line_height(1.0))
-								.padding(1)
-								.into()
-						}))
+					scrollable(
+						row![
+							column((0..16).map(|channel| {
+								container(value(channel + 1).size(13).line_height(1.0))
+									.padding(1)
+									.into()
+							}))
+							.spacing(5)
+							.align_x(Center),
+							column((0..16).map(|channel| {
+								checkbox(self.input.midi & (1 << channel) != 0)
+									.on_toggle(move |_| {
+										Message::InputChangeChannels(
+											self.id,
+											self.input.midi(self.input.midi ^ (1 << channel)),
+										)
+									})
+									.size(15)
+									.into()
+							}))
+							.spacing(5)
+							.align_x(Center),
+						]
 						.spacing(5)
-						.align_x(Center),
-						column((0..16).map(|channel| {
-							checkbox(self.input.midi & (1 << channel) != 0)
-								.on_toggle(move |_| {
-									Message::InputChangeChannels(
-										self.id,
-										self.input.midi(self.input.midi ^ (1 << channel)),
-									)
-								})
-								.size(15)
-								.into()
-						}))
-						.spacing(5)
-						.align_x(Center),
-					]
-					.spacing(5),
+					)
+					.direction(scrollable::Direction::Vertical(
+						scrollable::Scrollbar::hidden(),
+					))
 				)
 				.padding(5)
 				.style(container_with_radius(weaker_bordered_box, 5))
