@@ -153,7 +153,9 @@ struct Block(bool);
 
 impl Operation for Block {
 	fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<()>)) {
-		operate(self);
+		if !self.0 {
+			operate(self);
+		}
 	}
 
 	fn custom(
@@ -162,8 +164,10 @@ impl Operation for Block {
 		_bounds: Rectangle,
 		state: &mut dyn std::any::Any,
 	) {
-		if let Some(Self(block)) = state.downcast_ref() {
-			self.0 |= block;
+		if !self.0
+			&& let Some(&Self(block)) = state.downcast_ref()
+		{
+			self.0 = block;
 		}
 	}
 }
