@@ -120,12 +120,12 @@ impl AudioBuffers {
 		(input_audio, output_audio)
 	}
 
-	pub fn are_inputs_quiet(&self) -> bool {
-		are_buffers_quiet(&self.input_buffers)
+	pub fn are_inputs_quiet(&self, len: usize) -> bool {
+		are_buffers_quiet(&self.input_buffers, len)
 	}
 
-	pub fn are_outputs_quiet(&self) -> bool {
-		are_buffers_quiet(&self.output_buffers)
+	pub fn are_outputs_quiet(&self, len: usize) -> bool {
+		are_buffers_quiet(&self.output_buffers, len)
 	}
 
 	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
@@ -189,13 +189,13 @@ impl AudioBuffers {
 	}
 }
 
-fn are_buffers_quiet(buffers: &[Box<[f32]>]) -> bool {
+fn are_buffers_quiet(buffers: &[Box<[f32]>], len: usize) -> bool {
 	!buffers.iter().any(|buffer| {
-		let (chunks_16, rest) = buffer.as_chunks::<16>();
+		let (chunks_16, rest) = buffer[..len].as_chunks::<16>();
 
 		chunks_16
 			.iter()
-			.any(|chunk| chunk.iter().any(|&x| x >= f32::EPSILON))
-			|| rest.iter().any(|&x| x >= f32::EPSILON)
+			.any(|chunk| chunk.map(f32::abs).into_iter().any(|x| x >= f32::EPSILON))
+			|| rest.iter().any(|x| x.abs() >= f32::EPSILON)
 	})
 }

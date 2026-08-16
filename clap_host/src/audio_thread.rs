@@ -65,7 +65,7 @@ impl AudioThread {
 
 		let steady_time = self.audio_buffers.read_in(audio);
 
-		let audio_in = LazyCell::new(|| !self.audio_buffers.are_inputs_quiet());
+		let audio_in = LazyCell::new(|| !self.audio_buffers.are_inputs_quiet(audio.len()));
 		let events_in = !self.event_buffers.are_inputs_empty();
 		let request_process = self
 			.processor
@@ -114,7 +114,7 @@ impl AudioThread {
 				self.processing = match process_status {
 					Ok(ProcessStatus::Continue) => true,
 					Ok(ProcessStatus::ContinueIfNotQuiet) => {
-						!self.audio_buffers.are_outputs_quiet()
+						!self.audio_buffers.are_outputs_quiet(audio.len())
 					}
 					Ok(ProcessStatus::Tail) => {
 						match self
