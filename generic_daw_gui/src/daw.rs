@@ -307,7 +307,7 @@ impl Daw {
 
 		let (p_sender, p_receiver) = oneshot::channel();
 
-		let (stream, input_channels, output_channels, sample_rate, frames) = build_streams(
+		let (streams, input_channels, output_channels, sample_rate, frames) = build_streams(
 			&config.audio.devices.as_core(),
 			config.midi.input.as_deref(),
 			config.midi.output.as_deref(),
@@ -324,7 +324,7 @@ impl Daw {
 			frames,
 			p_sender,
 		);
-		arrangement.replace_stream(Some(stream));
+		arrangement.replace_streams(Some(streams));
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
@@ -429,7 +429,8 @@ impl Daw {
 				self.bottom_pane = self.bottom_pane.map(|_| Tab::Mixer);
 				self.project = project;
 
-				arrangement.replace_stream(self.arrangement_view.arrangement.replace_stream(None));
+				arrangement
+					.replace_streams(self.arrangement_view.arrangement.replace_streams(None));
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
 					ArrangementView::new(*arrangement, &self.state, view),

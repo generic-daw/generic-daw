@@ -17,7 +17,7 @@ use crate::{
 use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_streams,
+	PluginId, Point, SampleId, Streams, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -35,7 +35,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoDebug, ShiftMoveExt as _, boxed_slice, sanitize_filename_chars};
+use utils::{ShiftMoveExt as _, boxed_slice, sanitize_filename_chars};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -62,7 +62,7 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
-	stream: Option<NoDebug<Stream>>,
+	streams: Option<Streams>,
 }
 
 impl Arrangement {
@@ -112,14 +112,14 @@ impl Arrangement {
 
 				producer,
 				queue: VecDeque::new(),
-				stream: None,
+				streams: None,
 			},
 			Task::stream(poll_consumer(consumer)),
 		)
 	}
 
-	pub fn replace_stream(&mut self, stream: Option<Stream>) -> Option<Stream> {
-		std::mem::replace(&mut self.stream, stream.map(NoDebug)).map(|stream| stream.0)
+	pub fn replace_streams(&mut self, streams: Option<Streams>) -> Option<Streams> {
+		std::mem::replace(&mut self.streams, streams)
 	}
 
 	pub fn request_processor(
@@ -134,9 +134,9 @@ impl Arrangement {
 	pub fn change_config(&mut self, mut processor: AudioThread, config: &Config) {
 		self.interrupted();
 
-		self.replace_stream(None);
+		self.replace_streams(None);
 		let (p_sender, a_receiver) = oneshot::channel();
-		let (stream, input_channels, output_channels, sample_rate, frames) = build_streams(
+		let (streams, input_channels, output_channels, sample_rate, frames) = build_streams(
 			&config.audio.devices.as_core(),
 			config.midi.input.as_deref(),
 			config.midi.output.as_deref(),
@@ -144,7 +144,7 @@ impl Arrangement {
 			config.audio.buffer_size,
 			a_receiver,
 		);
-		self.replace_stream(Some(stream));
+		self.replace_streams(Some(streams));
 
 		processor.change_config(input_channels, output_channels, sample_rate, frames);
 		p_sender.send(processor).unwrap();

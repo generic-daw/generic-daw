@@ -1,10 +1,10 @@
 use crate::{
-	DeviceDescription, DeviceId, HostId, Stream,
+	DeviceDescription, DeviceId, HostId,
 	audio_thread::{AudioCallback, AudioThread, MidiAction},
 };
 use cpal::{
 	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
-	SampleFormat, StreamConfig, SupportedBufferSize, U24,
+	SampleFormat, Stream, StreamConfig, SupportedBufferSize, U24,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, warn};
@@ -17,7 +17,7 @@ use std::{
 	num::NonZero,
 	sync::{Arc, LazyLock},
 };
-use utils::boxed_slice;
+use utils::{NoDebug, boxed_slice};
 
 pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host().id());
 
@@ -175,6 +175,13 @@ pub fn get_output_ports() -> HashMap<Arc<str>, Arc<str>> {
 		.collect()
 }
 
+#[derive(Debug)]
+pub struct Streams {
+	_midi_input: Option<NoDebug<MidiInputConnection<()>>>,
+	_audio_input: Option<NoDebug<Stream>>,
+	_audio_output: NoDebug<Stream>,
+}
+
 pub fn build_streams(
 	devices: &Devices,
 	input_port: Option<&str>,
@@ -182,10 +189,10 @@ pub fn build_streams(
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
 	receiver: oneshot::Receiver<AudioThread>,
-) -> (Stream, u16, NonZero<u16>, NonZero<u32>, NonZero<u32>) {
-	let (midi_input_connection, midi_consumer) = build_midi_input_connection(input_port);
+) -> (Streams, u16, NonZero<u16>, NonZero<u32>, NonZero<u32>) {
+	let (midi_input, midi_consumer) = build_midi_input_connection(input_port);
 
-	let midi_output_connection = build_midi_output_connection(output_port);
+	let midi_output = build_midi_output_connection(output_port);
 
 	let host = devices
 		.host()
@@ -222,26 +229,32 @@ pub fn build_streams(
 			.any(|config| matches!(config.buffer_size(), &SupportedBufferSize::Range { min, max } if (min..=max).contains(&frames.get())))
 	});
 
-	let (audio_input_stream, input_channels, audio_consumer) =
+	let (mut audio_input, input_channels, audio_consumer) =
 		build_audio_input_stream(input_device.as_ref(), sample_rate, frames);
 
-	let (audio_output_stream, output_channels) = build_audio_output_stream(
+	let (audio_output, output_channels) = build_audio_output_stream(
 		&output_device,
 		sample_rate,
 		frames,
 		input_channels,
 		AudioCallback::Away(receiver),
-		midi_input_connection,
-		midi_output_connection,
+		midi_output,
 		midi_consumer,
-		audio_input_stream,
 		audio_consumer,
 	);
 
-	audio_output_stream.play().unwrap();
+	if let Some(audio_input_stream) = &mut audio_input {
+		audio_input_stream.play().unwrap();
+	}
+
+	audio_output.play().unwrap();
 
 	(
-		audio_output_stream,
+		Streams {
+			_midi_input: midi_input,
+			_audio_input: audio_input,
+			_audio_output: audio_output,
+		},
 		input_channels,
 		output_channels,
 		sample_rate,
@@ -251,10 +264,13 @@ pub fn build_streams(
 
 fn build_midi_input_connection(
 	port: Option<&str>,
-) -> (Option<MidiInputConnection<()>>, Consumer<MidiAction>) {
+) -> (
+	Option<NoDebug<MidiInputConnection<()>>>,
+	Consumer<MidiAction>,
+) {
 	fn build_midi_input_connection(
 		port: Option<&str>,
-	) -> Option<(MidiInputConnection<()>, Consumer<MidiAction>)> {
+	) -> Option<(NoDebug<MidiInputConnection<()>>, Consumer<MidiAction>)> {
 		let port = port?;
 
 		let mut input = MidiInput::new("Generic DAW").ok()?;
@@ -273,7 +289,8 @@ fn build_midi_input_connection(
 					(),
 				)
 				.inspect_err(|err| warn!("{err}"))
-				.ok()?,
+				.ok()?
+				.into(),
 			consumer,
 		))
 	}
@@ -328,12 +345,12 @@ fn build_audio_input_stream(
 	device: Option<&Device>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
-) -> (Option<Stream>, u16, Consumer<f32>) {
+) -> (Option<NoDebug<Stream>>, u16, Consumer<f32>) {
 	fn build_audio_input_stream(
 		device: Option<&Device>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
-	) -> Result<(Stream, NonZero<u16>, Consumer<f32>), Option<cpal::Error>> {
+	) -> Result<(NoDebug<Stream>, NonZero<u16>, Consumer<f32>), Option<cpal::Error>> {
 		let device = device.ok_or(None)?;
 
 		let channels = device
@@ -363,7 +380,7 @@ fn build_audio_input_stream(
 							build_audio_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
 							|err| error!("{err}"),
 							None,
-						)?,
+						)?.into(),
 					)*
 					sample_format => panic!("unsupported sample format {sample_format}"),
 				}
@@ -430,12 +447,10 @@ fn build_audio_output_stream(
 	frames: Option<NonZero<u32>>,
 	input_channels: u16,
 	processor: AudioCallback,
-	midi_input: Option<MidiInputConnection<()>>,
 	midi_output: Option<MidiOutputConnection>,
 	midi_consumer: Consumer<MidiAction>,
-	audio_input: Option<Stream>,
 	audio_consumer: Consumer<f32>,
-) -> (Stream, NonZero<u16>) {
+) -> (NoDebug<Stream>, NonZero<u16>) {
 	let channels = device
 		.supported_output_configs()
 		.unwrap()
@@ -458,10 +473,10 @@ fn build_audio_output_stream(
 				$(
 					$pat => device.build_output_stream(
 						config,
-						build_audio_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_input, midi_output, midi_consumer, audio_input, audio_consumer, processor),
+						build_audio_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_output, midi_consumer, audio_consumer, processor),
 						|err| error!("{err}"),
 						None,
-					).unwrap(),
+					).unwrap().into(),
 				)*
 				sample_format => panic!("unsupported sample format {sample_format}"),
 			}
@@ -491,10 +506,8 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	frames: NonZero<u32>,
 	input_channels: u16,
 	output_channels: NonZero<u16>,
-	midi_input: Option<MidiInputConnection<()>>,
 	mut midi_output: Option<MidiOutputConnection>,
 	mut midi_consumer: Consumer<MidiAction>,
-	mut audio_input: Option<Stream>,
 	mut audio_consumer: Consumer<f32>,
 	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
@@ -504,19 +517,13 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
 	let mut warn = false;
 
-	if let Some(audio_input) = &mut audio_input {
-		audio_input.play().unwrap();
-	}
-
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
 			let frames = buf.len() / usize::from(output_channels.get());
 			let input_len = frames * usize::from(input_channels);
 
-			midi_input.as_ref();
 			let midi_input = midi_consumer.pop_partial_slice_uninit(&mut midi_in).0;
 
-			audio_input.as_ref();
 			if let (_, rest) = audio_consumer.pop_partial_slice(&mut audio_in[..input_len])
 				&& !rest.is_empty()
 			{

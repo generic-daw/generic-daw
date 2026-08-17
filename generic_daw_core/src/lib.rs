@@ -26,7 +26,7 @@ pub use bpm_tapper::BpmTapper;
 pub use channel::{Channel, PluginId};
 pub use clap_host;
 pub use clip::{Clip, ClipId};
-pub use cpal::{DeviceDescription, DeviceId, HostId, Stream};
+pub use cpal::{DeviceDescription, DeviceId, HostId};
 pub use dsp::{PanMode, Utility};
 pub use event::Event;
 pub use midi_clip::MidiClip;
@@ -36,8 +36,8 @@ pub use midly::num::{u4, u7};
 pub use node::Node;
 pub use sample::{Sample, SampleId};
 pub use stream::{
-	Channels, DEFAULT_HOST, Devices, build_streams, get_hosts, get_input_devices, get_input_ports,
-	get_output_devices, get_output_ports,
+	Channels, DEFAULT_HOST, Devices, Streams, build_streams, get_hosts, get_input_devices,
+	get_input_ports, get_output_devices, get_output_ports,
 };
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
