@@ -180,8 +180,8 @@ impl Arrangement {
 					self.interrupted();
 					self.transport.position = position;
 				}
-				Update::AudioInterrupted(node) => self.audio_interrupted(node),
-				Update::MidiInterrupted(node) => self.midi_interrupted(node),
+				Update::AudioInterrupted(id) => self.audio_interrupted(id),
+				Update::MidiInterrupted(id) => self.midi_interrupted(id),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -223,11 +223,11 @@ impl Arrangement {
 		self.midi_interrupted(None);
 	}
 
-	fn audio_interrupted(&mut self, node: impl Into<Option<NodeId>>) {
-		let node = node.into();
+	fn audio_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
+		let id = id.into();
 
 		for track in 0..self.tracks.len() {
-			if node.is_some_and(|node| self.tracks[track].id != node) {
+			if id.is_some_and(|node| self.tracks[track].id != node) {
 				continue;
 			}
 
@@ -239,11 +239,11 @@ impl Arrangement {
 		}
 	}
 
-	fn midi_interrupted(&mut self, node: impl Into<Option<NodeId>>) {
-		let node = node.into();
+	fn midi_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
+		let id = id.into();
 
 		for track in 0..self.tracks.len() {
-			if node.is_some_and(|node| self.tracks[track].id != node) {
+			if id.is_some_and(|node| self.tracks[track].id != node) {
 				continue;
 			}
 
@@ -729,6 +729,7 @@ impl Arrangement {
 
 				let index = self.channel_of(id).unwrap();
 				self.channels.remove(index);
+
 				self.tracks.push(Track::new(
 					id,
 					Channels::base(self.transport.input_channels),
@@ -747,15 +748,12 @@ impl Arrangement {
 				None
 			}
 			NodeType::Track => {
-				let index = self.track_of(id).unwrap();
-				if self.tracks[index].audio_consumer.is_some() {
-					self.input_toggle_audio_recording(id);
-				}
-
 				self.node_mut(id).ty = NodeType::Channel;
 				self.send(Message::NodeToggleKind(id));
 
+				let index = self.track_of(id).unwrap();
 				let track = self.tracks.remove(index);
+
 				self.channels.insert(0, Channel::new(id));
 
 				for clip in track.clips {
@@ -783,8 +781,12 @@ impl Arrangement {
 
 	pub fn input_toggle_audio_recording(&mut self, id: NodeId) {
 		let track = self.track_of(id).unwrap();
-		if self.tracks[track].audio_consumer.take().is_some() {
-			self.audio_interrupted(id);
+		if self.tracks[track].audio_consumer.is_some() {
+			if let Some(recording) = &mut self.tracks[track].audio_recording
+				&& std::mem::replace(&mut recording.dropping, true)
+			{
+				return;
+			}
 			self.node_action(id, NodeAction::InputSetAudioRecording(None));
 		} else {
 			let (producer, consumer) = RingBuffer::new(192_000);
@@ -796,7 +798,11 @@ impl Arrangement {
 	pub fn input_toggle_midi_recording(&mut self, id: NodeId) {
 		let track = self.track_of(id).unwrap();
 		if self.tracks[track].midi_consumer.take().is_some() {
-			self.midi_interrupted(id);
+			if let Some(recording) = &mut self.tracks[track].midi_recording
+				&& std::mem::replace(&mut recording.dropping, true)
+			{
+				return;
+			}
 			self.node_action(id, NodeAction::InputSetMidiRecording(None));
 		} else {
 			let (producer, consumer) = RingBuffer::new(2048);

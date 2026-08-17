@@ -188,10 +188,6 @@ impl Channel {
 		}
 	}
 
-	pub fn push_update(&mut self, update: Update) {
-		self.updates.push(update);
-	}
-
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
 		if let Some(&Update::Peaks(_, peaks)) = self.updates.last() {
 			debug_assert_ne!(self.last_peaks, peaks);

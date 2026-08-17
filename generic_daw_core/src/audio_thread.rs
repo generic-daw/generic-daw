@@ -250,6 +250,7 @@ pub struct State {
 	pub audio_input: Box<[f32]>,
 	pub midi_input: Vec<MidiAction>,
 	pub playing: HashMap<(u4, u7), u7>,
+	pub updates: Vec<Update>,
 }
 
 impl State {
@@ -292,7 +293,6 @@ pub struct AudioThread {
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	needs_update: bool,
-	updates: Vec<Update>,
 	update_buffers: Vec<Vec<Update>>,
 }
 
@@ -320,6 +320,7 @@ impl AudioThread {
 				audio_input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
 				midi_input: Vec::with_capacity(2048),
 				playing: HashMap::with_capacity(2048),
+				updates: Vec::new(),
 			},
 			transport.frames,
 		);
@@ -332,7 +333,6 @@ impl AudioThread {
 			producer,
 			consumer,
 			needs_update: false,
-			updates: Vec::new(),
 			update_buffers: Vec::new(),
 		};
 
@@ -408,7 +408,9 @@ impl AudioThread {
 				}
 				Message::NodeConnect(from, to) => {
 					if !self.audio_graph.connect(from, to) {
-						self.updates.push(Update::ConnectFailed(from, to));
+						self.state_mut()
+							.updates
+							.push(Update::ConnectFailed(from, to));
 					}
 				}
 				Message::NodeSetMix(from, to, mix) => self.audio_graph.set_mix(from, to, mix),
@@ -420,15 +422,14 @@ impl AudioThread {
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => {
 					self.transport_mut().playing ^= true;
-					self.updates
-						.push(Update::Interrupted(self.transport().position));
+					let position = self.transport().position;
+					self.state_mut().updates.push(Update::Interrupted(position));
 				}
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
 				Message::Position(version, position) => {
 					self.transport_mut().version = version;
 					self.transport_mut().position = position;
-					self.updates
-						.push(Update::Interrupted(self.transport().position));
+					self.state_mut().updates.push(Update::Interrupted(position));
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
 				Message::Reset => {
@@ -458,6 +459,7 @@ impl AudioThread {
 		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
 
 		let acc = self
+			.state_mut()
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
 
@@ -489,10 +491,10 @@ impl AudioThread {
 			return Some((sender, receiver));
 		}
 
-		if self.updates.capacity() == 0
+		if self.state().updates.capacity() == 0
 			&& let Some(updates) = self.update_buffers.pop()
 		{
-			self.updates = updates;
+			self.state_mut().updates = updates;
 		}
 
 		while !audio_output.is_empty() {
@@ -520,15 +522,15 @@ impl AudioThread {
 
 			let output_channels = self.transport().output_channels;
 			self.audio_graph.for_each_node(|node, audio, events| {
-				let channels = node.output();
+				let output = node.output();
 
-				if channels.enable_midi
-					&& channels.midi != 0
+				if output.enable_midi
+					&& output.midi != 0
 					&& let Some(midi_output) = &mut midi_output
 				{
 					'events: for &event in events {
 						for channel in 0..16 {
-							if channels.midi & (1 << channel) != 0 {
+							if output.midi & (1 << channel) != 0 {
 								let buf = match event {
 									Event::On { key, velocity, .. } => [
 										0x90 | channel,
@@ -549,16 +551,16 @@ impl AudioThread {
 					}
 				}
 
-				if channels.enable_audio && channels.fits_in(output_channels.get()) {
+				if output.enable_audio && output.fits_in(output_channels.get()) {
 					for (frame, &[l, r]) in audio_output[..out_len]
 						.chunks_mut(output_channels.get().into())
 						.zip(audio)
 					{
-						if channels.left == channels.right {
-							frame[usize::from(channels.left)] += (l + r) / 2.0;
+						if output.left == output.right {
+							frame[usize::from(output.left)] += (l + r) / 2.0;
 						} else {
-							frame[usize::from(channels.left)] += l;
-							frame[usize::from(channels.right)] += r;
+							frame[usize::from(output.left)] += l;
+							frame[usize::from(output.right)] += r;
 						}
 					}
 				}
@@ -572,10 +574,10 @@ impl AudioThread {
 			}
 
 			if self.transport().playing {
-				self.updates.push(Update::Recorded(frames));
+				self.state_mut().updates.push(Update::Recorded(frames));
 				if looped.is_some() {
-					self.updates
-						.push(Update::Interrupted(self.transport().position));
+					let position = self.transport().position;
+					self.state_mut().updates.push(Update::Interrupted(position));
 				}
 			}
 
@@ -584,7 +586,7 @@ impl AudioThread {
 		}
 
 		self.audio_graph
-			.for_each_node_mut(|node, _| node.collect_updates(&mut self.updates));
+			.for_each_node_mut(|node, state| node.collect_updates(&mut state.updates));
 
 		let now = Instant::now();
 		let mut duration = now - start;
@@ -594,23 +596,25 @@ impl AudioThread {
 			duration += d;
 			frames += f;
 		}
-		self.updates.push(Update::Load(duration, frames));
+		self.state_mut()
+			.updates
+			.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)
 			|| self.transport().playing
-			|| self.updates.len() > 1
+			|| self.state().updates.len() > 1
 		{
 			let batch = Batch {
 				version: self.transport().version,
 				position: self.transport().position,
-				updates: std::mem::take(&mut self.updates),
+				updates: std::mem::take(&mut self.state_mut().updates),
 				now,
 			};
 
 			if let Err(PushError::Full(Batch { updates, .. })) = self.producer.push(batch) {
 				warn!("full ring buffer");
 				self.needs_update = true;
-				self.updates = updates;
+				self.state_mut().updates = updates;
 			}
 		}
 

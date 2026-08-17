@@ -12,6 +12,7 @@ pub struct MidiRecording {
 	pub playing: HashMap<(u4, u7), (u7, BeatTime)>,
 	pub position: BeatTime,
 	pub name: Arc<str>,
+	pub dropping: bool,
 }
 
 impl MidiRecording {
@@ -21,6 +22,7 @@ impl MidiRecording {
 			playing: HashMap::new(),
 			position: transport.position.to_beat_time(transport),
 			name,
+			dropping: false,
 		}
 	}
 

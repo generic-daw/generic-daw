@@ -141,7 +141,7 @@ impl Track {
 		self.channel.reset();
 	}
 
-	pub fn apply(&mut self, action: NodeAction, state: &State) {
+	pub fn apply(&mut self, action: NodeAction, state: &mut State) {
 		match action {
 			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), *clip),
 			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
@@ -245,32 +245,61 @@ impl Track {
 					.unwrap()
 					.slip_to(pos, &state.transport);
 			}
-			NodeAction::InputSetChannels(channels) => {
-				if self.input.left != channels.left || self.input.right != channels.right {
-					self.channel
-						.push_update(Update::AudioInterrupted(self.channel.id()));
+			NodeAction::InputSetChannels(input) => {
+				if (self.input.left != input.left || self.input.right != input.right)
+					&& self.audio_producer.is_some()
+				{
+					state
+						.updates
+						.push(Update::AudioInterrupted(self.channel.id()));
 				}
 
-				if self.input.midi != channels.midi {
-					self.channel
-						.push_update(Update::MidiInterrupted(self.channel.id()));
-				}
+				if self.input.midi != input.midi
+					&& let Some(producer) = &mut self.midi_producer
+				{
+					state
+						.updates
+						.push(Update::MidiInterrupted(self.channel.id()));
 
-				self.input = channels;
-			}
-			NodeAction::InputSetAudioRecording(producer) => self.audio_producer = producer,
-			NodeAction::InputSetMidiRecording(producer) => {
-				self.midi_producer = producer;
-				if let Some(producer) = &mut self.midi_producer {
 					for (&(channel, key), &velocity) in &state.playing {
-						if producer
-							.push(MidiAction::NoteOn(channel, key, velocity))
-							.is_err()
+						if input.midi & (1 << channel.as_int()) != 0
+							&& producer
+								.push(MidiAction::NoteOn(channel, key, velocity))
+								.is_err()
 						{
 							warn!("full ring buffer");
 							break;
 						}
 					}
+				}
+
+				self.input = input;
+			}
+			NodeAction::InputSetAudioRecording(producer) => {
+				self.audio_producer = producer;
+				if self.audio_producer.is_none() {
+					state
+						.updates
+						.push(Update::AudioInterrupted(self.channel.id()));
+				}
+			}
+			NodeAction::InputSetMidiRecording(producer) => {
+				self.midi_producer = producer;
+				if let Some(producer) = &mut self.midi_producer {
+					for (&(channel, key), &velocity) in &state.playing {
+						if self.input.midi & (1 << channel.as_int()) != 0
+							&& producer
+								.push(MidiAction::NoteOn(channel, key, velocity))
+								.is_err()
+						{
+							warn!("full ring buffer");
+							break;
+						}
+					}
+				} else {
+					state
+						.updates
+						.push(Update::MidiInterrupted(self.channel.id()));
 				}
 			}
 			action => self.channel.apply(action),

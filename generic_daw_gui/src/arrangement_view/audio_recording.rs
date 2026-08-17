@@ -18,6 +18,7 @@ pub struct AudioRecording {
 	pub position: BeatTime,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
+	pub dropping: bool,
 }
 
 impl AudioRecording {
@@ -43,6 +44,7 @@ impl AudioRecording {
 			position: transport.position.to_beat_time(transport),
 			path,
 			name,
+			dropping: false,
 		})
 	}
 
