@@ -355,7 +355,11 @@ impl ConfigView {
 						text("Host:").width(Fill),
 						row![
 							pick_list(self.config.audio.devices.get_host(), &*self.hosts, |host| {
-								host.name().to_owned()
+								if self.devices.contains_key(host) {
+									host.name().to_owned()
+								} else {
+									format!("Unknown ({host})")
+								}
 							})
 							.on_select(|host| Message::ChangedHost(Some(host)))
 							.handle(PICK_LIST_HANDLE)
@@ -382,14 +386,16 @@ impl ConfigView {
 							row![
 								pick_list(
 									self.config.audio.devices.get_input(),
-									&*self.devices[&self
-										.config
-										.audio
-										.devices
-										.get_host()
-										.filter(|host| self.devices.contains_key(host))
-										.unwrap_or_else(|| *DEFAULT_HOST)]
-										.input,
+									self.devices
+										.get(
+											&self
+												.config
+												.audio
+												.devices
+												.get_host()
+												.unwrap_or_else(|| *DEFAULT_HOST)
+										)
+										.map_or([].as_slice(), |devices| &*devices.input),
 									|id| self.device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
@@ -422,14 +428,16 @@ impl ConfigView {
 							row![
 								pick_list(
 									self.config.audio.devices.get_output(),
-									&*self.devices[&self
-										.config
-										.audio
-										.devices
-										.get_host()
-										.filter(|host| self.devices.contains_key(host))
-										.unwrap_or_else(|| *DEFAULT_HOST)]
-										.output,
+									self.devices
+										.get(
+											&self
+												.config
+												.audio
+												.devices
+												.get_host()
+												.unwrap_or_else(|| *DEFAULT_HOST)
+										)
+										.map_or([].as_slice(), |devices| &*devices.output),
 									|id| self.device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
