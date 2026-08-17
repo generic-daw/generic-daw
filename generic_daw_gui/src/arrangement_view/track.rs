@@ -18,7 +18,7 @@ use iced::{
 };
 use log::warn;
 use rtrb::Consumer;
-use std::{mem::MaybeUninit, sync::atomic::Ordering::Acquire};
+use std::mem::MaybeUninit;
 
 #[derive(Debug)]
 pub struct Track {
@@ -83,12 +83,9 @@ impl Track {
 	pub fn audio_finalize(&mut self) -> Option<(BeatTime, SamplePair)> {
 		if let Some(audio_consumer) = &self.audio_consumer
 			&& audio_consumer.is_abandoned()
+			&& audio_consumer.is_empty()
 		{
-			std::sync::atomic::fence(Acquire);
-
-			if audio_consumer.is_empty() {
-				self.audio_consumer = None;
-			}
+			self.audio_consumer = None;
 		}
 
 		Some(self.audio_recording.take()?.finalize())
@@ -116,12 +113,9 @@ impl Track {
 	pub fn midi_finalize(&mut self, transport: &Transport) -> Option<(BeatTime, MidiPatternPair)> {
 		if let Some(midi_consumer) = &self.midi_consumer
 			&& midi_consumer.is_abandoned()
+			&& midi_consumer.is_empty()
 		{
-			std::sync::atomic::fence(Acquire);
-
-			if midi_consumer.is_empty() {
-				self.midi_consumer = None;
-			}
+			self.midi_consumer = None;
 		}
 
 		Some(self.midi_recording.take()?.finalize(transport))
