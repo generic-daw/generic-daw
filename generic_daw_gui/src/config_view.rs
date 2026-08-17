@@ -13,8 +13,8 @@ use crate::{
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
 use generic_daw_core::{
-	DEFAULT_HOST, DeviceDescription, DeviceId, HostId, clap_host::DEFAULT_CLAP_PATHS, get_devices,
-	get_input_ports, get_output_ports,
+	DEFAULT_HOST, DeviceDescription, DeviceId, HostId, clap_host::DEFAULT_CLAP_PATHS, get_hosts,
+	get_input_devices, get_input_ports, get_output_devices, get_output_ports,
 };
 use iced::{
 	Center, Element, Fill, Font, Task, border, keyboard,
@@ -81,8 +81,10 @@ pub struct ConfigView {
 	config: Config,
 	last_config: Config,
 	hosts: Box<[HostId]>,
-	devices: HashMap<HostId, Devices>,
-	device_info: HashMap<DeviceId, DeviceDescription>,
+	input_devices: HashMap<HostId, Vec<DeviceId>>,
+	input_device_info: HashMap<DeviceId, DeviceDescription>,
+	output_devices: HashMap<HostId, Vec<DeviceId>>,
+	output_device_info: HashMap<DeviceId, DeviceDescription>,
 	input_ports: Box<[Arc<str>]>,
 	input_port_info: HashMap<Arc<str>, Arc<str>>,
 	output_ports: Box<[Arc<str>]>,
@@ -90,53 +92,49 @@ pub struct ConfigView {
 	main_window_id: window::Id,
 }
 
-#[derive(Debug, Default)]
-struct Devices {
-	input: Vec<DeviceId>,
-	output: Vec<DeviceId>,
-}
-
 impl ConfigView {
 	pub fn new(main_window_id: window::Id) -> Self {
-		let device_info = get_devices();
+		let input_device_info = get_input_devices();
+		let output_device_info = get_output_devices();
 		let input_port_info = get_input_ports();
 		let output_port_info = get_output_ports();
 
-		let mut devices =
-			device_info
-				.iter()
-				.fold(HashMap::<_, Devices>::new(), |mut acc, (id, device)| {
-					if device.supports_input() {
-						acc.entry(id.host()).or_default().input.push(id.clone());
-					}
+		let mut hosts = get_hosts().into_boxed_slice();
+		hosts.sort_unstable_by(|l, r| natural_cmp(l.name().as_bytes(), r.name().as_bytes()));
 
-					if device.supports_output() {
-						acc.entry(id.host()).or_default().output.push(id.clone());
-					}
-
+		let mut input_devices =
+			input_device_info
+				.keys()
+				.fold(HashMap::<_, Vec<_>>::new(), |mut acc, id| {
+					acc.entry(id.host()).or_default().push(id.clone());
 					acc
 				});
 
-		for device in devices.values_mut() {
-			device.input.sort_unstable_by(|l, r| {
+		for input_devices in input_devices.values_mut() {
+			input_devices.sort_unstable_by(|l, r| {
 				natural_cmp(
-					device_info[l].name().as_bytes(),
-					device_info[r].name().as_bytes(),
-				)
-			});
-
-			device.output.sort_unstable_by(|l, r| {
-				natural_cmp(
-					device_info[l].name().as_bytes(),
-					device_info[r].name().as_bytes(),
+					input_device_info[l].name().as_bytes(),
+					input_device_info[r].name().as_bytes(),
 				)
 			});
 		}
 
-		devices.entry(*DEFAULT_HOST).or_default();
+		let mut output_devices =
+			output_device_info
+				.keys()
+				.fold(HashMap::<_, Vec<_>>::new(), |mut acc, id| {
+					acc.entry(id.host()).or_default().push(id.clone());
+					acc
+				});
 
-		let mut hosts = devices.keys().copied().collect::<Box<_>>();
-		hosts.sort_unstable_by(|l, r| natural_cmp(l.name().as_bytes(), r.name().as_bytes()));
+		for output_devices in output_devices.values_mut() {
+			output_devices.sort_unstable_by(|l, r| {
+				natural_cmp(
+					output_device_info[l].name().as_bytes(),
+					output_device_info[r].name().as_bytes(),
+				)
+			});
+		}
 
 		let mut input_ports = input_port_info.keys().cloned().collect::<Box<_>>();
 		input_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
@@ -150,8 +148,10 @@ impl ConfigView {
 			last_config: config.clone(),
 			config,
 			hosts,
-			devices,
-			device_info,
+			input_devices,
+			input_device_info,
+			output_devices,
+			output_device_info,
 			input_ports,
 			input_port_info,
 			output_ports,
@@ -355,7 +355,7 @@ impl ConfigView {
 						text("Host:").width(Fill),
 						row![
 							pick_list(self.config.audio.devices.get_host(), &*self.hosts, |host| {
-								if self.devices.contains_key(host) {
+								if self.hosts.contains(host) {
 									host.name().to_owned()
 								} else {
 									format!("Unknown ({host})")
@@ -386,7 +386,7 @@ impl ConfigView {
 							row![
 								pick_list(
 									self.config.audio.devices.get_input(),
-									self.devices
+									self.input_devices
 										.get(
 											&self
 												.config
@@ -395,8 +395,8 @@ impl ConfigView {
 												.get_host()
 												.unwrap_or_else(|| *DEFAULT_HOST)
 										)
-										.map_or([].as_slice(), |devices| &*devices.input),
-									|id| self.device_info.get(id).map_or_else(
+										.map_or([].as_slice(), |input_devices| &**input_devices),
+									|id| self.input_device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
 									)
@@ -428,7 +428,7 @@ impl ConfigView {
 							row![
 								pick_list(
 									self.config.audio.devices.get_output(),
-									self.devices
+									self.output_devices
 										.get(
 											&self
 												.config
@@ -437,8 +437,8 @@ impl ConfigView {
 												.get_host()
 												.unwrap_or_else(|| *DEFAULT_HOST)
 										)
-										.map_or([].as_slice(), |devices| &*devices.output),
-									|id| self.device_info.get(id).map_or_else(
+										.map_or([].as_slice(), |devices| &**devices),
+									|id| self.output_device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
 									)

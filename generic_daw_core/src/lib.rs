@@ -36,7 +36,8 @@ pub use midly::num::{u4, u7};
 pub use node::Node;
 pub use sample::{Sample, SampleId};
 pub use stream::{
-	Channels, DEFAULT_HOST, Devices, build_streams, get_devices, get_input_ports, get_output_ports,
+	Channels, DEFAULT_HOST, Devices, build_streams, get_hosts, get_input_devices, get_input_ports,
+	get_output_devices, get_output_ports,
 };
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;

@@ -125,11 +125,27 @@ impl Devices {
 }
 
 #[must_use]
-pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
+pub fn get_hosts() -> Vec<HostId> {
+	cpal::available_hosts()
+}
+
+#[must_use]
+pub fn get_input_devices() -> HashMap<DeviceId, DeviceDescription> {
 	cpal::available_hosts()
 		.into_iter()
 		.filter_map(|host| cpal::host_from_id(host).ok())
-		.filter_map(|host| host.devices().ok())
+		.filter_map(|host| host.input_devices().ok())
+		.flatten()
+		.filter_map(|device| Some((device.id().ok()?, device.description().ok()?)))
+		.collect()
+}
+
+#[must_use]
+pub fn get_output_devices() -> HashMap<DeviceId, DeviceDescription> {
+	cpal::available_hosts()
+		.into_iter()
+		.filter_map(|host| cpal::host_from_id(host).ok())
+		.filter_map(|host| host.output_devices().ok())
 		.flatten()
 		.filter_map(|device| Some((device.id().ok()?, device.description().ok()?)))
 		.collect()
