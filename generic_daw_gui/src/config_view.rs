@@ -387,6 +387,7 @@ impl ConfigView {
 										.audio
 										.devices
 										.get_host()
+										.filter(|host| self.devices.contains_key(host))
 										.unwrap_or_else(|| *DEFAULT_HOST)]
 										.input,
 									|id| self.device_info.get(id).map_or_else(
@@ -426,6 +427,7 @@ impl ConfigView {
 										.audio
 										.devices
 										.get_host()
+										.filter(|host| self.devices.contains_key(host))
 										.unwrap_or_else(|| *DEFAULT_HOST)]
 										.output,
 									|id| self.device_info.get(id).map_or_else(
