@@ -327,10 +327,6 @@ impl Track {
 		self.channel.restart_all_plugins();
 	}
 
-	pub fn destroy_all_plugins(&mut self) {
-		self.channel.destroy_all_plugins();
-	}
-
 	#[must_use]
 	pub fn from_channel(input: Channels, channel: Channel) -> Self {
 		Self {

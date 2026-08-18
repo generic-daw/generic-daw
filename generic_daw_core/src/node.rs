@@ -103,14 +103,6 @@ impl Node {
 			Self::None => unreachable!(),
 		}
 	}
-
-	pub fn destroy_all_plugins(&mut self) {
-		match self {
-			Self::Channel(node) => node.destroy_all_plugins(),
-			Self::Track(node) => node.destroy_all_plugins(),
-			Self::None => unreachable!(),
-		}
-	}
 }
 
 impl From<Channel> for Node {

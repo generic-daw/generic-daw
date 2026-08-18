@@ -418,8 +418,7 @@ impl AudioThread {
 				Message::NodeRemove(node, boxed) => {
 					let node = self.audio_graph.remove(node);
 					debug_assert!(node.is_some());
-					if let Some(mut node) = node {
-						node.destroy_all_plugins();
+					if let Some(node) = node {
 						self.updates
 							.push(Update::Dealloc(Box::write(boxed, node) as _));
 					}
