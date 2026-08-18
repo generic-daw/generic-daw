@@ -1,5 +1,5 @@
 use crate::{
-	DeviceDescription, DeviceId, HostId,
+	DeviceDescription, DeviceId, HostId, TimedMidiAction,
 	audio_thread::{AudioCallback, AudioThread, MidiAction},
 };
 use cpal::{
@@ -266,11 +266,14 @@ fn build_midi_input_connection(
 	port: Option<&str>,
 ) -> (
 	Option<NoDebug<MidiInputConnection<()>>>,
-	Consumer<MidiAction>,
+	Consumer<TimedMidiAction<u64>>,
 ) {
 	fn build_midi_input_connection(
 		port: Option<&str>,
-	) -> Option<(NoDebug<MidiInputConnection<()>>, Consumer<MidiAction>)> {
+	) -> Option<(
+		NoDebug<MidiInputConnection<()>>,
+		Consumer<TimedMidiAction<u64>>,
+	)> {
 		let port = port?;
 
 		let mut input = MidiInput::new("Generic DAW").ok()?;
@@ -303,14 +306,18 @@ fn build_midi_input_connection(
 }
 
 fn build_midi_input_callback(
-	mut producer: Producer<MidiAction>,
+	mut producer: Producer<TimedMidiAction<u64>>,
 ) -> impl FnMut(u64, &[u8], &mut ()) {
-	move |_, raw, ()| {
+	let mut first_ts = None;
+
+	move |ts, raw, ()| {
+		let ts = ts - *first_ts.get_or_insert(ts);
+
 		let Ok(event) = LiveEvent::parse(raw).inspect_err(|err| warn!("{err}")) else {
 			return;
 		};
 
-		let event = match event {
+		let action = match event {
 			LiveEvent::Midi {
 				channel,
 				message: MidiMessage::NoteOn { key, vel },
@@ -322,7 +329,7 @@ fn build_midi_input_callback(
 			_ => return,
 		};
 
-		if producer.push(event).is_err() {
+		if producer.push(TimedMidiAction { ts, action }).is_err() {
 			warn!("full ring buffer");
 		}
 	}
@@ -448,7 +455,7 @@ fn build_audio_output_stream(
 	input_channels: u16,
 	processor: AudioCallback,
 	midi_output: Option<MidiOutputConnection>,
-	midi_consumer: Consumer<MidiAction>,
+	midi_consumer: Consumer<TimedMidiAction<u64>>,
 	audio_consumer: Consumer<f32>,
 ) -> (NoDebug<Stream>, NonZero<u16>) {
 	let channels = device
@@ -473,7 +480,7 @@ fn build_audio_output_stream(
 				$(
 					$pat => device.build_output_stream(
 						config,
-						build_audio_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_output, midi_consumer, audio_consumer, processor),
+						build_audio_output_callback::<$ty>(sample_rate, frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_output, midi_consumer, audio_consumer, processor),
 						|err| error!("{err}"),
 						None,
 					).unwrap().into(),
@@ -503,11 +510,12 @@ fn build_audio_output_stream(
 }
 
 fn build_audio_output_callback<T: Sample + FromSample<f32>>(
+	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 	input_channels: u16,
 	output_channels: NonZero<u16>,
 	mut midi_output: Option<MidiOutputConnection>,
-	mut midi_consumer: Consumer<MidiAction>,
+	mut midi_consumer: Consumer<TimedMidiAction<u64>>,
 	mut audio_consumer: Consumer<f32>,
 	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
@@ -516,6 +524,7 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
 	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
 	let mut warn = false;
+	let mut frames_in = 0;
 
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
@@ -523,6 +532,18 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 			let input_len = frames * usize::from(input_channels);
 
 			let midi_input = midi_consumer.pop_partial_slice_uninit(&mut midi_in).0;
+			debug_assert!(midi_input.is_sorted_by_key(|action| action.ts));
+
+			for action in &mut *midi_input {
+				action.ts = action
+					.ts
+					.saturating_mul(sample_rate.get().into())
+					.saturating_div(1_000_000);
+				frames_in = frames_in.min(action.ts);
+				action.ts -= frames_in;
+			}
+
+			frames_in += frames as u64;
 
 			if let (_, rest) = audio_consumer.pop_partial_slice(&mut audio_in[..input_len])
 				&& !rest.is_empty()

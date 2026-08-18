@@ -1,6 +1,11 @@
 use crate::{
-	Channel, Channels, Clip, ClipId, Event, MidiAction, MidiNote, Node, NodeAction, NodeId, Update,
-	audio_thread::State, midi_clip::VoiceId, scratch::Scratch, voice_alloc::VoiceAlloc,
+	Channel, Channels, Clip, ClipId, Event, MidiAction, MidiNote, Node, NodeAction, NodeId,
+	TimedMidiAction, Update,
+	audio_thread::State,
+	midi_clip::VoiceId,
+	scratch::Scratch,
+	time::{BeatTime, SecondsTime},
+	voice_alloc::VoiceAlloc,
 };
 use audio_graph::Injector;
 use clap_host::{
@@ -18,7 +23,7 @@ pub struct Track {
 	last_polyphony: usize,
 	input: Channels,
 	audio_producer: Option<Producer<[f32; 2]>>,
-	midi_producer: Option<Producer<MidiAction>>,
+	midi_producer: Option<Producer<TimedMidiAction<BeatTime>>>,
 	channel: Channel,
 }
 
@@ -66,12 +71,12 @@ impl Track {
 			let iter = state
 				.midi_input
 				.iter()
-				.filter(|action| self.input.midi & (1 << action.channel().as_int()) != 0);
+				.filter(|action| self.input.midi & (1 << action.action.channel().as_int()) != 0);
 
 			if self.input.enable_midi {
-				events.extend(iter.clone().map(|action| match action {
+				events.extend(iter.clone().map(|action| match action.action {
 					MidiAction::NoteOn(channel, key, velocity) => Event::On {
-						time: 0,
+						time: action.ts as u32,
 						key: key.as_int(),
 						velocity: f32::from(velocity.as_int()) / 127.0,
 						note_id: Match::Specific(
@@ -80,7 +85,7 @@ impl Track {
 						flags: EventFlags::IS_LIVE,
 					},
 					MidiAction::NoteOff(channel, key, velocity) => Event::Off {
-						time: 0,
+						time: action.ts as u32,
 						key: key.as_int(),
 						velocity: f32::from(velocity.as_int()) / 127.0,
 						note_id: Match::Specific(
@@ -94,8 +99,12 @@ impl Track {
 			if let Some(producer) = &mut self.midi_producer
 				&& state.transport.playing
 			{
-				for &event in iter {
-					if producer.push(event).is_err() {
+				for &TimedMidiAction { ts, action } in iter {
+					let ts = (state.transport.position
+						+ SecondsTime::from_frames(ts as usize, &state.transport))
+					.to_beat_time(&state.transport);
+
+					if producer.push(TimedMidiAction { ts, action }).is_err() {
 						warn!("full ring buffer");
 						break;
 					}
@@ -274,7 +283,10 @@ impl Track {
 					for (&(channel, key), &velocity) in &state.playing {
 						if input.midi & (1 << channel.as_int()) != 0
 							&& producer
-								.push(MidiAction::NoteOn(channel, key, velocity))
+								.push(TimedMidiAction {
+									ts: state.transport.position.to_beat_time(&state.transport),
+									action: MidiAction::NoteOn(channel, key, velocity),
+								})
 								.is_err()
 						{
 							warn!("full ring buffer");
@@ -297,7 +309,10 @@ impl Track {
 					for (&(channel, key), &velocity) in &state.playing {
 						if self.input.midi & (1 << channel.as_int()) != 0
 							&& producer
-								.push(MidiAction::NoteOn(channel, key, velocity))
+								.push(TimedMidiAction {
+									ts: state.transport.position.to_beat_time(&state.transport),
+									action: MidiAction::NoteOn(channel, key, velocity),
+								})
 								.is_err()
 						{
 							warn!("full ring buffer");

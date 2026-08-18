@@ -1,6 +1,6 @@
 use crate::arrangement_view::midi_pattern::MidiPatternPair;
 use generic_daw_core::{
-	MidiAction, MidiKey, MidiNote, MidiNoteId, Transport,
+	MidiAction, MidiKey, MidiNote, MidiNoteId, TimedMidiAction, Transport,
 	time::{BeatRange, BeatTime},
 	u4, u7,
 };
@@ -36,21 +36,21 @@ impl MidiRecording {
 		BeatTime::from_frames(self.frames, transport)
 	}
 
-	pub fn recorded(&mut self, actions: &[MidiAction], frames: usize, transport: &Transport) {
+	pub fn recorded(&mut self, actions: &[TimedMidiAction<BeatTime>], frames: usize) {
 		self.frames += frames;
 
 		for &action in actions {
-			if let Some((velocity, position)) = match action {
+			if let Some((velocity, position)) = match action.action {
 				MidiAction::NoteOn(channel, key, velocity) => self
 					.playing
-					.insert((channel, key), (velocity, self.len(transport))),
+					.insert((channel, key), (velocity, action.ts - self.position)),
 				MidiAction::NoteOff(channel, key, _) => self.playing.remove(&(channel, key)),
 			} {
 				self.notes.push(MidiNote {
 					id: MidiNoteId::unique(),
-					key: MidiKey(action.key().as_int()),
+					key: MidiKey(action.action.key().as_int()),
 					velocity: f32::from(velocity.as_int()) / 127.0,
-					position: BeatRange::new(position, self.len(transport)),
+					position: BeatRange::new(position, action.ts - self.position),
 				});
 			}
 		}

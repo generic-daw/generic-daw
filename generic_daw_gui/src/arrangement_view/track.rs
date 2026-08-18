@@ -9,7 +9,7 @@ use crate::{
 	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
 };
 use generic_daw_core::{
-	Channels, Clip, MidiAction, NodeId, Transport,
+	Channels, Clip, NodeId, TimedMidiAction, Transport,
 	time::{BeatRange, BeatTime},
 };
 use generic_daw_widget::menu::Menu;
@@ -30,7 +30,7 @@ pub struct Track {
 	pub input: Channels,
 	pub audio_consumer: Option<Consumer<[f32; 2]>>,
 	pub audio_recording: Option<AudioRecording>,
-	pub midi_consumer: Option<Consumer<MidiAction>>,
+	pub midi_consumer: Option<Consumer<TimedMidiAction<BeatTime>>>,
 	pub midi_recording: Option<MidiRecording>,
 }
 
@@ -96,7 +96,7 @@ impl Track {
 
 	pub fn midi_recorded(
 		&mut self,
-		actions: &mut [MaybeUninit<MidiAction>],
+		actions: &mut [MaybeUninit<TimedMidiAction<BeatTime>>],
 		frames: usize,
 		transport: &Transport,
 		name: &str,
@@ -111,7 +111,7 @@ impl Track {
 			.get_or_insert_with(|| {
 				MidiRecording::new(format!("{} {}", name, format_now()).into(), transport)
 			})
-			.recorded(actions, frames, transport);
+			.recorded(actions, frames);
 	}
 
 	pub fn midi_finalize(&mut self, transport: &Transport) -> Option<(BeatRange, MidiPatternPair)> {

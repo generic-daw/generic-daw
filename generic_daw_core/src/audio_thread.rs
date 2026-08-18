@@ -67,6 +67,12 @@ pub enum Message {
 
 const _: () = assert!(size_of::<Message>() == 64);
 
+#[derive(Debug, Clone, Copy)]
+pub struct TimedMidiAction<T> {
+	pub ts: T,
+	pub action: MidiAction,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum MidiAction {
 	NoteOn(u4, u7, u7),
@@ -110,7 +116,7 @@ pub enum NodeAction {
 
 	InputSetChannels(Channels),
 	InputSetAudioRecording(Option<Producer<[f32; 2]>>),
-	InputSetMidiRecording(Option<Producer<MidiAction>>),
+	InputSetMidiRecording(Option<Producer<TimedMidiAction<BeatTime>>>),
 
 	OutputSetChannels(Channels),
 
@@ -251,17 +257,21 @@ pub struct State {
 	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
 	pub render_mode: RenderMode,
 	pub audio_input: Box<[f32]>,
-	pub midi_input: Vec<MidiAction>,
+	pub midi_input: Vec<TimedMidiAction<u64>>,
 	pub playing: HashMap<(u4, u7), u7>,
 }
 
 impl State {
 	fn reset(&mut self) {
-		self.midi_input.extend(
-			self.playing
-				.drain()
-				.map(|((channel, key), velocity)| MidiAction::NoteOff(channel, key, velocity)),
-		);
+		self.midi_input
+			.extend(
+				self.playing
+					.drain()
+					.map(|((channel, key), velocity)| TimedMidiAction {
+						ts: 0,
+						action: MidiAction::NoteOff(channel, key, velocity),
+					}),
+			);
 	}
 }
 
@@ -465,7 +475,7 @@ impl AudioThread {
 
 	fn process(
 		&mut self,
-		midi_input: &[MidiAction],
+		midi_input: &[TimedMidiAction<u64>],
 		mut midi_output: Option<&mut MidiOutputConnection>,
 		mut audio_input: &[f32],
 		mut audio_output: &mut [f32],
@@ -481,14 +491,15 @@ impl AudioThread {
 		for &action in midi_input {
 			trace!("{action:?}");
 
-			match action {
+			match action.action {
 				MidiAction::NoteOn(channel, key, velocity) => {
 					if let Some(velocity) =
 						self.state_mut().playing.insert((channel, key), velocity)
 					{
-						self.state_mut()
-							.midi_input
-							.push(MidiAction::NoteOff(channel, key, velocity));
+						self.state_mut().midi_input.push(TimedMidiAction {
+							ts: action.ts,
+							action: MidiAction::NoteOff(channel, key, velocity),
+						});
 					}
 
 					self.state_mut().midi_input.push(action);
@@ -789,7 +800,7 @@ pub enum AudioCallback {
 impl AudioCallback {
 	pub fn process(
 		&mut self,
-		midi_input: &[MidiAction],
+		midi_input: &[TimedMidiAction<u64>],
 		mut midi_output: Option<&mut MidiOutputConnection>,
 		audio_input: &[f32],
 		audio_output: &mut [f32],
