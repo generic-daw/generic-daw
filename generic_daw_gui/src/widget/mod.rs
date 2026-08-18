@@ -119,5 +119,5 @@ fn key_to_px(key: MidiKey, position: Vector, scale: Vector) -> f32 {
 }
 
 fn px_to_key(px: f32, position: Vector, scale: Vector) -> MidiKey {
-	MidiKey(127 - ((px + position.y) / scale.y) as u8)
+	MidiKey(127u8.saturating_sub(((px + position.y) / scale.y) as u8))
 }
