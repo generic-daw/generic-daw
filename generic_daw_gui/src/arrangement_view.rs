@@ -155,6 +155,7 @@ pub enum Message {
 	TransposeOctUp(Tab),
 	TransposeOctDown(Tab),
 	Quantize(Tab),
+	Join(Tab),
 	SelectAll(Tab),
 	SelectInverse(Tab),
 	UnselectAll(Tab),
@@ -723,6 +724,70 @@ impl ArrangementView {
 							self.arrangement
 								.note_trim_start_to(clip.pattern, note, pos.start());
 						}
+					}
+				}
+			},
+			Message::Join(tab) => match tab {
+				Tab::Playlist | Tab::Mixer => {}
+				Tab::PianoRoll => {
+					if let Some(clip) = self.midi_clip() {
+						let piano_roll = self.piano_roll.get_mut();
+						piano_roll.finish();
+						let mut sorted = piano_roll.primary.drain().collect::<Vec<_>>();
+						sorted.sort_unstable();
+
+						let mut i = 0;
+						'outer: while i < sorted.len() {
+							let note = sorted[i];
+							i += 1;
+
+							let pattern = &self.arrangement.midi_patterns()[&clip.pattern];
+
+							let mut j = i;
+							while j < sorted.len() {
+								let other = sorted[j];
+								j += 1;
+
+								if pattern.notes[note].key != pattern.notes[other].key {
+									continue;
+								}
+
+								let note_pos = pattern.notes[note].position;
+								let other_pos = pattern.notes[other].position;
+
+								if note_pos.start().max(other_pos.start())
+									> note_pos.end().min(other_pos.end())
+								{
+									continue;
+								}
+
+								self.arrangement.note_trim_start_to(
+									clip.pattern,
+									note,
+									note_pos.start().min(other_pos.start()),
+								);
+
+								self.arrangement.note_trim_end_to(
+									clip.pattern,
+									note,
+									note_pos.end().max(other_pos.end()),
+								);
+
+								self.arrangement.remove_note(clip.pattern, other);
+
+								i -= 1;
+								j -= 1;
+
+								sorted.remove(j);
+								for other in &mut sorted[j..] {
+									*other -= 1;
+								}
+
+								continue 'outer;
+							}
+						}
+
+						piano_roll.primary.extend(sorted);
 					}
 				}
 			},
@@ -2413,6 +2478,7 @@ impl ArrangementView {
 			},
 			(false, false, true, false) => match key.to_latin(physical_key) {
 				Some('i') => Some(Message::Invert),
+				Some('j') => Some(Message::Join),
 				Some('m') => Some(Message::ToggleEnabled),
 				Some('n') => Some(Message::Normalize),
 				Some('q') => Some(Message::Quantize),
