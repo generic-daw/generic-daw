@@ -2,7 +2,7 @@ use crate::{
 	ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_thread::State,
 	time::OffsetBeatRange, voice_alloc::VoiceAlloc,
 };
-use clap_host::events::Match;
+use clap_host::events::{EventFlags, Match};
 
 pub type VoiceId = (ClipId, MidiNoteId, MidiKey);
 
@@ -130,6 +130,7 @@ fn alloc_or_steal(
 			key: old_voice.info.key.0,
 			velocity: old_voice.info.velocity,
 			note_id: Match::Specific(old_voice.note_id),
+			flags: EventFlags::empty(),
 		});
 
 		voice
@@ -140,6 +141,7 @@ fn alloc_or_steal(
 		key: voice.info.key.0,
 		velocity: voice.info.velocity,
 		note_id: Match::Specific(voice.note_id),
+		flags: EventFlags::empty(),
 	});
 }
 
@@ -155,6 +157,7 @@ fn dealloc(
 			key: voice.info.key.0,
 			velocity: voice.info.velocity,
 			note_id: Match::Specific(voice.note_id),
+			flags: EventFlags::empty(),
 		});
 	}
 }

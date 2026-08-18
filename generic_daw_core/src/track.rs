@@ -3,7 +3,10 @@ use crate::{
 	audio_thread::State, midi_clip::VoiceId, scratch::Scratch, voice_alloc::VoiceAlloc,
 };
 use audio_graph::Injector;
-use clap_host::{RenderMode, events::Match};
+use clap_host::{
+	RenderMode,
+	events::{EventFlags, Match},
+};
 use log::warn;
 use rtrb::Producer;
 use std::collections::HashMap;
@@ -55,6 +58,7 @@ impl Track {
 				key: voice.info.key.0,
 				velocity: voice.info.velocity,
 				note_id: Match::Specific(voice.note_id),
+				flags: EventFlags::empty(),
 			});
 		}
 
@@ -73,6 +77,7 @@ impl Track {
 						note_id: Match::Specific(
 							i32::MAX.cast_unsigned() - 1 - u32::from(channel.as_int()),
 						),
+						flags: EventFlags::IS_LIVE,
 					},
 					MidiAction::NoteOff(channel, key, velocity) => Event::Off {
 						time: 0,
@@ -81,6 +86,7 @@ impl Track {
 						note_id: Match::Specific(
 							i32::MAX.cast_unsigned() - 1 - u32::from(channel.as_int()),
 						),
+						flags: EventFlags::IS_LIVE,
 					},
 				}));
 			}

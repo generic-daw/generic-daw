@@ -4,7 +4,7 @@ use crate::{
 	scratch::Scratch,
 };
 use audio_graph::Injector;
-use clap_host::AudioThread;
+use clap_host::{AudioThread, events::EventFlags};
 use dsp::Utility;
 use utils::{ShiftMoveExt as _, unique_id};
 
@@ -181,6 +181,7 @@ impl Channel {
 						time: 0,
 						param_id,
 						value,
+						flags: EventFlags::IS_LIVE,
 					});
 				}
 			}

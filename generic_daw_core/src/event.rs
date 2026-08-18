@@ -2,8 +2,8 @@ use crate::{PluginId, Update};
 use clap_host::{
 	ClapId, Cookie,
 	events::{
-		self, ClapEvent, Event as _, Match, Midi2Event, MidiEvent, NoteDialect, NoteOffEvent,
-		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent, spaces::CoreEventSpace,
+		self, ClapEvent, Event as _, EventFlags, Match, Midi2Event, MidiEvent, NoteDialect,
+		NoteOffEvent, NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent, spaces::CoreEventSpace,
 	},
 };
 
@@ -14,17 +14,20 @@ pub enum Event {
 		key: u8,
 		velocity: f32,
 		note_id: Match<u32>,
+		flags: EventFlags,
 	},
 	Off {
 		time: u32,
 		key: u8,
 		velocity: f32,
 		note_id: Match<u32>,
+		flags: EventFlags,
 	},
 	ParamValue {
 		time: u32,
 		param_id: ClapId,
 		value: f32,
+		flags: EventFlags,
 	},
 }
 
@@ -68,66 +71,78 @@ impl events::EventImpl for Event {
 				key,
 				velocity,
 				note_id,
+				flags,
 			} => match dialect {
-				NoteDialect::Clap => ClapEvent::NoteOn(NoteOnEvent::new(
-					time,
-					Pckn::new(0u16, 0u16, key, note_id),
-					velocity.into(),
-				)),
-				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(MidiEvent::new(
-					time,
-					0u16,
-					[0x90, key, (velocity * 127.0).round().max(1.0) as u8],
-				)),
-				NoteDialect::Midi2 => ClapEvent::Midi2(Midi2Event::new(
-					time,
-					0u16,
-					[
-						(0x4090 << 16) | (u32::from(key) << 8),
-						(u32::from((velocity * 65535.0).round() as u16) << 16),
-						0,
-						0,
-					],
-				)),
+				NoteDialect::Clap => ClapEvent::NoteOn(
+					NoteOnEvent::new(time, Pckn::new(0u16, 0u16, key, note_id), velocity.into())
+						.with_flags(flags),
+				),
+				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(
+					MidiEvent::new(
+						time,
+						0u16,
+						[0x90, key, (velocity * 127.0).round().max(1.0) as u8],
+					)
+					.with_flags(flags),
+				),
+				NoteDialect::Midi2 => ClapEvent::Midi2(
+					Midi2Event::new(
+						time,
+						0u16,
+						[
+							(0x4090 << 16) | (u32::from(key) << 8),
+							(u32::from((velocity * 65535.0).round() as u16) << 16),
+							0,
+							0,
+						],
+					)
+					.with_flags(flags),
+				),
 			},
 			Self::Off {
 				time,
 				key,
 				velocity,
 				note_id,
+				flags,
 			} => match dialect {
-				NoteDialect::Clap => ClapEvent::NoteOff(NoteOffEvent::new(
-					time,
-					Pckn::new(0u16, 0u16, key, note_id),
-					velocity.into(),
-				)),
-				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(MidiEvent::new(
-					time,
-					0u16,
-					[0x80, key, (velocity * 127.0).round() as u8],
-				)),
-				NoteDialect::Midi2 => ClapEvent::Midi2(Midi2Event::new(
-					time,
-					0u16,
-					[
-						(0x4080 << 16) | (u32::from(key) << 8),
-						(u32::from((velocity * 65535.0).round() as u16) << 16),
-						0,
-						0,
-					],
-				)),
+				NoteDialect::Clap => ClapEvent::NoteOff(
+					NoteOffEvent::new(time, Pckn::new(0u16, 0u16, key, note_id), velocity.into())
+						.with_flags(flags),
+				),
+				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(
+					MidiEvent::new(time, 0u16, [0x80, key, (velocity * 127.0).round() as u8])
+						.with_flags(flags),
+				),
+				NoteDialect::Midi2 => ClapEvent::Midi2(
+					Midi2Event::new(
+						time,
+						0u16,
+						[
+							(0x4080 << 16) | (u32::from(key) << 8),
+							(u32::from((velocity * 65535.0).round() as u16) << 16),
+							0,
+							0,
+						],
+					)
+					.with_flags(flags),
+				),
 			},
 			Self::ParamValue {
 				time,
 				param_id,
 				value,
-			} => ClapEvent::ParamValue(ParamValueEvent::new(
-				time,
-				param_id,
-				Pckn::new(0u16, 0u16, Match::All, Match::All),
-				value.into(),
-				Cookie::empty(),
-			)),
+				flags,
+			} => ClapEvent::ParamValue(
+				ParamValueEvent::new(
+					time,
+					param_id,
+					Pckn::new(0u16, 0u16, Match::All, Match::All),
+					value.into(),
+					Cookie::empty(),
+				)
+				.with_flags(flags),
+			),
 		}
 	}
 
@@ -138,17 +153,20 @@ impl events::EventImpl for Event {
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
 				note_id: event.note_id(),
+				flags: event.flags(),
 			}),
 			CoreEventSpace::NoteOff(event) => Some(Self::Off {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
 				note_id: event.note_id(),
+				flags: event.flags(),
 			}),
 			CoreEventSpace::ParamValue(event) => Some(Self::ParamValue {
 				time: event.time(),
 				param_id: event.param_id()?,
 				value: event.value() as f32,
+				flags: event.flags(),
 			}),
 			CoreEventSpace::Midi(event) => {
 				let data = event.data();
@@ -158,12 +176,14 @@ impl events::EventImpl for Event {
 						key: data[1],
 						velocity: f32::from(data[2]) / 127.0,
 						note_id: Match::All,
+						flags: event.flags(),
 					}),
 					0x90 | 0x80 => Some(Self::Off {
 						time: event.time(),
 						key: data[1],
 						velocity: f32::from(data[2]) / 127.0,
 						note_id: Match::All,
+						flags: event.flags(),
 					}),
 					_ => None,
 				}
@@ -176,12 +196,14 @@ impl events::EventImpl for Event {
 						key: (data[0] >> 8) as u8,
 						velocity: f32::from((data[1] >> 16) as u16) / 65535.0,
 						note_id: Match::All,
+						flags: event.flags(),
 					}),
 					0x4080 => Some(Self::Off {
 						time: event.time(),
 						key: (data[0] >> 8) as u8,
 						velocity: f32::from((data[1] >> 16) as u16) / 65535.0,
 						note_id: Match::All,
+						flags: event.flags(),
 					}),
 					_ => None,
 				}
