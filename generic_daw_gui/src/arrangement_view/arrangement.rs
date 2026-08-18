@@ -173,7 +173,12 @@ impl Arrangement {
 							sanitize_filename_chars(name)
 						};
 						self.tracks[track].audio_recorded(&mut samples, &self.transport, &name);
-						self.tracks[track].midi_recorded(&mut events, &self.transport, &name);
+						self.tracks[track].midi_recorded(
+							&mut events,
+							samples.len(),
+							&self.transport,
+							&name,
+						);
 					}
 				}
 				Update::Interrupted(position) => {
@@ -252,9 +257,8 @@ impl Arrangement {
 				let id = pattern.core.id;
 				self.add_midi_pattern(pattern);
 				let mut clip = MidiClip::new(id);
-				clip.position.move_to(pos);
-				clip.position
-					.trim_end_to(self.transport.position.to_beat_time(&self.transport));
+				clip.position.move_to(pos.start());
+				clip.position.trim_end_to(pos.end());
 				self.add_clip(track, clip);
 			}
 		}

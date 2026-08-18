@@ -8,7 +8,10 @@ use crate::{
 	icons::{keyboard_music, mic, square_arrow_right_enter},
 	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
 };
-use generic_daw_core::{Channels, Clip, MidiAction, NodeId, Transport, time::BeatTime};
+use generic_daw_core::{
+	Channels, Clip, MidiAction, NodeId, Transport,
+	time::{BeatRange, BeatTime},
+};
 use generic_daw_widget::menu::Menu;
 use iced::{
 	Center, Element, Fit, Shrink,
@@ -94,6 +97,7 @@ impl Track {
 	pub fn midi_recorded(
 		&mut self,
 		actions: &mut [MaybeUninit<MidiAction>],
+		frames: usize,
 		transport: &Transport,
 		name: &str,
 	) {
@@ -107,10 +111,10 @@ impl Track {
 			.get_or_insert_with(|| {
 				MidiRecording::new(format!("{} {}", name, format_now()).into(), transport)
 			})
-			.recorded(actions, transport);
+			.recorded(actions, frames, transport);
 	}
 
-	pub fn midi_finalize(&mut self, transport: &Transport) -> Option<(BeatTime, MidiPatternPair)> {
+	pub fn midi_finalize(&mut self, transport: &Transport) -> Option<(BeatRange, MidiPatternPair)> {
 		if let Some(midi_consumer) = &self.midi_consumer
 			&& midi_consumer.is_abandoned()
 			&& midi_consumer.is_empty()

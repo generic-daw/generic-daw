@@ -218,10 +218,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			),
 			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
 			Inner::AudioRecording(inner) => (inner.position, inner.end(self.transport)),
-			Inner::MidiRecording(inner) => (
-				inner.position,
-				self.transport.position.to_beat_time(self.transport),
-			),
+			Inner::MidiRecording(inner) => (inner.position, inner.end(self.transport)),
 		};
 
 		let start = time_to_px(start, playlist.position, playlist.scale, self.transport);
@@ -939,7 +936,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				for ((_, key), (_, start)) in &inner.playing {
 					let start_pixel = start.to_frames(self.transport) as f32 / frames_per_px;
 					let end_pixel =
-						self.transport.position.to_frames(self.transport) as f32 / frames_per_px;
+						inner.end(self.transport).to_frames(self.transport) as f32 / frames_per_px;
 
 					let top_pixel = f32::from(max - key.as_int() + 1) * note_height;
 
