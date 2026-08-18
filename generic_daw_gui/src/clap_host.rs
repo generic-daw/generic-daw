@@ -41,7 +41,7 @@ pub enum Message {
 	Activate(PluginId),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiOpen(PluginId),
-	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin>>>),
+	GuiOpened(PluginId, NoClone<NoDebug<Box<Fragile<Plugin>>>>),
 	WindowResized(window::Id, iced::Size),
 	WindowRescaled(window::Id, f32),
 	WindowCloseRequested(window::Id),
@@ -178,7 +178,7 @@ impl ClapHost {
 						// The plugin gui is destroyed before the window is closed (see
 						// [`Message::WindowCloseRequested`]).
 						unsafe { plugin.get_mut().set_transient(window) }
-						Message::GuiOpened(id, Box::new(plugin).into())
+						Message::GuiOpened(id, NoClone(NoDebug(Box::new(plugin))))
 					})
 				} else {
 					let (window, spawn) = window::open(window::Settings {
@@ -197,14 +197,14 @@ impl ClapHost {
 						// The plugin gui is destroyed before the window is closed (see
 						// [`Message::WindowCloseRequested`]).
 						unsafe { plugin.get_mut().set_parent(window) }
-						Message::GuiOpened(id, Box::new(plugin).into())
+						Message::GuiOpened(id, NoClone(NoDebug(Box::new(plugin))))
 					});
 
 					spawn.discard().chain(embed)
 				}
 				.into();
 			}
-			Message::GuiOpened(id, NoClone(plugin)) => {
+			Message::GuiOpened(id, NoClone(NoDebug(plugin))) => {
 				let mut plugin = plugin.into_inner();
 				plugin.show();
 				self.plugins.insert(id, plugin);
