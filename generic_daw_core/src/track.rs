@@ -91,7 +91,9 @@ impl Track {
 				}));
 			}
 
-			if let Some(producer) = &mut self.midi_producer {
+			if let Some(producer) = &mut self.midi_producer
+				&& state.transport.playing
+			{
 				for &event in iter {
 					if producer.push(event).is_err() {
 						warn!("full ring buffer");
