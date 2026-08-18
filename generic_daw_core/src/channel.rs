@@ -213,6 +213,10 @@ impl Channel {
 			}
 		}
 	}
+
+	pub fn destroy_all_plugins(&mut self) {
+		self.plugins.clear();
+	}
 }
 
 fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {

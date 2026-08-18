@@ -141,10 +141,16 @@ impl Track {
 		self.channel.reset();
 	}
 
-	pub fn apply(&mut self, action: NodeAction, state: &mut State) {
+	pub fn apply(&mut self, action: NodeAction, state: &State, updates: &mut Vec<Update>) {
 		match action {
-			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), *clip),
-			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
+			NodeAction::ClipAdd(clip) => {
+				let clip = self.clips.insert(clip.id(), *clip);
+				debug_assert!(clip.is_none());
+			}
+			NodeAction::ClipRemove(id) => {
+				let clip = self.clips.remove(&id);
+				debug_assert!(clip.is_some());
+			}
 			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
 			NodeAction::ClipTrimStartTo(id, pos) => {
 				let clip = self.clips.get_mut(&id).unwrap();
@@ -249,17 +255,13 @@ impl Track {
 				if (self.input.left != input.left || self.input.right != input.right)
 					&& self.audio_producer.is_some()
 				{
-					state
-						.updates
-						.push(Update::AudioInterrupted(self.channel.id()));
+					updates.push(Update::AudioInterrupted(self.channel.id()));
 				}
 
 				if self.input.midi != input.midi
 					&& let Some(producer) = &mut self.midi_producer
 				{
-					state
-						.updates
-						.push(Update::MidiInterrupted(self.channel.id()));
+					updates.push(Update::MidiInterrupted(self.channel.id()));
 
 					for (&(channel, key), &velocity) in &state.playing {
 						if input.midi & (1 << channel.as_int()) != 0
@@ -278,9 +280,7 @@ impl Track {
 			NodeAction::InputSetAudioRecording(producer) => {
 				self.audio_producer = producer;
 				if self.audio_producer.is_none() {
-					state
-						.updates
-						.push(Update::AudioInterrupted(self.channel.id()));
+					updates.push(Update::AudioInterrupted(self.channel.id()));
 				}
 			}
 			NodeAction::InputSetMidiRecording(producer) => {
@@ -297,9 +297,7 @@ impl Track {
 						}
 					}
 				} else {
-					state
-						.updates
-						.push(Update::MidiInterrupted(self.channel.id()));
+					updates.push(Update::MidiInterrupted(self.channel.id()));
 				}
 			}
 			action => self.channel.apply(action),
@@ -327,6 +325,10 @@ impl Track {
 
 	pub fn restart_all_plugins(&mut self) {
 		self.channel.restart_all_plugins();
+	}
+
+	pub fn destroy_all_plugins(&mut self) {
+		self.channel.destroy_all_plugins();
 	}
 
 	#[must_use]

@@ -90,7 +90,7 @@ pub use project::Feedback;
 #[derive(Clone, Debug)]
 pub enum Message {
 	ChangeConfig(NoClone<Box<AudioThread>>),
-	Batch(Batch),
+	Batch(NoClone<Batch>),
 	DrainQueue,
 	RequestUpdate,
 
@@ -240,7 +240,7 @@ impl ArrangementView {
 			Message::ChangeConfig(NoClone(processor)) => {
 				self.arrangement.change_config(*processor, config);
 			}
-			Message::Batch(msg) => {
+			Message::Batch(NoClone(msg)) => {
 				let before = self.arrangement.transport().position;
 
 				let action = Action::batch(

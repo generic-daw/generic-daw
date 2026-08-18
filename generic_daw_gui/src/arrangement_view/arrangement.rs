@@ -204,6 +204,7 @@ impl Arrangement {
 					messages.push(clap_host::Message::PluginParamChange(id, param_id, value));
 				}
 				Update::ConnectFailed(from, to) => _ = self.node_mut(from).outgoing.remove(&to),
+				Update::Dealloc(boxed) => drop(boxed),
 			}
 		}
 
@@ -591,7 +592,7 @@ impl Arrangement {
 		if self.solo == Some(id) {
 			self.toggle_solo(id);
 		}
-		self.send(Message::NodeRemove(id));
+		self.send(Message::NodeRemove(id, Box::new(MaybeUninit::uninit())));
 		self.nodes.remove(&id).unwrap()
 	}
 
@@ -846,13 +847,19 @@ impl Arrangement {
 			Clip::Audio(clip) => {
 				if self.samples[&clip.sample].refs == 0 {
 					self.samples.remove(&clip.sample);
-					self.send(Message::SampleRemove(clip.sample));
+					self.send(Message::SampleRemove(
+						clip.sample,
+						Box::new(MaybeUninit::uninit()),
+					));
 				}
 			}
 			Clip::Midi(clip) => {
 				if self.midi_patterns[&clip.pattern].refs == 0 {
 					self.midi_patterns.remove(&clip.pattern);
-					self.send(Message::MidiPatternRemove(clip.pattern));
+					self.send(Message::MidiPatternRemove(
+						clip.pattern,
+						Box::new(MaybeUninit::uninit()),
+					));
 				}
 			}
 		}

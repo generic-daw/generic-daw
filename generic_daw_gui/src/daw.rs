@@ -374,6 +374,7 @@ impl Daw {
 			Task::batch([
 				window,
 				batches
+					.map(NoClone)
 					.map(arrangement_view::Message::Batch)
 					.map(move |message| Message::Arrangement(project, message)),
 				scan.chain(open),

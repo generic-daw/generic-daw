@@ -18,8 +18,10 @@ use midir::MidiOutputConnection;
 use midly::num::{u4, u7};
 use rtrb::{Consumer, Producer, PushError};
 use std::{
+	any::Any,
 	collections::HashMap,
 	convert::Infallible,
+	mem::MaybeUninit,
 	num::NonZero,
 	time::{Duration, Instant},
 };
@@ -38,12 +40,12 @@ pub enum Message {
 	MidiPatternAction(MidiPatternId, MidiPatternAction),
 
 	SampleAdd(Sample),
-	SampleRemove(SampleId),
+	SampleRemove(SampleId, Box<MaybeUninit<Sample>>),
 	MidiPatternAdd(MidiPattern),
-	MidiPatternRemove(MidiPatternId),
+	MidiPatternRemove(MidiPatternId, Box<MaybeUninit<MidiPattern>>),
 
 	NodeAdd(Box<Node>),
-	NodeRemove(NodeId),
+	NodeRemove(NodeId, Box<MaybeUninit<Node>>),
 	NodeConnect(NodeId, NodeId),
 	NodeSetMix(NodeId, NodeId, f32),
 	NodeDisconnect(NodeId, NodeId),
@@ -137,7 +139,7 @@ pub enum MidiPatternAction {
 	TrimEndTo(MidiNoteId, BeatTime),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum Update {
 	Recorded(usize),
 	Interrupted(SecondsTime),
@@ -148,9 +150,10 @@ pub enum Update {
 	Polyphony(NodeId, usize),
 	Param(PluginId, ClapId, f32),
 	ConnectFailed(NodeId, NodeId),
+	Dealloc(Box<dyn Any + Send>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Batch {
 	pub version: Version,
 	pub position: SecondsTime,
@@ -250,7 +253,6 @@ pub struct State {
 	pub audio_input: Box<[f32]>,
 	pub midi_input: Vec<MidiAction>,
 	pub playing: HashMap<(u4, u7), u7>,
-	pub updates: Vec<Update>,
 }
 
 impl State {
@@ -294,6 +296,7 @@ pub struct AudioThread {
 	consumer: Consumer<Message>,
 	needs_update: bool,
 	update_buffers: Vec<Vec<Update>>,
+	updates: Vec<Update>,
 }
 
 impl AudioThread {
@@ -320,7 +323,6 @@ impl AudioThread {
 				audio_input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
 				midi_input: Vec::with_capacity(2048),
 				playing: HashMap::with_capacity(2048),
-				updates: Vec::new(),
 			},
 			transport.frames,
 		);
@@ -334,6 +336,7 @@ impl AudioThread {
 			consumer,
 			needs_update: false,
 			update_buffers: Vec::new(),
+			updates: Vec::new(),
 		};
 
 		(processor, master, transport)
@@ -372,9 +375,11 @@ impl AudioThread {
 			trace!("{msg:?}");
 
 			match msg {
-				Message::NodeAction(node, action) => self
-					.audio_graph
-					.for_node_mut(node, move |node, state| node.apply(action, state)),
+				Message::NodeAction(node, action) => {
+					self.audio_graph.for_node_mut(node, |node, state| {
+						node.apply(action, state, &mut self.updates);
+					});
+				}
 				Message::MidiPatternAction(pattern, action) => {
 					self.state_mut()
 						.midi_patterns
@@ -386,31 +391,42 @@ impl AudioThread {
 					let sample = self.state_mut().samples.insert(sample.id, sample);
 					debug_assert!(sample.is_none());
 				}
-				Message::SampleRemove(sample) => {
+				Message::SampleRemove(sample, boxed) => {
 					let sample = self.state_mut().samples.remove(&sample);
 					debug_assert!(sample.is_some());
+					if let Some(sample) = sample {
+						self.updates
+							.push(Update::Dealloc(Box::write(boxed, sample) as _));
+					}
 				}
 				Message::MidiPatternAdd(pattern) => {
 					let pattern = self.state_mut().midi_patterns.insert(pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
-				Message::MidiPatternRemove(pattern) => {
+				Message::MidiPatternRemove(pattern, boxed) => {
 					let pattern = self.state_mut().midi_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
+					if let Some(pattern) = pattern {
+						self.updates
+							.push(Update::Dealloc(Box::write(boxed, pattern) as _));
+					}
 				}
 				Message::NodeAdd(node) => {
 					let node = self.audio_graph.insert(*node);
 					debug_assert!(node.is_none());
 				}
-				Message::NodeRemove(node) => {
+				Message::NodeRemove(node, boxed) => {
 					let node = self.audio_graph.remove(node);
 					debug_assert!(node.is_some());
+					if let Some(mut node) = node {
+						node.destroy_all_plugins();
+						self.updates
+							.push(Update::Dealloc(Box::write(boxed, node) as _));
+					}
 				}
 				Message::NodeConnect(from, to) => {
 					if !self.audio_graph.connect(from, to) {
-						self.state_mut()
-							.updates
-							.push(Update::ConnectFailed(from, to));
+						self.updates.push(Update::ConnectFailed(from, to));
 					}
 				}
 				Message::NodeSetMix(from, to, mix) => self.audio_graph.set_mix(from, to, mix),
@@ -423,13 +439,13 @@ impl AudioThread {
 				Message::TogglePlayback => {
 					self.transport_mut().playing ^= true;
 					let position = self.transport().position;
-					self.state_mut().updates.push(Update::Interrupted(position));
+					self.updates.push(Update::Interrupted(position));
 				}
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
 				Message::Position(version, position) => {
 					self.transport_mut().version = version;
 					self.transport_mut().position = position;
-					self.state_mut().updates.push(Update::Interrupted(position));
+					self.updates.push(Update::Interrupted(position));
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
 				Message::Reset => {
@@ -459,7 +475,6 @@ impl AudioThread {
 		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
 
 		let acc = self
-			.state_mut()
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
 
@@ -491,10 +506,10 @@ impl AudioThread {
 			return Some((sender, receiver));
 		}
 
-		if self.state().updates.capacity() == 0
+		if self.updates.capacity() == 0
 			&& let Some(updates) = self.update_buffers.pop()
 		{
-			self.state_mut().updates = updates;
+			self.updates = updates;
 		}
 
 		while !audio_output.is_empty() {
@@ -574,10 +589,10 @@ impl AudioThread {
 			}
 
 			if self.transport().playing {
-				self.state_mut().updates.push(Update::Recorded(frames));
+				self.updates.push(Update::Recorded(frames));
 				if looped.is_some() {
 					let position = self.transport().position;
-					self.state_mut().updates.push(Update::Interrupted(position));
+					self.updates.push(Update::Interrupted(position));
 				}
 			}
 
@@ -586,7 +601,7 @@ impl AudioThread {
 		}
 
 		self.audio_graph
-			.for_each_node_mut(|node, state| node.collect_updates(&mut state.updates));
+			.for_each_node_mut(|node, _| node.collect_updates(&mut self.updates));
 
 		let now = Instant::now();
 		let mut duration = now - start;
@@ -596,25 +611,23 @@ impl AudioThread {
 			duration += d;
 			frames += f;
 		}
-		self.state_mut()
-			.updates
-			.push(Update::Load(duration, frames));
+		self.updates.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)
 			|| self.transport().playing
-			|| self.state().updates.len() > 1
+			|| self.updates.len() > 1
 		{
 			let batch = Batch {
 				version: self.transport().version,
 				position: self.transport().position,
-				updates: std::mem::take(&mut self.state_mut().updates),
+				updates: std::mem::take(&mut self.updates),
 				now,
 			};
 
 			if let Err(PushError::Full(Batch { updates, .. })) = self.producer.push(batch) {
 				warn!("full ring buffer");
 				self.needs_update = true;
-				self.state_mut().updates = updates;
+				self.updates = updates;
 			}
 		}
 
