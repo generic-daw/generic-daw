@@ -686,35 +686,15 @@ impl Arrangement {
 		drop(ignored_plugins);
 
 		for (from, to, mix) in reader.iter_track_to_channel() {
-			messages.push(arrangement_view::Message::Connect(
-				*tracks.get(&from)?,
-				*channels.get(&to)?,
-			));
-
-			if mix != 1.0 {
-				messages.push(arrangement_view::Message::SetMix(
-					*tracks.get(&from)?,
-					*channels.get(&to)?,
-					mix,
-				));
-			}
+			arrangement.connect(*tracks.get(&from)?, *channels.get(&to)?);
+			arrangement.set_mix(*tracks.get(&from)?, *channels.get(&to)?, mix);
 		}
 
 		drop(tracks);
 
 		for (from, to, mix) in reader.iter_channel_to_channel() {
-			messages.push(arrangement_view::Message::Connect(
-				*channels.get(&from)?,
-				*channels.get(&to)?,
-			));
-
-			if mix != 1.0 {
-				messages.push(arrangement_view::Message::SetMix(
-					*channels.get(&from)?,
-					*channels.get(&to)?,
-					mix,
-				));
-			}
+			arrangement.connect(*channels.get(&from)?, *channels.get(&to)?);
+			arrangement.set_mix(*channels.get(&from)?, *channels.get(&to)?, mix);
 		}
 
 		drop(channels);
