@@ -139,8 +139,6 @@ impl Arrangement {
 	}
 
 	pub fn change_config(&mut self, mut processor: AudioThread, config: &Config) {
-		self.interrupted();
-
 		self.replace_streams(None);
 		let (p_sender, a_receiver) = oneshot::channel();
 		let (streams, input_channels, output_channels, sample_rate, frames) = build_streams(
@@ -198,7 +196,8 @@ impl Arrangement {
 					}
 				}
 				Update::Interrupted(position) => {
-					self.interrupted();
+					self.audio_interrupted(None);
+					self.midi_interrupted(None);
 					self.transport.position = position;
 				}
 				Update::AudioInterrupted(id) => self.audio_interrupted(id),
@@ -238,11 +237,6 @@ impl Arrangement {
 		self.send(Message::ReturnUpdate(batch.updates));
 
 		messages
-	}
-
-	fn interrupted(&mut self) {
-		self.audio_interrupted(None);
-		self.midi_interrupted(None);
 	}
 
 	fn audio_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
@@ -1282,8 +1276,6 @@ impl Arrangement {
 			)
 		});
 
-		self.interrupted();
-
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 		let mut writer = WavWriter::new(
 			BufWriter::new(File::create(path).unwrap()),
@@ -1357,8 +1349,6 @@ impl Arrangement {
 		.inspect_err(|err| warn!("{err}")) else {
 			return Task::done(daw::Message::RenderedFile);
 		};
-
-		self.interrupted();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 

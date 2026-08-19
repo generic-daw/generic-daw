@@ -377,6 +377,9 @@ impl AudioThread {
 		self.transport_mut().output_channels = output_channels;
 		self.transport_mut().sample_rate = sample_rate;
 		self.transport_mut().frames = frames;
+
+		self.updates
+			.push(Update::Interrupted(self.transport().position));
 	}
 
 	#[must_use]
@@ -771,6 +774,9 @@ impl AudioThread {
 
 		*self.transport_mut() = old;
 		self.audio_graph.reset();
+
+		self.updates
+			.push(Update::Interrupted(self.transport().position));
 	}
 
 	fn state(&self) -> &State {
