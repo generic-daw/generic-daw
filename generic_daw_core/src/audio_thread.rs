@@ -378,8 +378,12 @@ impl AudioThread {
 		self.transport_mut().sample_rate = sample_rate;
 		self.transport_mut().frames = frames;
 
+		let acc = self
+			.updates
+			.pop_if(|update| matches!(update, Update::Load(..)));
 		self.updates
 			.push(Update::Interrupted(self.transport().position));
+		self.updates.extend(acc);
 	}
 
 	#[must_use]
@@ -516,6 +520,7 @@ impl AudioThread {
 		}
 
 		if let Some((sender, receiver)) = self.recv_events() {
+			self.updates.extend(acc);
 			return Some((sender, receiver));
 		}
 
@@ -717,6 +722,7 @@ impl AudioThread {
 	) {
 		let old = *self.transport();
 		self.audio_graph.reset();
+		self.state_mut().reset();
 
 		self.transport_mut().position = SecondsTime::ZERO;
 		self.transport_mut().playing = true;
@@ -775,8 +781,12 @@ impl AudioThread {
 		*self.transport_mut() = old;
 		self.audio_graph.reset();
 
+		let acc = self
+			.updates
+			.pop_if(|update| matches!(update, Update::Load(..)));
 		self.updates
 			.push(Update::Interrupted(self.transport().position));
+		self.updates.extend(acc);
 	}
 
 	fn state(&self) -> &State {
