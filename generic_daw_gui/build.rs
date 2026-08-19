@@ -10,7 +10,6 @@ macro_rules! icon {
 
 // https://unpkg.com/lucide-static@latest/font/codepoints.json
 static GLYPHS: &[(&str, char)] = &[
-	icon!(arrow_down_wide_narrow = 57415),
 	icon!(chevron_down = 57453),
 	icon!(chevron_right = 57455),
 	icon!(chevron_up = 57456),
@@ -32,6 +31,7 @@ static GLYPHS: &[(&str, char)] = &[
 	icon!(snowflake = 57701),
 	icon!(square = 57703),
 	icon!(triangle_alert = 57747),
+	icon!(volume_2 = 57771),
 	icon!(x = 57778),
 	icon!(move_vertical = 57799),
 	icon!(arrow_big_right = 57827),
@@ -47,7 +47,6 @@ static GLYPHS: &[(&str, char)] = &[
 	icon!(panel_bottom_dashed = 58414),
 	icon!(chart_no_axes_gantt = 58564),
 	icon!(folder_sync = 58569),
-	icon!(audio_lines = 58714),
 	icon!(file_music = 58718),
 	icon!(keyboard_music = 58720),
 	icon!(between_horizontal_start = 58770),
@@ -55,6 +54,7 @@ static GLYPHS: &[(&str, char)] = &[
 	icon!(chevrons_left_right_ellipsis = 58911),
 	icon!(metronome = 59068),
 	icon!(square_arrow_right_enter = 59075),
+	icon!(midi_port = 59193),
 ];
 
 pub fn main() {

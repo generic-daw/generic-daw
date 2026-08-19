@@ -6,9 +6,9 @@ use crate::{
 	daw::{self, Tab},
 	file_tree::FileKind,
 	icons::{
-		arrow_down_wide_narrow, arrow_up_down, audio_lines, chevron_down, chevron_up,
-		chevrons_left_right_ellipsis, circle_ellipsis, copy, grip_horizontal, grip_vertical, plus,
-		power, power_off, rotate_ccw, snowflake, x,
+		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
+		copy, grip_horizontal, grip_vertical, midi_port, plus, power, power_off, rotate_ccw,
+		snowflake, volume_2, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -2278,7 +2278,7 @@ impl ArrangementView {
 									if node.id == self.selected {
 										row![
 											ContextMenu::new(
-												button(audio_lines().size(TEXT_HEIGHT))
+												button(volume_2().size(TEXT_HEIGHT))
 													.padding((LINE_HEIGHT - TEXT_HEIGHT) / 2.0)
 													.style(button_with_radius(
 														if !node.output.enable_audio {
@@ -2308,7 +2308,7 @@ impl ArrangementView {
 												)
 											),
 											ContextMenu::new(
-												button(arrow_down_wide_narrow().size(TEXT_HEIGHT))
+												button(midi_port().size(TEXT_HEIGHT))
 													.padding((LINE_HEIGHT - TEXT_HEIGHT) / 2.0)
 													.style(button_with_radius(
 														if !node.output.enable_midi {
