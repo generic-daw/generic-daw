@@ -720,6 +720,10 @@ impl AudioThread {
 		mut samples_fn: impl FnMut(&[[f32; 2]]),
 		mut progress_fn: impl FnMut(f64),
 	) {
+		let acc = self
+			.updates
+			.pop_if(|update| matches!(update, Update::Load(..)));
+
 		let old = *self.transport();
 		self.audio_graph.reset();
 		self.state_mut().reset();
@@ -750,8 +754,6 @@ impl AudioThread {
 			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(node, &mut audio[..diff_frames]);
-			self.audio_graph
-				.for_each_node_mut(|node, _| node.clear_updates());
 
 			self.transport_mut().position += diff;
 			progress_fn(self.transport().position / render_end);
@@ -769,8 +771,6 @@ impl AudioThread {
 			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(node, &mut audio[..diff_frames]);
-			self.audio_graph
-				.for_each_node_mut(|node, _| node.clear_updates());
 
 			samples_fn(&audio[..diff_frames]);
 
@@ -781,9 +781,8 @@ impl AudioThread {
 		*self.transport_mut() = old;
 		self.audio_graph.reset();
 
-		let acc = self
-			.updates
-			.pop_if(|update| matches!(update, Update::Load(..)));
+		self.audio_graph
+			.for_each_node_mut(|node, _| node.collect_updates(&mut self.updates));
 		self.updates
 			.push(Update::Interrupted(self.transport().position));
 		self.updates.extend(acc);

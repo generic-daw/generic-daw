@@ -337,10 +337,6 @@ impl Track {
 		self.channel.collect_updates(updates);
 	}
 
-	pub fn clear_updates(&mut self) {
-		self.channel.clear_updates();
-	}
-
 	#[must_use]
 	pub fn output(&self) -> Channels {
 		self.channel.output()

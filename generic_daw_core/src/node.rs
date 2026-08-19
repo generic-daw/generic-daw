@@ -79,14 +79,6 @@ impl Node {
 		}
 	}
 
-	pub fn clear_updates(&mut self) {
-		match self {
-			Self::Channel(node) => node.clear_updates(),
-			Self::Track(node) => node.clear_updates(),
-			Self::None => unreachable!(),
-		}
-	}
-
 	#[must_use]
 	pub fn output(&self) -> Channels {
 		match self {

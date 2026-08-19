@@ -198,10 +198,6 @@ impl Channel {
 		updates.append(&mut self.updates);
 	}
 
-	pub fn clear_updates(&mut self) {
-		self.updates.clear();
-	}
-
 	#[must_use]
 	pub fn output(&self) -> Channels {
 		self.output
