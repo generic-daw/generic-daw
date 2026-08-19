@@ -17,7 +17,7 @@ use crate::{
 use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Streams, Transport, Update, Version, build_streams,
+	PluginId, Point, SampleId, Streams, TimedMidiAction, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -27,6 +27,7 @@ use log::warn;
 use rtrb::{Producer, PushError, RingBuffer};
 use smol::unblock;
 use std::{
+	cell::LazyCell,
 	collections::{BTreeMap, HashMap, VecDeque},
 	fs::File,
 	io::BufWriter,
@@ -59,6 +60,9 @@ pub struct Arrangement {
 	channels: Vec<Channel>,
 	master: NodeId,
 	nodes: HashMap<NodeId, Node>,
+
+	recorded_samples: Box<[[f32; 2]]>,
+	recorded_actions: Box<[MaybeUninit<TimedMidiAction<BeatTime>>]>,
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
@@ -110,6 +114,9 @@ impl Arrangement {
 				master,
 				nodes,
 
+				recorded_samples: boxed_slice![[0.0; 2]; transport.frames.get() as usize],
+				recorded_actions: boxed_slice![MaybeUninit::uninit(); 2048],
+
 				producer,
 				queue: VecDeque::new(),
 				streams: None,
@@ -149,6 +156,10 @@ impl Arrangement {
 		processor.change_config(input_channels, output_channels, sample_rate, frames);
 		p_sender.send(processor).unwrap();
 
+		if self.transport.frames != frames {
+			self.recorded_samples = boxed_slice![[0.0; 2]; frames.get() as usize];
+		}
+
 		self.transport.input_channels = input_channels;
 		self.transport.output_channels = output_channels;
 		self.transport.sample_rate = sample_rate;
@@ -163,19 +174,24 @@ impl Arrangement {
 		for update in batch.updates.drain(..) {
 			match update {
 				Update::Recorded(frames) => {
-					let mut samples = boxed_slice![[0.0; 2]; frames];
-					let mut events = boxed_slice![MaybeUninit::uninit(); 2048];
 					for track in 0..self.tracks.len() {
-						let name = &self.node(self.tracks[track].id).name;
-						let name = if name.is_empty() {
-							format!("T{}", track + 1)
-						} else {
-							sanitize_filename_chars(name)
-						};
-						self.tracks[track].audio_recorded(&mut samples, &self.transport, &name);
+						let id = self.tracks[track].id;
+						let name = LazyCell::new(|| {
+							let name = &self.nodes[&id].name;
+							if name.is_empty() {
+								format!("T{}", track + 1)
+							} else {
+								sanitize_filename_chars(name)
+							}
+						});
+						self.tracks[track].audio_recorded(
+							&mut self.recorded_samples[..frames],
+							&self.transport,
+							&name,
+						);
 						self.tracks[track].midi_recorded(
-							&mut events,
-							samples.len(),
+							&mut self.recorded_actions,
+							frames,
 							&self.transport,
 							&name,
 						);
@@ -348,8 +364,8 @@ impl Arrangement {
 
 	pub fn track_toggle_enabled(&mut self, id: NodeId) {
 		if let Some(solo) = self.solo.take() {
-			for i in 0..self.tracks.len() {
-				let node = self.node_mut(self.tracks[i].id);
+			for track in 0..self.tracks.len() {
+				let node = self.node_mut(self.tracks[track].id);
 
 				node.enabled = solo == node.id || solo == id || node.id == id;
 				if (solo == node.id) == node.enabled {
@@ -526,8 +542,8 @@ impl Arrangement {
 		let solo = (self.solo != Some(id)).then_some(id);
 
 		if self.solo != solo {
-			for i in 0..self.tracks.len() {
-				let node = self.node(self.tracks[i].id);
+			for track in 0..self.tracks.len() {
+				let node = self.node(self.tracks[track].id);
 
 				if node.enabled {
 					if self.solo.is_none_or(|solo| solo == node.id)

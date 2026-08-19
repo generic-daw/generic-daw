@@ -60,7 +60,7 @@ impl<'a, Message> Menu<'a, Message> {
 	}
 
 	#[must_use]
-	pub fn padding<P: Into<Padding>>(mut self, padding: P) -> Self {
+	pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
 		self.padding = padding.into();
 		self
 	}
