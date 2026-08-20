@@ -226,11 +226,15 @@ impl Plugin {
 			.ok()?;
 
 		if let Some(&latency) = self.instance.access_shared_handler(|s| s.ext.latency.get()) {
-			let latency = latency.get(&mut self.instance.plugin_handle());
-			audio_buffers.set_latency(latency);
+			audio_buffers.set_latency(latency.get(&mut self.instance.plugin_handle()));
 		}
 
-		Some(AudioThread::new(processor, audio_buffers, event_buffers))
+		Some(AudioThread::new(
+			processor,
+			audio_buffers,
+			event_buffers,
+			&self.params,
+		))
 	}
 
 	pub fn deactivate<Event: EventImpl>(&mut self, NoClone(mut processor): NoClone<AudioThread>) {

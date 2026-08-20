@@ -1,6 +1,6 @@
 use crate::{
 	event_ports_config::EventPortsConfig,
-	events::{EventImpl, NoteDialect},
+	events::{EventImpl, NoteDialect, spaces::CoreEventSpace},
 	host::Host,
 };
 use clack_host::prelude::*;
@@ -29,14 +29,6 @@ impl EventBuffers {
 		}
 	}
 
-	pub fn are_inputs_empty(&self) -> bool {
-		self.input_events.is_empty()
-	}
-
-	pub fn are_outputs_empty(&self) -> bool {
-		self.output_events.is_empty()
-	}
-
 	pub fn push(&mut self, event: impl EventImpl) {
 		self.input_events.push(
 			&event.to_clap(
@@ -58,6 +50,23 @@ impl EventBuffers {
 	pub fn prepare(&mut self) -> (InputEvents<'_>, OutputEvents<'_>) {
 		self.input_events.sort();
 		(self.input_events.as_input(), self.output_events.as_output())
+	}
+
+	pub fn are_inputs_empty(&self) -> bool {
+		self.input_events.is_empty()
+	}
+
+	pub fn inputs_require_process(&self, mut requires_process: impl FnMut(ClapId) -> bool) -> bool {
+		self.input_events.iter().any(|event| {
+			match event.as_core_event() {
+				Some(CoreEventSpace::ParamValue(event)) => event.param_id(),
+				Some(CoreEventSpace::ParamMod(event)) => event.param_id(),
+				Some(CoreEventSpace::ParamGestureBegin(event)) => event.param_id(),
+				Some(CoreEventSpace::ParamGestureEnd(event)) => event.param_id(),
+				_ => None,
+			}
+			.is_none_or(&mut requires_process)
+		})
 	}
 
 	pub fn output_events<Event: EventImpl>(&self) -> impl Iterator<Item = Event> {

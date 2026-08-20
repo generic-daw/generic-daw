@@ -4,12 +4,13 @@ use crate::{
 	event_buffers::EventBuffers,
 	events::{EventImpl, TransportEvent},
 	host::Host,
+	param::Param,
 	shared::CURRENT_THREAD_ID,
 };
-use clack_extensions::tail::TailLength;
+use clack_extensions::{params::ParamInfoFlags, tail::TailLength};
 use clack_host::prelude::*;
-use log::warn;
-use std::{cell::LazyCell, sync::atomic::Ordering::Relaxed};
+use log::{info, warn};
+use std::{cell::LazyCell, collections::HashSet, sync::atomic::Ordering::Relaxed};
 use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
@@ -17,6 +18,7 @@ pub struct AudioThread {
 	pub(crate) processor: NoDebug<PluginAudioProcessor<Host>>,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
+	requires_process: HashSet<ClapId>,
 	last_input: Option<u64>,
 	processing: bool,
 }
@@ -27,13 +29,20 @@ impl AudioThread {
 		processor: StoppedPluginAudioProcessor<Host>,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
+		params: &[Param],
 	) -> Self {
 		Self {
 			processor: NoDebug(processor.into()),
 			audio_buffers,
 			event_buffers,
+			requires_process: params
+				.iter()
+				.filter_map(|param| {
+					(param.flags.contains(ParamInfoFlags::REQUIRES_PROCESS)).then_some(param.id)
+				})
+				.collect(),
 			last_input: None,
-			processing: false,
+			processing: true,
 		}
 	}
 
@@ -66,20 +75,31 @@ impl AudioThread {
 		let steady_time = self.audio_buffers.read_in(audio);
 
 		let audio_in = LazyCell::new(|| !self.audio_buffers.are_inputs_quiet(audio.len()));
-		let events_in = !self.event_buffers.are_inputs_empty();
+		let events_in = LazyCell::new(|| {
+			self.event_buffers
+				.inputs_require_process(|param_id| self.requires_process.contains(&param_id))
+		});
 		let request_process = self
 			.processor
 			.access_shared_handler(|s| s.request_process.swap(false, Relaxed));
 
-		if !self.processing && !request_process && !events_in && !*audio_in {
+		if !self.processing && !request_process && !*events_in && !*audio_in {
 			self.flush(audio, events, mix_level);
 			return;
 		}
 
+		let was_started = self.processor.is_started();
 		match self.processor.ensure_processing_started() {
 			Ok(started_processor) => {
+				if !was_started {
+					info!(
+						"{}: woke up from sleep",
+						started_processor.access_shared_handler(|s| &s.descriptor)
+					);
+				}
+
 				if started_processor.access_shared_handler(|s| s.ext.tail.get().is_some())
-					&& (request_process || events_in || *audio_in)
+					&& (*events_in || *audio_in)
 				{
 					self.last_input = Some(steady_time);
 				}
@@ -171,6 +191,13 @@ impl AudioThread {
 	}
 
 	pub(crate) fn flush_events<Event: EventImpl>(&mut self, mut events: impl FnMut(Event)) {
+		if self.processor.is_started() {
+			info!(
+				"{}: went to sleep",
+				self.processor.access_shared_handler(|s| &s.descriptor)
+			);
+		}
+
 		self.processor.ensure_processing_stopped();
 
 		let events_in = !self.event_buffers.are_inputs_empty();
@@ -212,7 +239,6 @@ impl AudioThread {
 		self.audio_buffers.reset();
 		self.event_buffers.reset();
 		self.last_input = None;
-		self.processing = false;
 	}
 
 	pub fn deactivate(self) {
