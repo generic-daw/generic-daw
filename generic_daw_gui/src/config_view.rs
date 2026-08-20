@@ -79,7 +79,6 @@ pub enum Message {
 #[derive(Debug)]
 pub struct ConfigView {
 	config: Config,
-	last_config: Config,
 	hosts: Box<[HostId]>,
 	input_devices: HashMap<HostId, Vec<DeviceId>>,
 	input_device_info: HashMap<DeviceId, DeviceDescription>,
@@ -93,7 +92,7 @@ pub struct ConfigView {
 }
 
 impl ConfigView {
-	pub fn new(main_window_id: window::Id) -> Self {
+	pub fn new(main_window_id: window::Id, loaded_config: &Config) -> Self {
 		let input_device_info = get_input_devices();
 		let output_device_info = get_output_devices();
 		let input_port_info = get_input_ports();
@@ -142,11 +141,8 @@ impl ConfigView {
 		let mut output_ports = output_port_info.keys().cloned().collect::<Box<_>>();
 		output_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
 
-		let config = Config::read();
-
 		Self {
-			last_config: config.clone(),
-			config,
+			config: loaded_config.clone(),
 			hosts,
 			input_devices,
 			input_device_info,
@@ -160,7 +156,7 @@ impl ConfigView {
 		}
 	}
 
-	pub fn update(&mut self, message: Message) -> Action<Config, Message> {
+	pub fn update(&mut self, message: Message, loaded_config: &Config) -> Action<Config, Message> {
 		match message {
 			Message::AddSamplePathFileDialog => {
 				return window::run(self.main_window_id, |window| {
@@ -222,18 +218,14 @@ impl ConfigView {
 			Message::ChangedScaleFactor(scale_factor) => {
 				self.config.scale_factor = scale_factor;
 			}
-			Message::WriteConfig => {
-				self.config.write();
-				self.last_config = self.config.clone();
-				return Action::instruction(self.config.clone());
-			}
-			Message::ResetConfigToLast => self.config = self.last_config.clone(),
+			Message::WriteConfig => return Action::instruction(self.config.clone()),
+			Message::ResetConfigToLast => self.config = loaded_config.clone(),
 		}
 
 		Action::none()
 	}
 
-	pub fn view(&self) -> Element<'_, Message> {
+	pub fn view(&self, loaded_config: &Config) -> Element<'_, Message> {
 		container(
 			scrollable(
 				column![
@@ -608,7 +600,7 @@ impl ConfigView {
 							number_input(
 								1..=999,
 								self.config.autosave.interval.get().into(),
-								self.last_config.autosave.interval.get().into(),
+								300,
 								5
 							)
 							.map(|interval| Message::ChangedAutosaveInterval(
@@ -677,13 +669,13 @@ impl ConfigView {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.config != self.last_config).then_some(Message::WriteConfig)
+								(self.config != *loaded_config).then_some(Message::WriteConfig)
 							),
 						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.config != self.last_config)
+								(self.config != *loaded_config)
 									.then_some(Message::ResetConfigToLast)
 							)
 					]
@@ -713,7 +705,7 @@ impl ConfigView {
 		) {
 			(false, false, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Escape) => {
-					Some(daw::Message::CloseConfigView)
+					Some(daw::Message::ToggleConfigView)
 				}
 				_ => None,
 			},

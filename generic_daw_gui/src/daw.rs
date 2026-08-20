@@ -165,9 +165,8 @@ pub enum Message {
 	RenderFile(Arc<Path>),
 	RenderedFile,
 
-	OpenConfigView,
-	CloseConfigView,
-	MergeConfig(Box<Config>),
+	ToggleConfigView,
+	LoadConfig(Box<Config>),
 
 	RescanDevices,
 	RescanPlugins,
@@ -409,9 +408,9 @@ impl Daw {
 			Message::ConfigView(message) => {
 				if let Some(config_view) = self.config_view.as_mut() {
 					return config_view
-						.update(message)
+						.update(message, &self.config)
 						.handle(Message::ConfigView, |config| {
-							self.update(Message::MergeConfig(config.into()))
+							self.update(Message::LoadConfig(config.into()))
 						});
 				}
 			}
@@ -666,11 +665,14 @@ impl Daw {
 				self.clap_host.set_render_mode(RenderMode::Realtime);
 				self.progress = None;
 			}
-			Message::OpenConfigView => {
-				self.config_view = Some(ConfigView::new(self.main_window_id));
+			Message::ToggleConfigView => {
+				self.config_view = if self.config_view.is_some() {
+					None
+				} else {
+					Some(ConfigView::new(self.main_window_id, &self.config))
+				};
 			}
-			Message::CloseConfigView => self.config_view = None,
-			Message::MergeConfig(config) => {
+			Message::LoadConfig(config) => {
 				let mut fut = if self.config.clap_paths == config.clap_paths {
 					Task::none()
 				} else {
@@ -686,6 +688,7 @@ impl Daw {
 				}
 
 				self.config = *config;
+				self.config.write();
 
 				return fut;
 			}
@@ -749,8 +752,8 @@ impl Daw {
 					&& path.metadata().is_ok_and(|metadata| metadata.is_dir())
 				{
 					self.config.sample_paths.push(path);
-					self.file_tree.diff(&self.config.sample_paths);
 					self.config.write();
+					self.file_tree.diff(&self.config.sample_paths);
 				}
 			}
 			Message::FileHoveredLeft => self.files_hovered = false,
@@ -1038,7 +1041,7 @@ impl Daw {
 						rule::horizontal(1),
 						menu_entry(None, "Reconnect devices", "").on_press(Message::RescanDevices),
 						menu_entry(None, "Rescan plugins", "").on_press(Message::RescanPlugins),
-						menu_entry(None, "Settings", "Ctrl+,").on_press(Message::OpenConfigView),
+						menu_entry(None, "Settings", "Ctrl+,").on_press(Message::ToggleConfigView),
 					])
 					.width(200)
 					.style(container_with_radius(weaker_bordered_box, 5))
@@ -1257,10 +1260,12 @@ impl Daw {
 					.interaction(Interaction::Progress)),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
-					center(opaque(config_view.view().map(Message::ConfigView)))
-						.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+					center(opaque(
+						config_view.view(&self.config).map(Message::ConfigView)
+					))
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
 				)
-				.on_press(Message::CloseConfigView),
+				.on_press(Message::ToggleConfigView),
 			)),
 			self.progress.map(|progress| mouse_area(
 				container(
@@ -1533,7 +1538,7 @@ impl Daw {
 				_ => None,
 			},
 			(true, false, false, false) => match key.to_latin(physical_key) {
-				Some(',') => Some(Message::OpenConfigView),
+				Some(',') => Some(Message::ToggleConfigView),
 				Some('m') => Some(Message::ToggleMetronome),
 				Some('n') => Some(Message::NewFile),
 				Some('o') => Some(Message::OpenFileDialog),
