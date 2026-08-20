@@ -177,12 +177,7 @@ impl Plugin {
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
 	) -> Option<AudioThread> {
-		if self
-			.instance
-			.access_handler_mut(|mt| std::mem::take(&mut mt.params_rescan))
-		{
-			self.params = Param::all(&mut self.instance).unwrap_or_default();
-		}
+		self.rescan_params(ParamRescanFlags::ALL);
 
 		let config = PluginAudioConfiguration {
 			sample_rate: sample_rate.get().into(),
@@ -242,8 +237,17 @@ impl Plugin {
 	}
 
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {
-		for param in &mut self.params {
-			param.rescan(&mut self.instance, flags);
+		if flags.requires_restart() {
+			if self
+				.instance
+				.access_handler_mut(|mt| std::mem::take(&mut mt.params_rescan))
+			{
+				self.params = Param::all(&mut self.instance).unwrap_or_default();
+			}
+		} else {
+			for param in &mut self.params {
+				param.rescan(&mut self.instance, flags);
+			}
 		}
 	}
 

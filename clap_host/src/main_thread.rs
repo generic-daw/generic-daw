@@ -79,18 +79,20 @@ impl HostNotePortsImpl for MainThread<'_> {
 
 impl HostParamsImplMainThread for MainThread<'_> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
+		if flags.is_empty() {
+			return;
+		}
+
 		if flags.contains(ParamRescanFlags::VALUES) {
 			self.mark_dirty();
 		}
 
-		if flags.requires_restart() {
-			self.params_rescan = true;
-		} else if !flags.is_empty() {
-			self.shared
-				.sender
-				.send(MainThreadMessage::RescanParams(flags))
-				.unwrap();
-		}
+		self.params_rescan |= flags.requires_restart();
+
+		self.shared
+			.sender
+			.send(MainThreadMessage::RescanParams(flags))
+			.unwrap();
 	}
 
 	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
