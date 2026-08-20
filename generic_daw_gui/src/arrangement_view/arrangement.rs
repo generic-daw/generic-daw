@@ -221,7 +221,9 @@ impl Arrangement {
 					}
 				}
 				Update::Param(id, param_id, value) => {
-					messages.push(clap_host::Message::PluginParamChange(id, param_id, value));
+					messages.push(clap_host::Message::PluginParamValueChange(
+						id, param_id, value,
+					));
 				}
 				Update::ConnectFailed(from, to) => _ = self.node_mut(from).outgoing.remove(&to),
 				Update::Dealloc(boxed) => drop(boxed),

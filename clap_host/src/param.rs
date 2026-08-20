@@ -3,14 +3,13 @@ use clack_extensions::{
 	params::{ParamInfoBuffer, ParamInfoFlags, ParamRescanFlags},
 	state::HostStateImpl as _,
 };
-use clack_host::{prelude::*, utils::Cookie};
+use clack_host::prelude::*;
 use std::{ops::RangeInclusive, sync::Arc};
 
 #[derive(Debug)]
 pub struct Param {
 	pub id: ClapId,
 	pub flags: ParamInfoFlags,
-	pub cookie: Cookie,
 	pub name: Arc<str>,
 	pub module: Arc<str>,
 	pub range: RangeInclusive<f32>,
@@ -45,7 +44,6 @@ impl Param {
 		Some(Self {
 			id: param.id,
 			flags: param.flags,
-			cookie: param.cookie,
 			name: str::from_utf8(param.name).ok()?.into(),
 			module: str::from_utf8(param.module).ok()?.into(),
 			range: param.min_value as f32..=param.max_value as f32,
@@ -86,15 +84,9 @@ impl Param {
 		}
 	}
 
-	pub fn adjust_value(&mut self, plugin: &mut PluginInstance<Host>, value: f32) -> bool {
-		if self.flags.contains(ParamInfoFlags::IS_READONLY) {
-			return false;
-		}
-
+	pub fn adjust_value(&mut self, plugin: &mut PluginInstance<Host>, value: f32) {
 		self.value = value;
 		plugin.access_handler_mut(|mt| mt.mark_dirty());
 		self.rescan(plugin, ParamRescanFlags::TEXT);
-
-		true
 	}
 }

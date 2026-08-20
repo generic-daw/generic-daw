@@ -251,15 +251,48 @@ impl Plugin {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
+	pub fn flush_event<Event: EventImpl>(&mut self, event: Event, mut events: impl FnMut(Event)) {
+		if self.is_active() {
+			return;
+		}
+
+		self.instance
+			.access_shared_handler(|s| s.request_flush.store(false, Relaxed));
+
+		let mut event_buffers = EventBuffers::new(&mut self.instance);
+		event_buffers.push(event);
+		let (input_events, mut output_events) = event_buffers.prepare();
+
+		self.instance
+			.access_shared_handler(|s| *s.ext.params.get().unwrap())
+			.flush(
+				&mut self.instance.inactive_plugin_handle().unwrap(),
+				&input_events,
+				&mut output_events,
+			);
+
+		for event in event_buffers.output_events() {
+			events(event);
+		}
+	}
+
 	#[must_use]
-	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> bool {
-		let param = self
+	pub fn param_can_adjust_value(&self, param_id: ClapId) -> bool {
+		!self
 			.params
+			.iter()
+			.find(|param| param.id == param_id)
+			.unwrap()
+			.flags
+			.contains(ParamInfoFlags::IS_READONLY)
+	}
+
+	pub fn param_adjust_value(&mut self, param_id: ClapId, value: f32) {
+		self.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
-			.unwrap();
-
-		param.adjust_value(&mut self.instance, value)
+			.unwrap()
+			.adjust_value(&mut self.instance, value);
 	}
 
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {

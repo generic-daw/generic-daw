@@ -67,7 +67,7 @@ pub enum Message {
 
 const _: () = assert!(size_of::<Message>() == 64);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TimedMidiAction<T> {
 	pub ts: T,
 	pub action: MidiAction,

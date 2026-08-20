@@ -9,9 +9,10 @@ use crate::{
 	},
 	widget::LINE_HEIGHT,
 };
+use events::EventFlags;
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
-use generic_daw_core::{Event, PluginId, Transport, Update};
+use generic_daw_core::{Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
@@ -33,8 +34,8 @@ use utils::{NoClone, NoDebug, natural_cmp};
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, Box<MainThreadMessage>),
-	PluginParamChange(PluginId, ClapId, f32),
-	HostParamChange(PluginId, ClapId, f32),
+	PluginParamValueChange(PluginId, ClapId, f32),
+	HostParamValueChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
 	LoadPreset(PluginId, Preset),
 	DestroyInactive(PluginId),
@@ -98,15 +99,42 @@ impl ClapHost {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, *msg, transport);
 			}
-			Message::PluginParamChange(id, param_id, value) => {
-				_ = plugin!(id).adjust_param_value(param_id, value);
+			Message::PluginParamValueChange(id, param_id, value) => {
+				plugin!(id).param_adjust_value(param_id, value);
 			}
-			Message::HostParamChange(id, param_id, value) => {
+			Message::HostParamValueChange(id, param_id, value) => {
 				let plugin = plugin!(id);
-				if plugin.is_active() && plugin.adjust_param_value(param_id, value) {
-					return Action::instruction(daw::Instruction::PluginParamChanged(
-						id, param_id, value,
-					));
+				if plugin.param_can_adjust_value(param_id) {
+					plugin.param_adjust_value(param_id, value);
+					return if plugin.is_active() {
+						Action::instruction(daw::Instruction::PluginParamChanged(
+							id, param_id, value,
+						))
+					} else {
+						let mut messages = Vec::new();
+						plugin.flush_event(
+							Event::ParamValue {
+								time: 0,
+								param_id,
+								value,
+								flags: EventFlags::IS_LIVE,
+							},
+							|event| {
+								if let Event::ParamValue {
+									param_id, value, ..
+								} = event
+								{
+									messages
+										.push(Message::PluginParamValueChange(id, param_id, value));
+								}
+							},
+						);
+						Action::batch(
+							messages
+								.into_iter()
+								.map(|message| self.update(message, transport)),
+						)
+					};
 				}
 			}
 			Message::TickTimer(duration) => {
@@ -288,8 +316,11 @@ impl ClapHost {
 				let mut messages = Vec::new();
 
 				plugin!().flush_inactive::<Event>(|event| {
-					if let Some(Update::Param(id, param_id, value)) = event.into_update(id) {
-						messages.push(Message::PluginParamChange(id, param_id, value));
+					if let Event::ParamValue {
+						param_id, value, ..
+					} = event
+					{
+						messages.push(Message::PluginParamValueChange(id, param_id, value));
 					}
 				});
 
@@ -402,16 +433,16 @@ impl ClapHost {
 						column![
 							ContextMenu::new(
 								Knob::new(param.range.clone(), param.value, move |value| {
-									Message::HostParamChange(id, param.id, value)
+									Message::HostParamValueChange(id, param.id, value)
 								})
 								.default(param.default)
 								.radius(25.0)
-								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
+								.enabled(plugin.is_active())
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 								.maybe_tooltip(param.value_text.as_deref()),
 								move || container(
 									menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
-										Message::HostParamChange(id, param.id, param.default)
+										Message::HostParamValueChange(id, param.id, param.default)
 									),
 								)
 								.width(160)
