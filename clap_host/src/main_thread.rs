@@ -16,6 +16,7 @@ use utils::NoClone;
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
+	RequestFlush,
 	Restart(NoClone<AudioThread>),
 	Deactivate(NoClone<AudioThread>),
 	Destroy(NoClone<AudioThread>),

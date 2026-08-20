@@ -11,7 +11,7 @@ use crate::{
 };
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
-use generic_daw_core::{Event, PluginId, Transport};
+use generic_daw_core::{Event, PluginId, Transport, Update};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
@@ -284,6 +284,21 @@ impl ClapHost {
 
 		match message {
 			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
+			MainThreadMessage::RequestFlush => {
+				let mut messages = Vec::new();
+
+				plugin!().flush_inactive::<Event>(|event| {
+					if let Some(Update::Param(id, param_id, value)) = event.into_update(id) {
+						messages.push(Message::PluginParamChange(id, param_id, value));
+					}
+				});
+
+				return Action::batch(
+					messages
+						.into_iter()
+						.map(|message| self.update(message, transport)),
+				);
+			}
 			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate::<Event>(processor);

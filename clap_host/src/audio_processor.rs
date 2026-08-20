@@ -1,4 +1,4 @@
-use crate::shared::Shared;
+use crate::{MainThreadMessage, shared::Shared};
 use clack_extensions::{
 	tail::HostTailImpl,
 	thread_pool::{HostThreadPoolImpl, PluginThreadPool},
@@ -43,6 +43,7 @@ pub struct AudioProcessor<'a> {
 
 impl<'a> AudioProcessor<'a> {
 	pub fn new(shared: &'a Shared<'a>) -> Self {
+		shared.active.store(true, Relaxed);
 		shared.request_restart.store(false, Relaxed);
 
 		Self {
@@ -53,6 +54,19 @@ impl<'a> AudioProcessor<'a> {
 }
 
 impl<'a> AudioProcessorHandler<'a> for AudioProcessor<'a> {}
+
+impl Drop for AudioProcessor<'_> {
+	fn drop(&mut self) {
+		self.shared.active.store(false, Relaxed);
+
+		if self.shared.request_flush.load(Relaxed) {
+			self.shared
+				.sender
+				.send(MainThreadMessage::RequestFlush)
+				.unwrap();
+		}
+	}
+}
 
 impl HostTailImpl for AudioProcessor<'_> {
 	fn changed(&mut self) {}

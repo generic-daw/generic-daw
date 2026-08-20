@@ -2,9 +2,7 @@ use crate::{
 	event_ports_config::EventPortsConfig,
 	events::{EventImpl, NoteDialect},
 	host::Host,
-	param::Param,
 };
-use clack_extensions::params::ParamInfoFlags;
 use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
@@ -16,23 +14,18 @@ pub struct EventBuffers {
 }
 
 impl EventBuffers {
-	pub fn new(plugin: &mut PluginInstance<Host>, params: &[Param]) -> Self {
-		let input_config = EventPortsConfig::from_ports(plugin, true).unwrap_or_default();
+	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
+		Self::with_capacity(plugin, 0)
+	}
 
-		let event_buffers_cap = params
-			.iter()
-			.filter(|param| {
-				!param
-					.flags
-					.intersects(ParamInfoFlags::IS_HIDDEN | ParamInfoFlags::IS_READONLY)
-			})
-			.count() + 128;
+	pub fn with_capacity(plugin: &mut PluginInstance<Host>, capacity: usize) -> Self {
+		let input_config = EventPortsConfig::from_ports(plugin, true).unwrap_or_default();
 
 		Self {
 			input_config,
 
-			input_events: EventBuffer::with_capacity(event_buffers_cap),
-			output_events: EventBuffer::with_capacity(event_buffers_cap),
+			input_events: EventBuffer::with_capacity(capacity),
+			output_events: EventBuffer::with_capacity(capacity),
 		}
 	}
 

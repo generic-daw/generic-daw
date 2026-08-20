@@ -53,6 +53,7 @@ pub struct Shared<'a> {
 	pub ext: Ext,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
+	pub active: AtomicBool,
 	pub request_process: AtomicBool,
 	pub request_restart: AtomicBool,
 	pub request_flush: AtomicBool,
@@ -69,6 +70,7 @@ impl<'a> Shared<'a> {
 			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
+			active: AtomicBool::new(false),
 			request_process: AtomicBool::new(false),
 			request_restart: AtomicBool::new(false),
 			request_flush: AtomicBool::new(false),
@@ -169,7 +171,9 @@ impl HostLogImpl for Shared<'_> {
 
 impl HostParamsImplShared for Shared<'_> {
 	fn request_flush(&self) {
-		self.request_flush.store(true, Relaxed);
+		if !self.request_flush.swap(true, Relaxed) && !self.active.load(Relaxed) {
+			self.sender.send(MainThreadMessage::RequestFlush).unwrap();
+		}
 	}
 }
 

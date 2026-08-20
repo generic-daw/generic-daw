@@ -167,6 +167,31 @@ impl Plugin {
 		self.instance.call_on_main_thread_callback();
 	}
 
+	pub fn flush_inactive<Event: EventImpl>(&mut self, mut events: impl FnMut(Event)) {
+		if self.is_active()
+			|| self
+				.instance
+				.access_shared_handler(|s| !s.request_flush.swap(false, Relaxed))
+		{
+			return;
+		}
+
+		let mut event_buffers = EventBuffers::new(&mut self.instance);
+		let (input_events, mut output_events) = event_buffers.prepare();
+
+		self.instance
+			.access_shared_handler(|s| *s.ext.params.get().unwrap())
+			.flush(
+				&mut self.instance.inactive_plugin_handle().unwrap(),
+				&input_events,
+				&mut output_events,
+			);
+
+		for event in event_buffers.output_events() {
+			events(event);
+		}
+	}
+
 	#[must_use]
 	pub fn is_active(&self) -> bool {
 		self.instance.is_active()
@@ -186,7 +211,8 @@ impl Plugin {
 		};
 
 		let mut audio_buffers = AudioBuffers::new(&mut self.instance, config);
-		let event_buffers = EventBuffers::new(&mut self.instance, &self.params);
+		let event_buffers =
+			EventBuffers::with_capacity(&mut self.instance, 128 + self.params.len());
 
 		let processor = self
 			.instance
