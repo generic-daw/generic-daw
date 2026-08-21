@@ -1,9 +1,8 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiAction, MidiNote, Node, NodeAction, NodeId,
 	TimedMidiAction, Update,
-	audio_thread::State,
+	audio_thread::{Scratch, State},
 	midi_clip::VoiceId,
-	scratch::Scratch,
 	time::{BeatTime, SecondsTime},
 	voice_alloc::VoiceAlloc,
 };

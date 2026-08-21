@@ -1,5 +1,5 @@
 use crate::{
-	EventImpl as _, Injector, NodeId, NodeImpl, ScratchImpl as _,
+	EventImpl as _, Injector, NodeId, NodeImpl, ThreadPool,
 	entry::{Entry, Incoming},
 	node_impl::Inject,
 };
@@ -9,8 +9,7 @@ use std::{
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
-use thread_pool::{ThreadPool, WorkList};
-use utils::NoDebug;
+use thread_pool::WorkList;
 
 impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 	type Item = NodeId;
@@ -35,7 +34,6 @@ impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 pub struct AudioGraph<Node: NodeImpl> {
 	state: Node::State,
 	graph: HashMap<NodeId, Entry<Node>>,
-	pool: Option<NoDebug<ThreadPool<Self>>>,
 	queue: ArrayQueue<NodeId>,
 	max_frames: NonZero<u32>,
 	curr_len: usize,
@@ -48,7 +46,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		Self {
 			state,
 			graph: HashMap::new(),
-			pool: Some(ThreadPool::new_with_scratch(|| Node::Scratch::new(max_frames)).into()),
 			queue: ArrayQueue::new(4),
 			max_frames,
 			curr_len: 0,
@@ -63,12 +60,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph
 			.values_mut()
 			.for_each(|entry| entry.change_max_frames(max_frames));
-		self.pool = None;
-		self.pool = Some(ThreadPool::new_with_scratch(|| Node::Scratch::new(max_frames)).into());
 		self.max_frames = max_frames;
 	}
 
-	pub fn process_all(&mut self, len: usize) {
+	pub fn process_all(&mut self, pool: &mut ThreadPool<Node>, len: usize) {
 		self.curr_len = len;
 
 		for (&id, entry) in &mut self.graph {
@@ -78,13 +73,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		let mut pool = self.pool.take().unwrap();
 		pool.run(
 			self,
 			self.graph.len(),
 			NonZero::new(self.queue.len()).unwrap(),
 		);
-		self.pool = Some(pool);
 
 		self.needs_reset = false;
 
@@ -93,7 +86,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
-	pub fn process_subtree(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
+	pub fn process_subtree(
+		&mut self,
+		pool: &mut ThreadPool<Node>,
+		node: NodeId,
+		audio: &mut [[f32; 2]],
+	) {
 		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, entry: &Entry<Node>) {
 			let buffers = entry.read_buffers_uncontended();
 			if entry.indegree.swap(buffers.incoming.len(), Relaxed) == usize::MAX {
@@ -125,9 +123,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		let mut pool = self.pool.take().unwrap();
 		pool.run(self, count, NonZero::new(self.queue.len()).unwrap());
-		self.pool = Some(pool);
 
 		self.needs_reset = false;
 
@@ -187,7 +183,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let audio = if latency_diff == 0 {
 				&dep_buffers.audio[..self.curr_len]
 			} else {
-				let audio = scratch.get_audio();
+				let audio = Node::get_scratch_audio(scratch);
 				audio[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
 				delay_line.advance_mut(&mut audio[..self.curr_len]);
 				&audio[..self.curr_len]

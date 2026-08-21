@@ -1,7 +1,6 @@
 use crate::{
 	Channel, Channels, Event, NodeAction, NodeImpl, Track, Transport, Update,
-	audio_thread::{Inject, State},
-	scratch::Scratch,
+	audio_thread::{Inject, Scratch, State},
 };
 use audio_graph::{Injector, NodeId};
 
@@ -31,6 +30,10 @@ impl NodeImpl for Node {
 			Self::Track(node) => node.process(state, audio, events, scratch, injector),
 			Self::None => unreachable!(),
 		}
+	}
+
+	fn get_scratch_audio(scratch: &mut Self::Scratch) -> &mut [[f32; 2]] {
+		&mut scratch.audio
 	}
 
 	fn id(&self) -> NodeId {

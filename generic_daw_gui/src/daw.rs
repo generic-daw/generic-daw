@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	AudioThread, BpmTapper, NodeId, PluginId, build_streams,
+	AudioThread, BpmTapper, NodeId, PluginId, Slot, build_streams,
 	clap_host::{
 		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 		StateContextType,
@@ -132,7 +132,7 @@ pub enum Message {
 	ProjectLoaded(
 		Project,
 		NoClone<NoDebug<Box<Arrangement>>>,
-		NoClone<oneshot::Receiver<AudioThread>>,
+		NoClone<NoDebug<Box<AudioThread>>>,
 		Option<proto::ViewState>,
 	),
 
@@ -304,26 +304,23 @@ impl Daw {
 		let config = Config::read();
 		let state = State::read();
 
-		let (p_sender, p_receiver) = oneshot::channel();
-
+		let (sender, receiver) = oneshot::channel();
 		let (streams, input_channels, output_channels, sample_rate, frames) = build_streams(
 			&config.audio.devices.as_core(),
 			config.midi.input.as_deref(),
 			config.midi.output.as_deref(),
 			config.audio.sample_rate,
 			config.audio.buffer_size,
-			p_receiver,
+			Slot::Empty(receiver),
 		);
 
 		let project = Project::unique();
-		let (mut arrangement, batches) = Arrangement::create(
-			input_channels,
-			output_channels,
-			sample_rate,
-			frames,
-			p_sender,
-		);
+		let (mut arrangement, processor, batches) =
+			Arrangement::create(input_channels, output_channels, sample_rate, frames);
+		let pool = processor.create_pool();
+		sender.send((Slot::Full(processor), pool)).unwrap();
 		arrangement.replace_streams(Some(streams));
+
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
@@ -422,7 +419,7 @@ impl Daw {
 			Message::ProjectLoaded(
 				project,
 				NoClone(NoDebug(mut arrangement)),
-				NoClone(a_receiver),
+				NoClone(NoDebug(processor)),
 				view,
 			) => {
 				self.top_pane = Tab::Playlist;
@@ -437,7 +434,7 @@ impl Daw {
 				)
 				.arrangement;
 
-				let p_receiver = arrangement.request_processor(a_receiver);
+				let p_receiver = arrangement.request_processor(Slot::Full(*processor));
 
 				return Task::future(unblock(|| {
 					while !arrangement.drain_queue() {

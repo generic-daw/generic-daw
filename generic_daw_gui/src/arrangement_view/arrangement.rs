@@ -17,7 +17,8 @@ use crate::{
 use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Streams, TimedMidiAction, Transport, Update, Version, build_streams,
+	PluginId, Point, SampleId, Slot, Streams, ThreadPool, TimedMidiAction, Transport, Update,
+	Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -75,8 +76,7 @@ impl Arrangement {
 		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
-		p_sender: oneshot::Sender<AudioThread>,
-	) -> (Self, Task<Batch>) {
+	) -> (Self, AudioThread, Task<Batch>) {
 		let (p_producer, consumer) = RingBuffer::new(6000);
 		let (producer, p_consumer) = RingBuffer::new(6000);
 
@@ -88,7 +88,6 @@ impl Arrangement {
 			p_producer,
 			p_consumer,
 		);
-		p_sender.send(processor).unwrap();
 
 		let mut nodes = HashMap::new();
 		nodes.insert(
@@ -121,6 +120,7 @@ impl Arrangement {
 				queue: VecDeque::new(),
 				streams: None,
 			},
+			processor,
 			Task::stream(poll_consumer(consumer)),
 		)
 	}
@@ -129,34 +129,47 @@ impl Arrangement {
 		std::mem::replace(&mut self.streams, streams)
 	}
 
-	pub fn request_processor(
-		&mut self,
-		a_receiver: oneshot::Receiver<AudioThread>,
-	) -> oneshot::Receiver<AudioThread> {
-		let (a_sender, p_receiver) = oneshot::channel();
-		self.send(Message::RequestProcessor(a_sender, a_receiver));
-		p_receiver
+	pub fn request_processor(&mut self, slot: Slot<AudioThread>) -> oneshot::Receiver<AudioThread> {
+		let (sender, receiver) = oneshot::channel();
+		self.send(Message::RequestProcessor(sender, Box::new(slot)));
+		receiver
 	}
 
-	pub fn change_config(&mut self, mut processor: AudioThread, config: &Config) {
+	pub fn request_processor_and_pool(
+		&mut self,
+		slot: Slot<(Slot<AudioThread>, ThreadPool)>,
+	) -> oneshot::Receiver<(AudioThread, ThreadPool)> {
+		let (sender, receiver) = oneshot::channel();
+		self.send(Message::RequestProcessorAndPool(sender, Box::new(slot)));
+		receiver
+	}
+
+	pub fn change_config(
+		&mut self,
+		(mut processor, mut pool): (AudioThread, ThreadPool),
+		config: &Config,
+	) {
 		self.replace_streams(None);
-		let (p_sender, a_receiver) = oneshot::channel();
+		let (sender, receiver) = oneshot::channel();
 		let (streams, input_channels, output_channels, sample_rate, frames) = build_streams(
 			&config.audio.devices.as_core(),
 			config.midi.input.as_deref(),
 			config.midi.output.as_deref(),
 			config.audio.sample_rate,
 			config.audio.buffer_size,
-			a_receiver,
+			Slot::Empty(receiver),
 		);
 		self.replace_streams(Some(streams));
 
 		processor.change_config(input_channels, output_channels, sample_rate, frames);
-		p_sender.send(processor).unwrap();
 
 		if self.transport.frames != frames {
 			self.recorded_samples = boxed_slice![[0.0; 2]; frames.get() as usize];
+			drop(pool);
+			pool = processor.create_pool();
 		}
+
+		sender.send((Slot::Full(processor), pool)).unwrap();
 
 		self.transport.input_channels = input_channels;
 		self.transport.output_channels = output_channels;
@@ -1290,14 +1303,15 @@ impl Arrangement {
 		)
 		.unwrap();
 
-		let (p_sender, a_receiver) = oneshot::channel();
-		let p_receiver = self.request_processor(a_receiver);
+		let (p_sender, receiver) = oneshot::channel();
+		let p_receiver = self.request_processor_and_pool(Slot::Empty(receiver));
 
 		let master = self.master;
 		Task::batch([
 			Task::future(unblock(move || {
-				let mut processor = p_receiver.recv().unwrap();
+				let (mut processor, mut pool) = p_receiver.recv().unwrap();
 				processor.render(
+					&mut pool,
 					master,
 					beat_range,
 					|samples| {
@@ -1308,7 +1322,7 @@ impl Arrangement {
 					},
 					|f| progress_sender.try_send(f).unwrap(),
 				);
-				p_sender.send(processor).unwrap();
+				p_sender.send((Slot::Full(processor), pool)).unwrap();
 			}))
 			.discard(),
 			Task::run(progress_receiver, |progress| {
@@ -1354,19 +1368,20 @@ impl Arrangement {
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
-		let (p_sender, a_receiver) = oneshot::channel();
-		let p_receiver = self.request_processor(a_receiver);
+		let (p_sender, receiver) = oneshot::channel();
+		let p_receiver = self.request_processor_and_pool(Slot::Empty(receiver));
 
 		Task::batch([
 			Task::future(unblock(move || {
-				let mut processor = p_receiver.recv().unwrap();
+				let (mut processor, mut pool) = p_receiver.recv().unwrap();
 				processor.render(
+					&mut pool,
 					node,
 					beat_range,
 					|samples| recording.recorded(samples),
 					|f| progress_sender.try_send(f).unwrap(),
 				);
-				p_sender.send(processor).unwrap();
+				p_sender.send((Slot::Full(processor), pool)).unwrap();
 
 				daw::Message::Arrangement(
 					project,

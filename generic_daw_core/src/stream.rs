@@ -1,6 +1,5 @@
 use crate::{
-	DeviceDescription, DeviceId, HostId, TimedMidiAction,
-	audio_thread::{AudioCallback, AudioThread, MidiAction},
+	AudioThread, DeviceDescription, DeviceId, HostId, MidiAction, Slot, ThreadPool, TimedMidiAction,
 };
 use cpal::{
 	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
@@ -188,7 +187,7 @@ pub fn build_streams(
 	output_port: Option<&str>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-	receiver: oneshot::Receiver<AudioThread>,
+	processor: Slot<(Slot<AudioThread>, ThreadPool)>,
 ) -> (Streams, u16, NonZero<u16>, NonZero<u32>, NonZero<u32>) {
 	let (midi_input, midi_consumer) = build_midi_input_connection(input_port);
 
@@ -237,7 +236,7 @@ pub fn build_streams(
 		sample_rate,
 		frames,
 		input_channels,
-		AudioCallback::Away(receiver),
+		processor,
 		midi_output,
 		midi_consumer,
 		audio_consumer,
@@ -453,7 +452,7 @@ fn build_audio_output_stream(
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 	input_channels: u16,
-	processor: AudioCallback,
+	processor: Slot<(Slot<AudioThread>, ThreadPool)>,
 	midi_output: Option<MidiOutputConnection>,
 	midi_consumer: Consumer<TimedMidiAction<u64>>,
 	audio_consumer: Consumer<f32>,
@@ -480,7 +479,7 @@ fn build_audio_output_stream(
 				$(
 					$pat => device.build_output_stream(
 						config,
-						build_audio_output_callback::<$ty>(sample_rate, frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_output, midi_consumer, audio_consumer, processor),
+						build_audio_output_callback::<$ty>(sample_rate, frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, processor, midi_output, midi_consumer, audio_consumer),
 						|err| error!("{err}"),
 						None,
 					).unwrap().into(),
@@ -514,10 +513,10 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	frames: NonZero<u32>,
 	input_channels: u16,
 	output_channels: NonZero<u16>,
+	mut processor: Slot<(Slot<AudioThread>, ThreadPool)>,
 	mut midi_output: Option<MidiOutputConnection>,
 	mut midi_consumer: Consumer<TimedMidiAction<u64>>,
 	mut audio_consumer: Consumer<f32>,
-	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
 	let mut midi_in = boxed_slice![MaybeUninit::uninit(); midi_consumer.buffer().capacity()];

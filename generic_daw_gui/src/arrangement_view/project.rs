@@ -225,19 +225,13 @@ impl Arrangement {
 		buffer_size: NonZero<u32>,
 	) -> Task<daw::Message> {
 		let project = Project::unique();
-		let (p_sender, p_receiver) = oneshot::channel();
-		let (arrangement, task) = Self::create(
-			input_channels,
-			output_channels,
-			sample_rate,
-			buffer_size,
-			p_sender,
-		);
+		let (arrangement, processor, task) =
+			Self::create(input_channels, output_channels, sample_rate, buffer_size);
 
 		Task::done(daw::Message::ProjectLoaded(
 			project,
 			NoClone(NoDebug(Box::new(arrangement))),
-			p_receiver.into(),
+			NoClone(NoDebug(Box::new(processor))),
 			None,
 		))
 		.chain(
@@ -293,14 +287,8 @@ impl Arrangement {
 		config: &Config,
 		daw: &Sender<daw::Message>,
 	) -> Option<Task<daw::Message>> {
-		let (p_sender, p_receiver) = oneshot::channel();
-		let (mut arrangement, task) = Self::create(
-			input_channels,
-			output_channels,
-			sample_rate,
-			buffer_size,
-			p_sender,
-		);
+		let (mut arrangement, processor, task) =
+			Self::create(input_channels, output_channels, sample_rate, buffer_size);
 
 		let gdp = std::fs::read(&path).ok()?;
 		let reader = Reader::new(&gdp)?;
@@ -710,7 +698,7 @@ impl Arrangement {
 			Task::done(daw::Message::ProjectLoaded(
 				project,
 				NoClone(NoDebug(Box::new(arrangement))),
-				p_receiver.into(),
+				NoClone(NoDebug(Box::new(processor))),
 				view,
 			))
 			.chain(Task::batch([

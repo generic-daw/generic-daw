@@ -25,7 +25,7 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioThread, Batch, Channels, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
-	PanMode, PluginId, Point, SampleId,
+	PanMode, PluginId, Point, SampleId, Slot, ThreadPool,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -89,7 +89,7 @@ pub use project::Feedback;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	ChangeConfig(NoClone<Box<AudioThread>>),
+	ChangeConfig(NoClone<NoDebug<Box<(AudioThread, ThreadPool)>>>),
 	Batch(NoClone<Batch>),
 	DrainQueue,
 	RequestUpdate,
@@ -238,7 +238,7 @@ impl ArrangementView {
 		state: &mut State,
 	) -> Action<daw::Instruction, Message> {
 		match message {
-			Message::ChangeConfig(NoClone(processor)) => {
+			Message::ChangeConfig(NoClone(NoDebug(processor))) => {
 				self.arrangement.change_config(*processor, config);
 			}
 			Message::Batch(NoClone(msg)) => {
@@ -2542,11 +2542,14 @@ impl ArrangementView {
 	pub fn change_config(&mut self) -> Task<Message> {
 		let (_, a_receiver) = oneshot::channel();
 		Task::perform(
-			self.arrangement.request_processor(a_receiver).into_future(),
+			self.arrangement
+				.request_processor_and_pool(Slot::Empty(a_receiver))
+				.into_future(),
 			Result::ok,
 		)
 		.and_then(Task::done)
 		.map(Box::new)
+		.map(NoDebug)
 		.map(NoClone)
 		.map(Message::ChangeConfig)
 	}

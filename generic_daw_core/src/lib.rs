@@ -9,7 +9,6 @@ mod midi_note;
 mod midi_pattern;
 mod node;
 mod sample;
-mod scratch;
 mod stream;
 pub mod time;
 mod track;
@@ -19,7 +18,7 @@ mod voice_alloc;
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
 pub use audio_thread::{
-	AudioThread, Batch, Message, MidiAction, MidiPatternAction, NodeAction, TimedMidiAction,
+	AudioThread, Batch, Message, MidiAction, MidiPatternAction, NodeAction, Slot, TimedMidiAction,
 	Transport, Update, Version,
 };
 pub use bpm_tapper::BpmTapper;
@@ -42,3 +41,5 @@ pub use stream::{
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
 pub use transition::{Point, Transition};
+
+pub type ThreadPool = utils::NoDebug<audio_graph::ThreadPool<Node>>;

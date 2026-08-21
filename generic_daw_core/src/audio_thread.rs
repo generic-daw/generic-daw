@@ -1,11 +1,11 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
-	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, Sample, SampleId,
+	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, Sample, SampleId, ThreadPool,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use audio_graph::{
-	AudioGraph,
+	self, AudioGraph,
 	thread_pool::{Injector, WorkList},
 };
 use clap_host::{
@@ -25,7 +25,7 @@ use std::{
 	num::NonZero,
 	time::{Duration, Instant},
 };
-use utils::{boxed_slice, include_f32s, unique_id};
+use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -62,7 +62,11 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestProcessor(oneshot::Sender<AudioThread>, oneshot::Receiver<AudioThread>),
+	RequestProcessor(oneshot::Sender<AudioThread>, Box<Slot<AudioThread>>),
+	RequestProcessorAndPool(
+		oneshot::Sender<(AudioThread, ThreadPool)>,
+		Box<Slot<(Slot<AudioThread>, ThreadPool)>>,
+	),
 }
 
 const _: () = assert!(size_of::<Message>() == 64);
@@ -276,6 +280,12 @@ impl State {
 }
 
 #[derive(Debug)]
+pub struct Scratch {
+	pub audio: Box<[[f32; 2]]>,
+	pub events: Vec<Event>,
+}
+
+#[derive(Debug)]
 pub struct Inject<'a>(pub ThreadPoolExecutor<'a>);
 
 impl WorkList for Inject<'_> {
@@ -352,6 +362,13 @@ impl AudioThread {
 		(processor, master, transport)
 	}
 
+	pub fn create_pool(&self) -> ThreadPool {
+		NoDebug(audio_graph::ThreadPool::new_with_scratch(|| Scratch {
+			audio: boxed_slice![[0.0; 2]; self.transport().frames.get() as usize],
+			events: Vec::new(),
+		}))
+	}
+
 	pub fn change_config(
 		&mut self,
 		input_channels: u16,
@@ -387,7 +404,7 @@ impl AudioThread {
 	}
 
 	#[must_use]
-	fn recv_events(&mut self) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
+	fn recv_events(&mut self) -> Option<Action> {
 		while let Ok(msg) = self.consumer.pop() {
 			trace!("{msg:?}");
 
@@ -473,7 +490,12 @@ impl AudioThread {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
-				Message::RequestProcessor(sender, receiver) => return Some((sender, receiver)),
+				Message::RequestProcessor(sender, slot) => {
+					return Some(Action::SendProcessor(sender, *slot));
+				}
+				Message::RequestProcessorAndPool(sender, slot) => {
+					return Some(Action::SendProcessorAndPool(sender, *slot));
+				}
 			}
 		}
 
@@ -482,11 +504,12 @@ impl AudioThread {
 
 	fn process(
 		&mut self,
+		pool: &mut ThreadPool,
 		midi_input: &[TimedMidiAction<u64>],
 		mut midi_output: Option<&mut MidiOutputConnection>,
 		mut audio_input: &[f32],
 		mut audio_output: &mut [f32],
-	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
+	) -> Option<Action> {
 		let start = Instant::now();
 		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
 
@@ -519,9 +542,9 @@ impl AudioThread {
 			}
 		}
 
-		if let Some((sender, receiver)) = self.recv_events() {
+		if let Some(action) = self.recv_events() {
 			self.updates.extend(acc);
-			return Some((sender, receiver));
+			return Some(action);
 		}
 
 		if self.updates.capacity() == 0
@@ -550,7 +573,7 @@ impl AudioThread {
 			let out_len = usize::from(self.transport().output_channels.get()) * frames;
 
 			self.state_mut().audio_input[..in_len].copy_from_slice(&audio_input[..in_len]);
-			self.audio_graph.process_all(frames);
+			self.audio_graph.process_all(pool, frames);
 			self.metronome();
 
 			let output_channels = self.transport().output_channels;
@@ -715,6 +738,7 @@ impl AudioThread {
 
 	pub fn render(
 		&mut self,
+		pool: &mut ThreadPool,
 		node: NodeId,
 		beat_range: BeatRange,
 		mut samples_fn: impl FnMut(&[[f32; 2]]),
@@ -753,7 +777,7 @@ impl AudioThread {
 
 			assert!(self.recv_events().is_none());
 			self.audio_graph
-				.process_subtree(node, &mut audio[..diff_frames]);
+				.process_subtree(pool, node, &mut audio[..diff_frames]);
 
 			self.transport_mut().position += diff;
 			progress_fn(self.transport().position / render_end);
@@ -770,7 +794,7 @@ impl AudioThread {
 
 			assert!(self.recv_events().is_none());
 			self.audio_graph
-				.process_subtree(node, &mut audio[..diff_frames]);
+				.process_subtree(pool, node, &mut audio[..diff_frames]);
 
 			samples_fn(&audio[..diff_frames]);
 
@@ -805,14 +829,33 @@ impl AudioThread {
 	}
 }
 
-#[derive(Debug)]
-#[expect(clippy::large_enum_variant)]
-pub enum AudioCallback {
-	Processing(AudioThread),
-	Away(oneshot::Receiver<AudioThread>),
+enum Action {
+	SendProcessor(oneshot::Sender<AudioThread>, Slot<AudioThread>),
+	SendProcessorAndPool(
+		oneshot::Sender<(AudioThread, ThreadPool)>,
+		Slot<(Slot<AudioThread>, ThreadPool)>,
+	),
 }
 
-impl AudioCallback {
+#[derive(Debug)]
+pub enum Slot<T> {
+	Full(T),
+	Empty(oneshot::Receiver<T>),
+}
+
+impl<T> Slot<T> {
+	fn try_recv(&mut self) -> Option<&mut T> {
+		match self {
+			Self::Full(t) => Some(t),
+			Self::Empty(t) => t.try_recv().map_or(None, |t| {
+				*self = Self::Full(t);
+				self.try_recv()
+			}),
+		}
+	}
+}
+
+impl Slot<(Slot<AudioThread>, ThreadPool)> {
 	pub fn process(
 		&mut self,
 		midi_input: &[TimedMidiAction<u64>],
@@ -820,34 +863,43 @@ impl AudioCallback {
 		audio_input: &[f32],
 		audio_output: &mut [f32],
 	) {
-		match self {
-			Self::Processing(processor) => {
-				if let Some((sender, receiver)) = processor.process(
-					midi_input,
-					midi_output.as_deref_mut(),
-					audio_input,
-					audio_output,
-				) {
-					let Self::Processing(processor) = std::mem::replace(self, Self::Away(receiver))
-					else {
-						unreachable!();
-					};
+		let Some((slot, pool)) = self.try_recv() else {
+			return;
+		};
 
-					sender.send(processor).unwrap();
+		let Some(processor) = slot.try_recv() else {
+			return;
+		};
 
-					self.process(midi_input, midi_output, audio_input, audio_output);
-				} else {
-					for s in audio_output {
-						*s = s.clamp(-1.0, 1.0);
-					}
-				}
+		let Some(action) = processor.process(
+			pool,
+			midi_input,
+			midi_output.as_deref_mut(),
+			audio_input,
+			audio_output,
+		) else {
+			return;
+		};
+
+		match action {
+			Action::SendProcessor(sender, receiver) => {
+				let Slot::Full(processor) = std::mem::replace(slot, receiver) else {
+					unreachable!();
+				};
+
+				sender.send(processor).unwrap();
+
+				self.process(midi_input, midi_output, audio_input, audio_output);
 			}
-			Self::Away(receiver) => {
-				if let Ok(processor) = receiver.try_recv() {
-					*self = Self::Processing(processor);
+			Action::SendProcessorAndPool(sender, receiver) => {
+				let Self::Full((Slot::Full(processor), pool)) = std::mem::replace(self, receiver)
+				else {
+					unreachable!();
+				};
 
-					self.process(midi_input, midi_output, audio_input, audio_output);
-				}
+				sender.send((processor, pool)).unwrap();
+
+				self.process(midi_input, midi_output, audio_input, audio_output);
 			}
 		}
 	}
