@@ -31,25 +31,16 @@ impl AudioClip {
 
 		let position = state.transport.position.to_frames(&state.transport);
 
-		let start = self.position.start().to_frames(&state.transport);
-
-		let write_start = start.saturating_sub(position);
-		if write_start >= audio.len() {
+		let (start, end) = self.position.beat_span().to_frames(&state.transport);
+		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
 
 		let sample = &state.samples[&self.sample];
 
-		let read_len = (sample.len(&state.transport))
-			.saturating_sub(self.position.offset())
-			.min(self.position.len() * self.stretch.abs());
-
-		let len = (read_len / self.stretch.abs()).to_frames(&state.transport);
-
 		let play_pos = position.saturating_sub(start);
-		if play_pos >= len {
-			return;
-		}
+		let write_start = start.saturating_sub(position);
+		let len = end - start;
 
 		let resample_ratio = sample.resample_ratio(&state.transport);
 		let offset = (self.position.offset() / resample_ratio).to_frames(&state.transport);
