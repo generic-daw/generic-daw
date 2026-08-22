@@ -1,4 +1,3 @@
-use crate::{PluginId, Update};
 use clap_host::{
 	ClapId, Cookie,
 	events::{
@@ -29,18 +28,6 @@ pub enum Event {
 		value: f32,
 		flags: EventFlags,
 	},
-}
-
-impl Event {
-	#[must_use]
-	pub fn into_update(self, plugin_id: PluginId) -> Option<Update> {
-		match self {
-			Self::ParamValue {
-				param_id, value, ..
-			} => Some(Update::Param(plugin_id, param_id, value)),
-			_ => None,
-		}
-	}
 }
 
 impl audio_graph::EventImpl for Event {

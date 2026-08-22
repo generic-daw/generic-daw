@@ -1,9 +1,9 @@
 use crate::{
-	Channels, Event, Node, NodeAction, NodeId, Update,
+	Channels, Event, Node, NodeAction, NodeId, PushSlot, Update,
 	audio_thread::{Inject, Scratch, State},
 };
 use audio_graph::Injector;
-use clap_host::{AudioThread, events::EventFlags};
+use clap_host::{AudioThread, RenderMode, events::EventFlags};
 use dsp::Utility;
 use utils::{ShiftMoveExt as _, unique_id};
 
@@ -14,23 +14,23 @@ pub use plugin::Id as PluginId;
 #[derive(Debug)]
 struct Plugin {
 	id: PluginId,
-	processor: Option<AudioThread>,
+	processor: PushSlot<Option<AudioThread>>,
 	mix: f32,
 }
 
 impl Drop for Plugin {
 	fn drop(&mut self) {
-		if let Some(processor) = self.processor.take() {
+		if let Some(processor) = self.processor.take().flatten() {
 			processor.destroy();
 		}
 	}
 }
 
 impl Plugin {
-	pub fn new(id: PluginId) -> Self {
+	pub fn new(id: PluginId, processor: PushSlot<Option<AudioThread>>) -> Self {
 		Self {
 			id,
-			processor: None,
+			processor,
 			mix: 1.0,
 		}
 	}
@@ -84,34 +84,45 @@ impl Channel {
 		}
 
 		for plugin in &mut self.plugins {
-			if let Some(processor) = &mut plugin.processor {
-				processor.push_all(events.drain(..));
+			let processor = match plugin.processor.try_recv() {
+				Some(Some(processor)) => processor,
+				Some(None) => continue,
+				None if state.render_mode == RenderMode::Realtime => continue,
+				None => match plugin.processor.recv() {
+					Some(Some(processor)) => processor,
+					_ => continue,
+				},
+			};
 
-				processor.process::<Event>(
-					audio,
-					|event| {
-						if let Some(update) = event.into_update(plugin.id) {
-							self.updates.push(update);
-						} else {
-							events.push(event);
-						}
-					},
-					Some(&state.transport.as_clap()),
-					Some(&mut |executor| {
-						let task_count = executor.task_count() as usize;
-						let executor = Inject(executor);
-						injector.inject(&executor, task_count);
-					}),
-					plugin.mix,
-				);
+			processor.push_all(events.drain(..));
 
-				if !self.bypassed {
-					latency += processor.latency();
-				}
+			processor.process::<Event>(
+				audio,
+				|event| {
+					if let Event::ParamValue {
+						param_id, value, ..
+					} = event
+					{
+						self.updates.push(Update::Param(plugin.id, param_id, value));
+					} else {
+						events.push(event);
+					}
+				},
+				Some(&state.transport.as_clap()),
+				Some(&mut |executor| {
+					let task_count = executor.task_count() as usize;
+					let executor = Inject(executor);
+					injector.inject(&executor, task_count);
+				}),
+				plugin.mix,
+			);
 
-				if processor.needs_restart() {
-					plugin.processor.take().unwrap().restart();
-				}
+			if !self.bypassed {
+				latency += processor.latency();
+			}
+
+			if processor.needs_restart() {
+				plugin.processor.take().flatten().unwrap().restart();
 			}
 		}
 
@@ -148,7 +159,7 @@ impl Channel {
 
 	pub fn reset(&mut self) {
 		for plugin in &mut self.plugins {
-			if let Some(processor) = &mut plugin.processor {
+			if let Some(Some(processor)) = plugin.processor.try_recv() {
 				processor.reset();
 			}
 		}
@@ -161,21 +172,21 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
-			NodeAction::PluginInsert(index, id) => self.plugins.insert(index, Plugin::new(id)),
-			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
-			NodeAction::PluginActivate(index, processor) => {
-				debug_assert!(self.plugins[index].processor.is_none());
-				self.plugins[index].processor = Some(*processor);
+			NodeAction::PluginInsert(index, id, processor) => {
+				self.plugins.insert(index, Plugin::new(id, *processor));
 			}
+			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginDeactivate(index) => {
-				if let Some(processor) = self.plugins[index].processor.take() {
+				if let Some(slot) = self.plugins[index].processor.try_recv()
+					&& let Some(processor) = slot.take()
+				{
 					processor.deactivate();
 				}
 			}
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			NodeAction::PluginParamChanged(index, param_id, value) => {
-				if let Some(processor) = &mut self.plugins[index].processor {
+				if let Some(Some(processor)) = self.plugins[index].processor.try_recv() {
 					processor.push(Event::ParamValue {
 						time: 0,
 						param_id,
@@ -204,7 +215,7 @@ impl Channel {
 
 	pub fn restart_all_plugins(&mut self) {
 		for plugin in &mut self.plugins {
-			if let Some(processor) = plugin.processor.take() {
+			if let Some(processor) = plugin.processor.take().flatten() {
 				processor.restart();
 			}
 		}

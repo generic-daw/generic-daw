@@ -30,6 +30,6 @@ clack-extensions = { version = "0.1.1", features = [
 	"timer",
 ] }
 clack-host = "0.1.1"
-log = "0.4.33"
+log = "0.4.34"
 raw-window-handle = "0.6.2"
 walkdir = "2.5.0"

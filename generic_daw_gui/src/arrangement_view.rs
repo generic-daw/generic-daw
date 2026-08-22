@@ -25,7 +25,7 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioThread, Batch, Channels, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
-	PanMode, PluginId, Point, SampleId, Slot, ThreadPool,
+	PanMode, PluginId, Point, PullSlot, SampleId, ThreadPool,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -2543,7 +2543,7 @@ impl ArrangementView {
 		let (_, a_receiver) = oneshot::channel();
 		Task::perform(
 			self.arrangement
-				.request_processor_and_pool(Slot::Empty(a_receiver))
+				.request_processor_and_pool(PullSlot::Empty(a_receiver))
 				.into_future(),
 			Result::ok,
 		)

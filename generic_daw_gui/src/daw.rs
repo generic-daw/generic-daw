@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	AudioThread, BpmTapper, NodeId, PluginId, Slot, build_streams,
+	AudioThread, BpmTapper, NodeId, PluginId, PullSlot, build_streams,
 	clap_host::{
 		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 		StateContextType,
@@ -311,14 +311,14 @@ impl Daw {
 			config.midi.output.as_deref(),
 			config.audio.sample_rate,
 			config.audio.buffer_size,
-			Slot::Empty(receiver),
+			PullSlot::Empty(receiver),
 		);
 
 		let project = Project::unique();
 		let (mut arrangement, processor, batches) =
 			Arrangement::create(input_channels, output_channels, sample_rate, frames);
 		let pool = processor.create_pool();
-		sender.send((Slot::Full(processor), pool)).unwrap();
+		sender.send((PullSlot::Full(processor), pool)).unwrap();
 		arrangement.replace_streams(Some(streams));
 
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
@@ -434,7 +434,7 @@ impl Daw {
 				)
 				.arrangement;
 
-				let p_receiver = arrangement.request_processor(Slot::Full(*processor));
+				let p_receiver = arrangement.request_processor(PullSlot::Full(*processor));
 
 				return Task::future(unblock(|| {
 					while !arrangement.drain_queue() {
@@ -967,9 +967,11 @@ impl Daw {
 			}
 			Instruction::PluginActivate(id, processor) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
-					self.arrangement_view
-						.arrangement
-						.plugin_activate(node, index, processor);
+					self.arrangement_view.arrangement.plugin_activate(
+						node,
+						index,
+						processor.map(|processor| *processor),
+					);
 				}
 			}
 			Instruction::PluginParamChanged(id, param_id, value) => {

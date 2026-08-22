@@ -1,5 +1,6 @@
 use crate::{
-	AudioThread, DeviceDescription, DeviceId, HostId, MidiAction, Slot, ThreadPool, TimedMidiAction,
+	AudioThread, DeviceDescription, DeviceId, HostId, MidiAction, PullSlot, ThreadPool,
+	TimedMidiAction,
 };
 use cpal::{
 	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
@@ -187,7 +188,7 @@ pub fn build_streams(
 	output_port: Option<&str>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-	processor: Slot<(Slot<AudioThread>, ThreadPool)>,
+	processor: PullSlot<(PullSlot<AudioThread>, ThreadPool)>,
 ) -> (Streams, u16, NonZero<u16>, NonZero<u32>, NonZero<u32>) {
 	let (midi_input, midi_consumer) = build_midi_input_connection(input_port);
 
@@ -452,7 +453,7 @@ fn build_audio_output_stream(
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 	input_channels: u16,
-	processor: Slot<(Slot<AudioThread>, ThreadPool)>,
+	processor: PullSlot<(PullSlot<AudioThread>, ThreadPool)>,
 	midi_output: Option<MidiOutputConnection>,
 	midi_consumer: Consumer<TimedMidiAction<u64>>,
 	audio_consumer: Consumer<f32>,
@@ -513,7 +514,7 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	frames: NonZero<u32>,
 	input_channels: u16,
 	output_channels: NonZero<u16>,
-	mut processor: Slot<(Slot<AudioThread>, ThreadPool)>,
+	mut processor: PullSlot<(PullSlot<AudioThread>, ThreadPool)>,
 	mut midi_output: Option<MidiOutputConnection>,
 	mut midi_consumer: Consumer<TimedMidiAction<u64>>,
 	mut audio_consumer: Consumer<f32>,

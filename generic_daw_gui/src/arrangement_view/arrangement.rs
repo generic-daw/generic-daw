@@ -17,8 +17,8 @@ use crate::{
 use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Slot, Streams, ThreadPool, TimedMidiAction, Transport, Update,
-	Version, build_streams,
+	PluginId, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool, TimedMidiAction, Transport,
+	Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -129,7 +129,10 @@ impl Arrangement {
 		std::mem::replace(&mut self.streams, streams)
 	}
 
-	pub fn request_processor(&mut self, slot: Slot<AudioThread>) -> oneshot::Receiver<AudioThread> {
+	pub fn request_processor(
+		&mut self,
+		slot: PullSlot<AudioThread>,
+	) -> oneshot::Receiver<AudioThread> {
 		let (sender, receiver) = oneshot::channel();
 		self.send(Message::RequestProcessor(sender, Box::new(slot)));
 		receiver
@@ -137,7 +140,7 @@ impl Arrangement {
 
 	pub fn request_processor_and_pool(
 		&mut self,
-		slot: Slot<(Slot<AudioThread>, ThreadPool)>,
+		slot: PullSlot<(PullSlot<AudioThread>, ThreadPool)>,
 	) -> oneshot::Receiver<(AudioThread, ThreadPool)> {
 		let (sender, receiver) = oneshot::channel();
 		self.send(Message::RequestProcessorAndPool(sender, Box::new(slot)));
@@ -157,7 +160,7 @@ impl Arrangement {
 			config.midi.output.as_deref(),
 			config.audio.sample_rate,
 			config.audio.buffer_size,
-			Slot::Empty(receiver),
+			PullSlot::Empty(receiver),
 		);
 		self.replace_streams(Some(streams));
 
@@ -169,7 +172,7 @@ impl Arrangement {
 			pool = processor.create_pool();
 		}
 
-		sender.send((Slot::Full(processor), pool)).unwrap();
+		sender.send((PullSlot::Full(processor), pool)).unwrap();
 
 		self.transport.input_channels = input_channels;
 		self.transport.output_channels = output_channels;
@@ -403,10 +406,13 @@ impl Arrangement {
 		descriptor: PluginDescriptor,
 		index: usize,
 	) -> Option<(PluginId, daw::Instruction)> {
-		let (plugin, receiver) = PluginPair::new(descriptor, HOST.clone())?;
+		let (plugin, slot, receiver) = PluginPair::new(descriptor, HOST.clone())?;
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.insert(index, plugin.gui);
-		self.node_action(id, NodeAction::PluginInsert(index, plugin_id));
+		self.node_action(
+			id,
+			NodeAction::PluginInsert(index, plugin_id, Box::new(slot)),
+		);
 		Some((
 			plugin_id,
 			daw::Instruction::PluginAdd(plugin_id, plugin.core, receiver),
@@ -463,12 +469,12 @@ impl Arrangement {
 		&mut self,
 		id: NodeId,
 		index: usize,
-		processor: Option<Box<clap_host::AudioThread>>,
+		processor: Option<clap_host::AudioThread>,
 	) {
 		self.node_mut(id).plugins[index].active = processor.is_some();
-		if let Some(processor) = processor {
-			self.node_action(id, NodeAction::PluginActivate(index, processor));
-		}
+		let (s, r) = oneshot::channel();
+		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s, s);
+		s.send(PushSlot::new(Some(processor), r)).unwrap();
 	}
 
 	pub fn plugin_deactivate(&mut self, id: NodeId, index: usize) {
@@ -1304,7 +1310,7 @@ impl Arrangement {
 		.unwrap();
 
 		let (p_sender, receiver) = oneshot::channel();
-		let p_receiver = self.request_processor_and_pool(Slot::Empty(receiver));
+		let p_receiver = self.request_processor_and_pool(PullSlot::Empty(receiver));
 
 		let master = self.master;
 		Task::batch([
@@ -1322,7 +1328,7 @@ impl Arrangement {
 					},
 					|f| progress_sender.try_send(f).unwrap(),
 				);
-				p_sender.send((Slot::Full(processor), pool)).unwrap();
+				p_sender.send((PullSlot::Full(processor), pool)).unwrap();
 			}))
 			.discard(),
 			Task::run(progress_receiver, |progress| {
@@ -1369,7 +1375,7 @@ impl Arrangement {
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
 		let (p_sender, receiver) = oneshot::channel();
-		let p_receiver = self.request_processor_and_pool(Slot::Empty(receiver));
+		let p_receiver = self.request_processor_and_pool(PullSlot::Empty(receiver));
 
 		Task::batch([
 			Task::future(unblock(move || {
@@ -1381,7 +1387,7 @@ impl Arrangement {
 					|samples| recording.recorded(samples),
 					|f| progress_sender.try_send(f).unwrap(),
 				);
-				p_sender.send((Slot::Full(processor), pool)).unwrap();
+				p_sender.send((PullSlot::Full(processor), pool)).unwrap();
 
 				daw::Message::Arrangement(
 					project,

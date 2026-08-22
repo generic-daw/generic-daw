@@ -30,7 +30,7 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
 iced_split = { git = "https://github.com/edwloef/iced_split.git", branch = "generic-daw" }
 infer = { version = "0.22.0", default-features = false }
 jiff = { version = "0.2.35", default-features = false, features = ["std"] }
-log = "0.4.33"
+log = "0.4.34"
 oneshot = { version = "0.2.1", features = ["async", "std"] }
 open = "5.4.1"
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }

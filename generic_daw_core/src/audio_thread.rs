@@ -1,6 +1,7 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
-	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, Sample, SampleId, ThreadPool,
+	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, PullSlot, PushSlot, Sample, SampleId,
+	ThreadPool,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -62,10 +63,10 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestProcessor(oneshot::Sender<AudioThread>, Box<Slot<AudioThread>>),
+	RequestProcessor(oneshot::Sender<AudioThread>, Box<PullSlot<AudioThread>>),
 	RequestProcessorAndPool(
 		oneshot::Sender<(AudioThread, ThreadPool)>,
-		Box<Slot<(Slot<AudioThread>, ThreadPool)>>,
+		Box<PullSlot<(PullSlot<AudioThread>, ThreadPool)>>,
 	),
 }
 
@@ -129,9 +130,12 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginInsert(usize, PluginId),
+	PluginInsert(
+		usize,
+		PluginId,
+		Box<PushSlot<Option<clap_host::AudioThread>>>,
+	),
 	PluginRemove(usize),
-	PluginActivate(usize, Box<clap_host::AudioThread>),
 	PluginDeactivate(usize),
 	PluginMoveTo(usize, usize),
 	PluginMixChanged(usize, f32),
@@ -517,6 +521,17 @@ impl AudioThread {
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
 
+		if self.updates.capacity() == 0
+			&& let Some(updates) = self.update_buffers.pop()
+		{
+			self.updates = updates;
+		}
+
+		if let Some(action) = self.recv_events() {
+			self.updates.extend(acc);
+			return Some(action);
+		}
+
 		self.state_mut().midi_input.clear();
 		for &action in midi_input {
 			trace!("{action:?}");
@@ -540,17 +555,6 @@ impl AudioThread {
 					}
 				}
 			}
-		}
-
-		if let Some(action) = self.recv_events() {
-			self.updates.extend(acc);
-			return Some(action);
-		}
-
-		if self.updates.capacity() == 0
-			&& let Some(updates) = self.update_buffers.pop()
-		{
-			self.updates = updates;
 		}
 
 		while !audio_output.is_empty() {
@@ -775,7 +779,6 @@ impl AudioThread {
 			let diff = buffer_size.min(render_start - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
-			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(pool, node, &mut audio[..diff_frames]);
 
@@ -792,7 +795,6 @@ impl AudioThread {
 			let diff = buffer_size.min(render_end - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
-			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(pool, node, &mut audio[..diff_frames]);
 
@@ -803,6 +805,7 @@ impl AudioThread {
 		}
 
 		*self.transport_mut() = old;
+		self.state_mut().render_mode = RenderMode::Realtime;
 		self.audio_graph.reset();
 
 		self.audio_graph
@@ -830,32 +833,14 @@ impl AudioThread {
 }
 
 enum Action {
-	SendProcessor(oneshot::Sender<AudioThread>, Slot<AudioThread>),
+	SendProcessor(oneshot::Sender<AudioThread>, PullSlot<AudioThread>),
 	SendProcessorAndPool(
 		oneshot::Sender<(AudioThread, ThreadPool)>,
-		Slot<(Slot<AudioThread>, ThreadPool)>,
+		PullSlot<(PullSlot<AudioThread>, ThreadPool)>,
 	),
 }
 
-#[derive(Debug)]
-pub enum Slot<T> {
-	Full(T),
-	Empty(oneshot::Receiver<T>),
-}
-
-impl<T> Slot<T> {
-	fn try_recv(&mut self) -> Option<&mut T> {
-		match self {
-			Self::Full(t) => Some(t),
-			Self::Empty(t) => t.try_recv().map_or(None, |t| {
-				*self = Self::Full(t);
-				self.try_recv()
-			}),
-		}
-	}
-}
-
-impl Slot<(Slot<AudioThread>, ThreadPool)> {
+impl PullSlot<(PullSlot<AudioThread>, ThreadPool)> {
 	pub fn process(
 		&mut self,
 		midi_input: &[TimedMidiAction<u64>],
@@ -883,7 +868,7 @@ impl Slot<(Slot<AudioThread>, ThreadPool)> {
 
 		match action {
 			Action::SendProcessor(sender, receiver) => {
-				let Slot::Full(processor) = std::mem::replace(slot, receiver) else {
+				let PullSlot::Full(processor) = std::mem::replace(slot, receiver) else {
 					unreachable!();
 				};
 
@@ -892,7 +877,8 @@ impl Slot<(Slot<AudioThread>, ThreadPool)> {
 				self.process(midi_input, midi_output, audio_input, audio_output);
 			}
 			Action::SendProcessorAndPool(sender, receiver) => {
-				let Self::Full((Slot::Full(processor), pool)) = std::mem::replace(self, receiver)
+				let Self::Full((PullSlot::Full(processor), pool)) =
+					std::mem::replace(self, receiver)
 				else {
 					unreachable!();
 				};

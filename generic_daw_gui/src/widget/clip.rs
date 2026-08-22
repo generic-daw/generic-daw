@@ -822,9 +822,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					},
 				);
 			}
-			Inner::MidiClip(inner) => 'blk: {
+			Inner::MidiClip(inner) => 'block: {
 				if lower_bounds.width < 1.0 || inner.pattern.notes.is_empty() {
-					break 'blk;
+					break 'block;
 				}
 
 				let (min, max) = inner
@@ -892,10 +892,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					},
 				);
 			}
-			Inner::MidiRecording(inner) => 'blk: {
+			Inner::MidiRecording(inner) => 'block: {
 				if lower_bounds.width < 1.0 || (inner.notes.is_empty() && inner.playing.is_empty())
 				{
-					break 'blk;
+					break 'block;
 				}
 
 				let (min, max) = inner

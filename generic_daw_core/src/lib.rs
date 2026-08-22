@@ -9,6 +9,7 @@ mod midi_note;
 mod midi_pattern;
 mod node;
 mod sample;
+mod slot;
 mod stream;
 pub mod time;
 mod track;
@@ -18,7 +19,7 @@ mod voice_alloc;
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
 pub use audio_thread::{
-	AudioThread, Batch, Message, MidiAction, MidiPatternAction, NodeAction, Slot, TimedMidiAction,
+	AudioThread, Batch, Message, MidiAction, MidiPatternAction, NodeAction, TimedMidiAction,
 	Transport, Update, Version,
 };
 pub use bpm_tapper::BpmTapper;
@@ -34,6 +35,7 @@ pub use midi_pattern::{MidiPattern, MidiPatternId};
 pub use midly::num::{u4, u7};
 pub use node::Node;
 pub use sample::{Sample, SampleId};
+pub use slot::{PullSlot, PushSlot};
 pub use stream::{
 	Channels, DEFAULT_HOST, Devices, Streams, build_streams, get_hosts, get_input_devices,
 	get_input_ports, get_output_devices, get_output_ports,
