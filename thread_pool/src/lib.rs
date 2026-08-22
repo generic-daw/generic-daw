@@ -8,7 +8,7 @@ use std::{
 		Arc,
 		atomic::{
 			AtomicBool, AtomicPtr, AtomicUsize,
-			Ordering::{AcqRel, Acquire, Relaxed, Release},
+			Ordering::{Acquire, Relaxed, Release},
 		},
 	},
 	thread::{JoinHandle, available_parallelism},
@@ -195,7 +195,7 @@ impl<W: Erased> Injector<W> {
 			.compare_exchange(
 				std::ptr::null_mut(),
 				std::ptr::from_ref(work_list).cast_mut().cast(),
-				Acquire,
+				Relaxed,
 				Relaxed,
 			)
 			.is_err()
@@ -216,7 +216,7 @@ impl<W: Erased> Injector<W> {
 	fn join(&self) {
 		let backoff = Backoff::new();
 
-		if self.active.fetch_sub(1, AcqRel) != 0 {
+		if self.active.fetch_sub(1, Release) != 0 {
 			backoff.spin();
 			while self.active.load(Acquire) != usize::MAX {
 				backoff.spin();
@@ -225,7 +225,7 @@ impl<W: Erased> Injector<W> {
 
 		debug_assert_eq!(self.to_do.load(Relaxed), 0);
 
-		self.work_list.store(std::ptr::null_mut(), Release);
+		self.work_list.store(std::ptr::null_mut(), Relaxed);
 	}
 
 	fn worker(&self, mut scratch: W::Scratch, injector: &Injector<W::Inject>) {
