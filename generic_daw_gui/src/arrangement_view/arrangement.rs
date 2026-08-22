@@ -721,6 +721,9 @@ impl Arrangement {
 			),
 			NodeType::Track,
 		);
+		if self.solo.is_some() {
+			self.node_action(id, NodeAction::ChannelToggleEnabled);
+		}
 		self.tracks.insert(
 			index,
 			Track::new(id, Channels::base(self.transport.input_channels)),
