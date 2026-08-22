@@ -523,7 +523,7 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
 	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
 	let mut warn = false;
-	let mut frames_in = 0;
+	let mut frames_in = None;
 
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
@@ -538,11 +538,15 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 					.ts
 					.saturating_mul(sample_rate.get().into())
 					.saturating_div(1_000_000);
-				frames_in = frames_in.min(action.ts);
-				action.ts -= frames_in;
+				let frames_in = frames_in.get_or_insert(action.ts);
+				*frames_in =
+					(*frames_in).clamp(action.ts.saturating_sub(frames as u64 - 1), action.ts);
+				action.ts -= *frames_in;
 			}
 
-			frames_in += frames as u64;
+			if let Some(frames_in) = &mut frames_in {
+				*frames_in += frames as u64;
+			}
 
 			if let (_, rest) = audio_consumer.pop_partial_slice(&mut audio_in[..input_len])
 				&& !rest.is_empty()
