@@ -652,7 +652,7 @@ impl Arrangement {
 		}
 
 		if let Some(solo) = reader.solo() {
-			arrangement.toggle_solo(tracks[&solo]);
+			arrangement.track_toggle_solo(tracks[&solo]);
 		}
 
 		drop(samples);

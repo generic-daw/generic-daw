@@ -553,7 +553,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn toggle_solo(&mut self, id: NodeId) {
+	pub fn track_toggle_solo(&mut self, id: NodeId) {
 		let solo = (self.solo != Some(id)).then_some(id);
 
 		if self.solo != solo {
@@ -625,7 +625,7 @@ impl Arrangement {
 			node.outgoing.remove(&id);
 		}
 		if self.solo == Some(id) {
-			self.toggle_solo(id);
+			self.track_toggle_solo(id);
 		}
 		self.send(Message::NodeRemove(id, Box::new(MaybeUninit::uninit())));
 		self.nodes.remove(&id).unwrap()

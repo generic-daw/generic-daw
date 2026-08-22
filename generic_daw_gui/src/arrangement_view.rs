@@ -530,7 +530,7 @@ impl ArrangementView {
 				);
 			}
 			Message::TrackToggleEnabled(node) => self.arrangement.track_toggle_enabled(node),
-			Message::TrackToggleSolo(node) => self.arrangement.toggle_solo(node),
+			Message::TrackToggleSolo(node) => self.arrangement.track_toggle_solo(node),
 			Message::SeekTo(pos) => self.arrangement.seek_to(pos),
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_range(marker),
 			Message::InputChangeChannels(node, channels) => {
@@ -563,7 +563,11 @@ impl ArrangementView {
 					self.arrangement.set_mix(track_id, outgoing, mix);
 				}
 
-				self.arrangement.channel_toggle_enabled(node);
+				if self.arrangement.solo().is_some() {
+					self.arrangement.track_toggle_solo(track_id);
+				} else {
+					self.arrangement.channel_toggle_enabled(node);
+				}
 			}
 			Message::PlaylistAction(action) => {
 				return self.handle_playlist_action(action, config, state);
