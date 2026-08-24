@@ -99,7 +99,7 @@ impl AudioThread {
 				}
 
 				if started_processor.access_shared_handler(|s| s.ext.tail.get().is_some())
-					&& (*events_in || *audio_in)
+					&& (request_process || *events_in || *audio_in)
 				{
 					self.last_input = Some(steady_time);
 				}
@@ -221,9 +221,9 @@ impl AudioThread {
 			for event in self.event_buffers.output_events() {
 				events(event);
 			}
-
-			self.event_buffers.reset();
 		}
+
+		self.event_buffers.reset();
 	}
 
 	#[must_use]
