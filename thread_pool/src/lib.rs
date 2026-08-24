@@ -47,7 +47,7 @@ impl WorkList for Infallible {
 	type Inject = Self;
 
 	fn next_item(&self) -> Option<Self::Item> {
-		None
+		match *self {}
 	}
 
 	fn do_work(
@@ -56,7 +56,7 @@ impl WorkList for Infallible {
 		_scratch: &mut Self::Scratch,
 		_injector: &Injector<Self::Inject>,
 	) -> Option<Self::Item> {
-		None
+		match *self {}
 	}
 }
 
@@ -66,7 +66,7 @@ pub struct ThreadPool<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible
 	scratch: W::Scratch,
 }
 
-impl<W: Erased<Scratch = (), Inject: Erased<Scratch = (), Inject = Infallible>>> Default
+impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallible>>> Default
 	for ThreadPool<W>
 {
 	fn default() -> Self {
@@ -74,7 +74,7 @@ impl<W: Erased<Scratch = (), Inject: Erased<Scratch = (), Inject = Infallible>>>
 	}
 }
 
-impl<W: Erased<Scratch = (), Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W> {
+impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W> {
 	#[must_use]
 	pub fn new() -> Self {
 		Self::new_with_threads(Self::default_threads())
@@ -82,7 +82,7 @@ impl<W: Erased<Scratch = (), Inject: Erased<Scratch = (), Inject = Infallible>>>
 
 	#[must_use]
 	pub fn new_with_threads(threads: NonZero<usize>) -> Self {
-		Self::new_with_threads_and_scratch(threads, || ())
+		Self::new_with_threads_and_scratch(threads, W::Scratch::default)
 	}
 }
 
