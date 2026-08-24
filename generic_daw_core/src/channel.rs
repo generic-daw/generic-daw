@@ -85,6 +85,14 @@ impl Channel {
 
 		for plugin in &mut self.plugins {
 			let processor = match plugin.processor.try_recv() {
+				Some(Some(processor)) if state.render_mode == RenderMode::Realtime => processor,
+				Some(Some(processor)) if processor.needs_restart() => {
+					plugin.processor.take().flatten().unwrap().restart();
+					match plugin.processor.recv() {
+						Some(Some(processor)) => processor,
+						_ => continue,
+					}
+				}
 				Some(Some(processor)) => processor,
 				Some(None) => continue,
 				None if state.render_mode == RenderMode::Realtime => continue,
