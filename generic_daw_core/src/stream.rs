@@ -378,18 +378,27 @@ fn build_audio_input_stream(
 		let (producer, consumer) =
 			RingBuffer::new(usize::from(channels.get()) * sample_rate.get() as usize);
 
+		let frames = frames.or(NonZero::new(2048)).unwrap();
+		let sample_format = device.default_input_config().unwrap().sample_format();
+
+		let callback = build_audio_input_callback(producer);
+
 		macro_rules! build_audio_input_stream {
 			($($pat:pat => $ty:ty),*$(,)?) => {
-				match device.default_input_config()?.sample_format() {
-					$(
-						$pat => device.build_input_stream(
-							config,
-							build_audio_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
-							|err| error!("{err}"),
-							None,
-						)?.into(),
-					)*
-					sample_format => panic!("unsupported sample format {sample_format}"),
+				if sample_format == SampleFormat::F32 {
+					device.build_input_stream(config, callback, |err| error!("{err}"), None)
+				} else {
+					match sample_format {
+						$(
+							$pat => device.build_input_stream(
+								config,
+								bridge_audio_input_callback::<$ty>(frames, channels, callback),
+								|err| error!("{err}"),
+								None,
+							),
+						)*
+						sample_format => panic!("unsupported sample format {sample_format}"),
+					}
 				}
 			}
 		}
@@ -406,9 +415,9 @@ fn build_audio_input_stream(
 				SampleFormat::U24 => U24,
 				SampleFormat::U32 => u32,
 				SampleFormat::U64 => u64,
-				SampleFormat::F32 => f32,
 				SampleFormat::F64 => f64,
-			},
+			}?
+			.into(),
 			channels,
 			consumer,
 		))
@@ -423,27 +432,34 @@ fn build_audio_input_stream(
 	(Some(stream), channels.get(), consumer)
 }
 
-fn build_audio_input_callback<T: Sample>(
+fn build_audio_input_callback(
+	mut producer: Producer<f32>,
+) -> impl FnMut(&[f32], &InputCallbackInfo) {
+	move |audio_in, _| {
+		if let (_, rest) = producer.push_partial_slice(audio_in)
+			&& !rest.is_empty()
+		{
+			warn!("full ring buffer");
+		}
+	}
+}
+
+fn bridge_audio_input_callback<T: Sample>(
 	frames: NonZero<u32>,
 	channels: NonZero<u16>,
-	mut producer: Producer<f32>,
+	mut callback: impl FnMut(&[f32], &InputCallbackInfo),
 ) -> impl FnMut(&[T], &InputCallbackInfo)
 where
 	f32: FromSample<T>,
 {
 	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
 	let mut audio_in = boxed_slice![0.0; chunk_size.get() as usize];
-	move |buf, _| {
+	move |buf, info| {
 		for buf in buf.chunks(chunk_size.get() as usize) {
-			for (buf, input) in buf.iter().zip(&mut audio_in[..buf.len()]) {
+			for (buf, input) in buf.iter().zip(&mut audio_in) {
 				*input = f32::from_sample(*buf);
 			}
-
-			if let (_, rest) = producer.push_partial_slice(&audio_in[..buf.len()])
-				&& !rest.is_empty()
-			{
-				warn!("full ring buffer");
-			}
+			callback(&audio_in[..buf.len()], info);
 		}
 	}
 }
@@ -474,18 +490,36 @@ fn build_audio_output_stream(
 		}),
 	};
 
+	let frames = frames.or(NonZero::new(2048)).unwrap();
+	let sample_format = device.default_output_config().unwrap().sample_format();
+
+	let callback = build_audio_output_callback(
+		sample_rate,
+		frames,
+		input_channels,
+		channels,
+		processor,
+		midi_output,
+		midi_consumer,
+		audio_consumer,
+	);
+
 	macro_rules! build_audio_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			match device.default_output_config().unwrap().sample_format() {
-				$(
-					$pat => device.build_output_stream(
-						config,
-						build_audio_output_callback::<$ty>(sample_rate, frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, processor, midi_output, midi_consumer, audio_consumer),
-						|err| error!("{err}"),
-						None,
-					).unwrap().into(),
-				)*
-				sample_format => panic!("unsupported sample format {sample_format}"),
+			if sample_format == SampleFormat::F32 {
+				device.build_output_stream(config, callback, |err| error!("{err}"), None)
+			} else {
+				match sample_format {
+					$(
+						$pat => device.build_output_stream(
+							config,
+							bridge_audio_output_callback::<$ty>(frames, channels, callback),
+							|err| error!("{err}"),
+							None,
+						),
+					)*
+					sample_format => panic!("unsupported sample format {sample_format}"),
+				}
 			}
 		}
 	}
@@ -502,14 +536,15 @@ fn build_audio_output_stream(
 			SampleFormat::U24 => U24,
 			SampleFormat::U32 => u32,
 			SampleFormat::U64 => u64,
-			SampleFormat::F32 => f32,
 			SampleFormat::F64 => f64,
-		},
+		}
+		.unwrap()
+		.into(),
 		channels,
 	)
 }
 
-fn build_audio_output_callback<T: Sample + FromSample<f32>>(
+fn build_audio_output_callback(
 	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 	input_channels: u16,
@@ -518,17 +553,15 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	mut midi_output: Option<MidiOutputConnection>,
 	mut midi_consumer: Consumer<TimedMidiAction<u64>>,
 	mut audio_consumer: Consumer<f32>,
-) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
+) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
 	let mut midi_in = boxed_slice![MaybeUninit::uninit(); midi_consumer.buffer().capacity()];
 	let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
-	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
-	let mut warn = false;
 	let mut frames_in = None;
 
-	move |buf, _| {
-		for buf in buf.chunks_mut(chunk_size.get() as usize) {
-			let frames = buf.len() / usize::from(output_channels.get());
+	move |audio_out, _| {
+		for audio_out in audio_out.chunks_mut(chunk_size.get() as usize) {
+			let frames = audio_out.len() / usize::from(output_channels.get());
 			let input_len = frames * usize::from(input_channels);
 
 			let midi_input = midi_consumer.pop_partial_slice_uninit(&mut midi_in).0;
@@ -552,26 +585,33 @@ fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 			if let (_, rest) = audio_consumer.pop_partial_slice(&mut audio_in[..input_len])
 				&& !rest.is_empty()
 			{
-				if warn {
-					warn!("empty ring buffer");
-				}
-
+				warn!("empty ring buffer");
 				rest.fill(0.0);
-			} else {
-				warn = true;
 			}
-
-			audio_out[..buf.len()].fill(0.0);
 
 			processor.process(
 				midi_input,
 				midi_output.as_mut(),
 				&audio_in[..input_len],
-				&mut audio_out[..buf.len()],
+				audio_out,
 			);
+		}
+	}
+}
 
-			for (output, buf) in audio_out[..buf.len()].iter().zip(buf) {
-				*buf = T::from_sample(*output);
+fn bridge_audio_output_callback<T: Sample + FromSample<f32>>(
+	frames: NonZero<u32>,
+	channels: NonZero<u16>,
+	mut callback: impl FnMut(&mut [f32], &OutputCallbackInfo),
+) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
+	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
+	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
+	move |buf, info| {
+		for buf in buf.chunks_mut(chunk_size.get() as usize) {
+			audio_out[..buf.len()].fill(0.0);
+			callback(&mut audio_out[..buf.len()], info);
+			for (audio_out, buf) in audio_out.iter().zip(buf) {
+				*buf = T::from_sample(*audio_out);
 			}
 		}
 	}
