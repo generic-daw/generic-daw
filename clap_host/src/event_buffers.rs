@@ -69,10 +69,11 @@ impl EventBuffers {
 		})
 	}
 
-	pub fn output_events<Event: EventImpl>(&self) -> impl Iterator<Item = Event> {
+	pub fn write_out<Event: EventImpl>(&self, events: impl FnMut(Event)) {
 		self.output_events
 			.iter()
 			.filter_map(Event::try_from_unknown)
+			.for_each(events);
 	}
 
 	pub fn reset(&mut self) {

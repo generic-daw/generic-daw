@@ -57,9 +57,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		if self.max_frames == max_frames {
 			return;
 		}
-		self.graph
-			.values_mut()
-			.for_each(|entry| entry.change_max_frames(max_frames));
+
+		for entry in self.graph.values_mut() {
+			entry.change_max_frames(max_frames);
+		}
+
 		self.max_frames = max_frames;
 	}
 

@@ -385,14 +385,14 @@ impl AudioThread {
 		if self.transport().input_channels != input_channels || self.transport().frames != frames {
 			self.state_mut().audio_input =
 				boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
-			self.state_mut().midi_input = Vec::with_capacity(
-				((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize),
-			);
 		}
 
 		if self.transport().sample_rate != sample_rate || self.transport().frames != frames {
 			self.audio_graph
 				.for_each_node_mut(|node, _| node.restart_all_plugins());
+			self.state_mut().midi_input = Vec::with_capacity(
+				((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize),
+			);
 		}
 
 		self.transport_mut().input_channels = input_channels;

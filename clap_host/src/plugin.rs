@@ -167,7 +167,7 @@ impl Plugin {
 		self.instance.call_on_main_thread_callback();
 	}
 
-	pub fn flush_inactive<Event: EventImpl>(&mut self, mut events: impl FnMut(Event)) {
+	pub fn flush_inactive<Event: EventImpl>(&mut self, events: impl FnMut(Event)) {
 		if self.is_active()
 			|| self
 				.instance
@@ -187,9 +187,7 @@ impl Plugin {
 				&mut output_events,
 			);
 
-		for event in event_buffers.output_events() {
-			events(event);
-		}
+		event_buffers.write_out(events);
 	}
 
 	#[must_use]
@@ -255,7 +253,7 @@ impl Plugin {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
-	pub fn flush_event<Event: EventImpl>(&mut self, event: Event, mut events: impl FnMut(Event)) {
+	pub fn flush_event<Event: EventImpl>(&mut self, event: Event, events: impl FnMut(Event)) {
 		if self.is_active() {
 			return;
 		}
@@ -275,9 +273,7 @@ impl Plugin {
 				&mut output_events,
 			);
 
-		for event in event_buffers.output_events() {
-			events(event);
-		}
+		event_buffers.write_out(events);
 	}
 
 	#[must_use]

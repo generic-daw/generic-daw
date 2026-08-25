@@ -63,7 +63,7 @@ impl AudioThread {
 	pub fn process<Event: EventImpl>(
 		&mut self,
 		audio: &mut [[f32; 2]],
-		mut events: impl FnMut(Event),
+		events: impl FnMut(Event),
 		transport: Option<&TransportEvent>,
 		injector: Option<ThreadPoolInjector<'_>>,
 		mix_level: f32,
@@ -161,10 +161,7 @@ impl AudioThread {
 
 				self.audio_buffers.write_out(audio, mix_level);
 
-				for event in self.event_buffers.output_events() {
-					events(event);
-				}
-
+				self.event_buffers.write_out(events);
 				self.event_buffers.reset();
 
 				self.processor
@@ -190,7 +187,7 @@ impl AudioThread {
 		self.flush_events(events);
 	}
 
-	pub(crate) fn flush_events<Event: EventImpl>(&mut self, mut events: impl FnMut(Event)) {
+	pub(crate) fn flush_events<Event: EventImpl>(&mut self, events: impl FnMut(Event)) {
 		if self.processor.is_started() {
 			info!(
 				"{}: went to sleep",
@@ -218,9 +215,7 @@ impl AudioThread {
 				&mut output_events,
 			);
 
-			for event in self.event_buffers.output_events() {
-				events(event);
-			}
+			self.event_buffers.write_out(events);
 		}
 
 		self.event_buffers.reset();
