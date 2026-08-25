@@ -361,7 +361,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			);
 		}
 
-		let active = &mut Vec::new();
+		let active = &mut Vec::<(usize, _)>::new();
 
 		let allocs = (0..128)
 			.map(|note| {
@@ -382,7 +382,11 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					};
 
 					active.retain(|&(_, e)| e > bounds.x);
-					let layer = active.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
+					let layer = active
+						.iter()
+						.map(|&(l, _)| l)
+						.max()
+						.map_or_default(|l| l + 1);
 					active.push((layer, bounds.x + bounds.width));
 
 					if layer == result.len() {

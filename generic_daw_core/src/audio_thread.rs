@@ -236,20 +236,16 @@ impl Transport {
 			tempo_inc: 0.0,
 			loop_start_beats: self
 				.loop_range
-				.map(|loop_range| loop_range.start().to_clap())
-				.unwrap_or_default(),
+				.map_or_default(|loop_range| loop_range.start().to_clap()),
 			loop_end_beats: self
 				.loop_range
-				.map(|loop_range| loop_range.end().to_clap())
-				.unwrap_or_default(),
+				.map_or_default(|loop_range| loop_range.end().to_clap()),
 			loop_start_seconds: self
 				.loop_range
-				.map(|loop_range| loop_range.start().to_seconds_time(self).to_clap())
-				.unwrap_or_default(),
+				.map_or_default(|loop_range| loop_range.start().to_seconds_time(self).to_clap()),
 			loop_end_seconds: self
 				.loop_range
-				.map(|loop_range| loop_range.end().to_seconds_time(self).to_clap())
-				.unwrap_or_default(),
+				.map_or_default(|loop_range| loop_range.end().to_seconds_time(self).to_clap()),
 			bar_start: self.position.to_beat_time(self).bar_floor(self).to_clap(),
 			bar_number: self.position.to_beat_time(self).bar(self) as i32,
 			time_signature_numerator: self.numerator.get().into(),

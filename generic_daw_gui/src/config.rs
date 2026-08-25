@@ -72,7 +72,7 @@ impl Devices {
 	}
 
 	pub fn set_host(&mut self, host: Option<HostId>) {
-		*self = host.map_or(Self::Default, |host| Self::WithHost {
+		*self = host.map_or_default(|host| Self::WithHost {
 			host,
 			input: None,
 			output: None,

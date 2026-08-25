@@ -512,11 +512,7 @@ impl Arrangement {
 			self.toggle_playback();
 		}
 
-		self.seek_to(
-			self.transport
-				.loop_range
-				.map_or(BeatTime::ZERO, BeatRange::start),
-		);
+		self.seek_to(self.transport.loop_range.map_or_default(BeatRange::start));
 
 		self.send(Message::Reset);
 	}

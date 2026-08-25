@@ -40,7 +40,7 @@ impl<T> PullSlot<T> {
 	pub fn try_recv(&mut self) -> Option<&mut T> {
 		match self {
 			Self::Full(t) => Some(t),
-			Self::Empty(t) => t.try_recv().map_or(None, |t| {
+			Self::Empty(t) => t.try_recv().map_or_default(|t| {
 				*self = Self::Full(t);
 				self.try_recv()
 			}),
@@ -50,7 +50,7 @@ impl<T> PullSlot<T> {
 	pub fn recv(&mut self) -> Option<&mut T> {
 		match self {
 			Self::Full(t) => Some(t),
-			Self::Empty(t) => t.recv_ref().map_or(None, |t| {
+			Self::Empty(t) => t.recv_ref().map_or_default(|t| {
 				*self = Self::Full(t);
 				self.try_recv()
 			}),

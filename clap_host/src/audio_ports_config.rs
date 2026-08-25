@@ -16,7 +16,7 @@ impl AudioPortsConfig {
 			.map(|i| {
 				audio_ports
 					.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)
-					.map_or(0, |info| info.channel_count)
+					.map_or_default(|info| info.channel_count)
 			})
 			.collect::<Box<_>>();
 

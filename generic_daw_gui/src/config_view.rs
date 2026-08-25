@@ -387,7 +387,7 @@ impl ConfigView {
 												.get_host()
 												.unwrap_or_else(|| *DEFAULT_HOST)
 										)
-										.map_or([].as_slice(), |input_devices| &**input_devices),
+										.map_or_default(|input_devices| &**input_devices),
 									|id| self.input_device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
@@ -429,7 +429,7 @@ impl ConfigView {
 												.get_host()
 												.unwrap_or_else(|| *DEFAULT_HOST)
 										)
-										.map_or([].as_slice(), |devices| &**devices),
+										.map_or_default(|devices| &**devices),
 									|id| self.output_device_info.get(id).map_or_else(
 										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()

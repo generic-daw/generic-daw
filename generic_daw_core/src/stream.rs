@@ -370,9 +370,7 @@ fn build_audio_input_stream(
 		let config = StreamConfig {
 			channels: channels.into(),
 			sample_rate: sample_rate.get(),
-			buffer_size: frames.map_or(BufferSize::Default, |frames| {
-				BufferSize::Fixed(frames.get())
-			}),
+			buffer_size: frames.map_or_default(|frames| BufferSize::Fixed(frames.get())),
 		};
 
 		let (producer, consumer) =
@@ -485,9 +483,7 @@ fn build_audio_output_stream(
 	let config = StreamConfig {
 		channels: channels.get(),
 		sample_rate: sample_rate.get(),
-		buffer_size: frames.map_or(BufferSize::Default, |frames| {
-			BufferSize::Fixed(frames.get())
-		}),
+		buffer_size: frames.map_or_default(|frames| BufferSize::Fixed(frames.get())),
 	};
 
 	let frames = frames.or(NonZero::new(2048)).unwrap();
