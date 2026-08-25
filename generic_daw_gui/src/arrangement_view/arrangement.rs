@@ -114,7 +114,7 @@ impl Arrangement {
 				nodes,
 
 				recorded_samples: boxed_slice![[0.0; 2]; transport.frames.get() as usize],
-				recorded_actions: boxed_slice![MaybeUninit::uninit(); 2048],
+				recorded_actions: boxed_slice![MaybeUninit::uninit(); ((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize)],
 
 				producer,
 				queue: VecDeque::new(),
@@ -168,6 +168,7 @@ impl Arrangement {
 
 		if self.transport.frames != frames {
 			self.recorded_samples = boxed_slice![[0.0; 2]; frames.get() as usize];
+			self.recorded_actions = boxed_slice![MaybeUninit::uninit(); ((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize)];
 			drop(pool);
 			pool = processor.create_pool();
 		}
@@ -832,7 +833,7 @@ impl Arrangement {
 
 	pub fn input_toggle_midi_recording(&mut self, id: NodeId) {
 		let track = self.track_of(id).unwrap();
-		if self.tracks[track].midi_consumer.take().is_some() {
+		if self.tracks[track].midi_consumer.is_some() {
 			if let Some(recording) = &mut self.tracks[track].midi_recording
 				&& std::mem::replace(&mut recording.dropping, true)
 			{
@@ -840,7 +841,7 @@ impl Arrangement {
 			}
 			self.node_action(id, NodeAction::InputSetMidiRecording(None));
 		} else {
-			let (producer, consumer) = RingBuffer::new(2048);
+			let (producer, consumer) = RingBuffer::new(31250 + 313);
 			self.tracks[track].midi_consumer = Some(consumer);
 			self.node_action(id, NodeAction::InputSetMidiRecording(Some(producer)));
 		}

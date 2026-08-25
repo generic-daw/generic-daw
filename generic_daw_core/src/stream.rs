@@ -281,7 +281,7 @@ fn build_midi_input_connection(
 
 		input.ignore(Ignore::All);
 
-		let (producer, consumer) = RingBuffer::new(2048);
+		let (producer, consumer) = RingBuffer::new(31250 + 313);
 
 		Some((
 			input
@@ -308,11 +308,7 @@ fn build_midi_input_connection(
 fn build_midi_input_callback(
 	mut producer: Producer<TimedMidiAction<u64>>,
 ) -> impl FnMut(u64, &[u8], &mut ()) {
-	let mut first_ts = None;
-
 	move |ts, raw, ()| {
-		let ts = ts - *first_ts.get_or_insert(ts);
-
 		let Ok(event) = LiveEvent::parse(raw).inspect_err(|err| warn!("{err}")) else {
 			return;
 		};
@@ -551,8 +547,8 @@ fn build_audio_output_callback(
 	mut audio_consumer: Consumer<f32>,
 ) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
-	let mut midi_in = boxed_slice![MaybeUninit::uninit(); midi_consumer.buffer().capacity()];
-	let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
+	let mut midi_in = boxed_slice![MaybeUninit::uninit(); ((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize)];
+	let mut audio_in = boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
 	let mut frames_in = None;
 
 	move |audio_out, _| {

@@ -341,8 +341,10 @@ impl AudioThread {
 				midi_patterns: HashMap::new(),
 				render_mode: RenderMode::Realtime,
 				audio_input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
-				midi_input: Vec::with_capacity(2048),
-				playing: HashMap::with_capacity(2048),
+				midi_input: Vec::with_capacity(
+					((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize),
+				),
+				playing: HashMap::with_capacity(16 * 128),
 			},
 			transport.frames,
 		);
@@ -383,6 +385,9 @@ impl AudioThread {
 		if self.transport().input_channels != input_channels || self.transport().frames != frames {
 			self.state_mut().audio_input =
 				boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
+			self.state_mut().midi_input = Vec::with_capacity(
+				((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize),
+			);
 		}
 
 		if self.transport().sample_rate != sample_rate || self.transport().frames != frames {
