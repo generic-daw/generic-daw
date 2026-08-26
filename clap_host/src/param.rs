@@ -55,6 +55,10 @@ impl Param {
 	}
 
 	pub fn rescan(&mut self, plugin: &mut PluginInstance<Host>, flags: ParamRescanFlags) {
+		if flags.is_empty() {
+			return;
+		}
+
 		let params = plugin.access_shared_handler(|s| *s.ext.params.get().unwrap());
 
 		if flags.contains(ParamRescanFlags::INFO)

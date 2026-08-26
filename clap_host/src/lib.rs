@@ -25,10 +25,7 @@ mod size;
 pub use audio_processor::{ThreadPoolExecutor, ThreadPoolInjector};
 pub use audio_thread::AudioThread;
 pub use clack_extensions::{
-	params::{ParamInfoFlags, ParamRescanFlags},
-	render::RenderMode,
-	state_context::StateContextType,
-	timer::TimerId,
+	params::ParamInfoFlags, render::RenderMode, state_context::StateContextType, timer::TimerId,
 };
 pub use clack_host::{
 	host::HostInfo,

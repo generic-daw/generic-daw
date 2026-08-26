@@ -26,7 +26,7 @@ pub enum MainThreadMessage {
 	GuiClosed,
 	RegisterTimer(TimerId, Duration),
 	UnregisterTimer(TimerId),
-	RescanParams(ParamRescanFlags),
+	RescanParams,
 	PresetDiscovered(Preset),
 	PresetLoaded(Preset),
 }
@@ -34,7 +34,7 @@ pub enum MainThreadMessage {
 #[derive(Debug)]
 pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
-	pub params_rescan: bool,
+	pub params_rescan: ParamRescanFlags,
 	pub presets: Vec<Preset>,
 	pub state: Option<Box<[u8]>>,
 	pub next_timer_id: u32,
@@ -44,7 +44,7 @@ impl<'a> MainThread<'a> {
 	pub fn new(shared: &'a Shared<'a>) -> Self {
 		Self {
 			shared,
-			params_rescan: false,
+			params_rescan: ParamRescanFlags::empty(),
 			presets: Vec::new(),
 			state: None,
 			next_timer_id: 0,
@@ -88,11 +88,11 @@ impl HostParamsImplMainThread for MainThread<'_> {
 			self.mark_dirty();
 		}
 
-		self.params_rescan |= flags.requires_restart();
+		self.params_rescan |= flags;
 
 		self.shared
 			.sender
-			.send(MainThreadMessage::RescanParams(flags))
+			.send(MainThreadMessage::RescanParams)
 			.unwrap();
 	}
 

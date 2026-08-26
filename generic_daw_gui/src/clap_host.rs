@@ -380,7 +380,7 @@ impl ClapHost {
 					timers.remove(&timer_id);
 				}
 			}
-			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
+			MainThreadMessage::RescanParams => plugin!().rescan_params(),
 			MainThreadMessage::PresetDiscovered(preset) => {
 				plugin!(MainThreadMessage::PresetDiscovered(preset))
 					.preset_discovered(preset.clone());
