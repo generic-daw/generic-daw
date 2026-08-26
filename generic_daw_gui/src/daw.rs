@@ -196,6 +196,7 @@ pub enum Message {
 	BottomSelected(bool),
 	MovePaneUp,
 	MovePaneDown,
+	ClosePane,
 
 	OnFileTreeDrag(f32),
 	OnBottomPaneDrag(f32),
@@ -215,7 +216,12 @@ pub enum Tab {
 }
 
 impl Tab {
-	fn tab<'a>(self, top_pane: Self, bottom_pane: Option<Self>) -> Element<'a, Message> {
+	fn tab<'a>(
+		self,
+		top_pane: Self,
+		bottom_pane: Option<Self>,
+		bottom_selected: bool,
+	) -> Element<'a, Message> {
 		ContextMenu::new(
 			button(match self {
 				Self::Playlist => chart_no_axes_gantt(),
@@ -223,7 +229,11 @@ impl Tab {
 				Self::PianoRoll => keyboard_music(),
 			})
 			.style(button_with_radius(
-				if bottom_pane == Some(self) {
+				if if bottom_pane.is_some() && bottom_selected {
+					top_pane == self
+				} else {
+					bottom_pane == Some(self)
+				} {
 					button::secondary
 				} else {
 					button::primary
@@ -235,14 +245,17 @@ impl Tab {
 				},
 			))
 			.padding(padding::horizontal(7).vertical(5))
-			.on_press_maybe(
-				(top_pane != self && bottom_pane != Some(self)).then_some(Message::TopPane(self)),
-			),
+			.on_press_maybe((top_pane != self && bottom_pane != Some(self)).then_some(
+				if bottom_pane.is_some() && bottom_selected {
+					Message::BottomPane(self)
+				} else {
+					Message::TopPane(self)
+				},
+			)),
 			move || {
 				container(
-					menu_entry(panel_bottom_dashed(), "Detach", "").on_press_maybe(
-						(bottom_pane != Some(self)).then_some(Message::BottomPane(self)),
-					),
+					menu_entry(panel_bottom_dashed(), "Detach", "")
+						.on_press_maybe(bottom_pane.is_none().then_some(Message::BottomPane(self))),
 				)
 				.width(160)
 				.style(container_with_radius(weaker_bordered_box, 5))
@@ -879,27 +892,36 @@ impl Daw {
 			Message::MovePaneUp => {
 				return if self.bottom_pane.is_none() {
 					Task::batch([
-						self.update(Message::BottomPane(self.top_pane)),
-						self.update(Message::BottomPane(self.top_pane)),
+						self.update(Message::MovePaneDown),
+						self.update(Message::MovePaneUp),
 					])
 				} else if self.bottom_selected {
 					self.update(Message::BottomPane(self.top_pane))
 				} else {
-					Task::batch([
-						self.update(Message::OnBottomPaneDrag(0.0)),
-						self.update(Message::OnBottomPaneDragEnd),
-					])
+					self.update(Message::ClosePane)
 				};
 			}
 			Message::MovePaneDown => {
 				return if self.bottom_pane.is_none() || !self.bottom_selected {
 					self.update(Message::BottomPane(self.top_pane))
 				} else {
-					Task::batch([
-						self.update(Message::BottomPane(self.top_pane)),
-						self.update(Message::MovePaneUp),
-					])
+					self.update(Message::ClosePane)
 				};
+			}
+			Message::ClosePane => {
+				if self.bottom_pane.is_some() {
+					return if self.bottom_selected {
+						Task::batch([
+							self.update(Message::OnBottomPaneDrag(0.0)),
+							self.update(Message::OnBottomPaneDragEnd),
+						])
+					} else {
+						Task::batch([
+							self.update(Message::MovePaneDown),
+							self.update(Message::ClosePane),
+						])
+					};
+				}
 			}
 			Message::OnFileTreeDrag(split_at) => {
 				self.state.file_tree_split_at = if split_at >= 20.0 {
@@ -1181,9 +1203,9 @@ impl Daw {
 					]
 					.spacing(5),
 					row![
-						Tab::Playlist.tab(self.top_pane, self.bottom_pane),
-						Tab::Mixer.tab(self.top_pane, self.bottom_pane),
-						Tab::PianoRoll.tab(self.top_pane, self.bottom_pane),
+						Tab::Playlist.tab(self.top_pane, self.bottom_pane, self.bottom_selected),
+						Tab::Mixer.tab(self.top_pane, self.bottom_pane, self.bottom_selected),
+						Tab::PianoRoll.tab(self.top_pane, self.bottom_pane, self.bottom_selected),
 					],
 				]
 				.height(Shrink)
@@ -1543,6 +1565,7 @@ impl Daw {
 				Some('o') => Some(Message::OpenFileDialog),
 				Some('r') => Some(Message::RenderFileDialog),
 				Some('s') => Some(Message::SaveFile),
+				Some('w') => Some(Message::ClosePane),
 				Some('1') => Some(Message::NarrowedGrid),
 				Some('2') => Some(Message::WidenedGrid),
 				Some('3') => Some(Message::ToggleGridTriplets),
