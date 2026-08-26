@@ -2,6 +2,7 @@ name: mirror
 on: [push]
 jobs:
   mirror:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: mirror
