@@ -9,7 +9,22 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all --check
+  check:
+    needs: fmt
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libpipewire-0.3-dev
+      - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
+      - run: cargo hack check --workspace
   clippy:
+    needs: check
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -23,10 +38,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libpipewire-0.3-dev
       - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
       - run: cargo clippy -- -D warnings
-  build-release:
-    name: build
+  build:
     if: github.ref == 'refs/heads/main'
-    needs: [fmt, clippy]
+    needs: clippy
     runs-on: ${{ matrix.os.os }}
     strategy:
       matrix:

@@ -16,7 +16,7 @@ use iced_widget::{
 		},
 		widget::{Tree, tree},
 	},
-	graphics::{geometry::Renderer as _, text::Paragraph},
+	graphics::geometry::Renderer as _,
 };
 use std::{cell::RefCell, f32::consts::PI, ops::RangeInclusive};
 
@@ -27,7 +27,7 @@ struct State {
 	cache: Cache,
 	last_info: KnobInfo,
 	last_theme: RefCell<Option<Theme>>,
-	tooltip: Plain<Paragraph>,
+	tooltip: Plain<<Renderer as text::Renderer>::Paragraph>,
 }
 
 #[derive(Clone, PartialEq)]

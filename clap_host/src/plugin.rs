@@ -22,7 +22,6 @@ use clack_host::prelude::*;
 use log::{info, warn};
 use raw_window_handle::HasWindowHandle;
 use std::{
-	io::Cursor,
 	num::NonZero,
 	path::Path,
 	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
@@ -573,13 +572,9 @@ impl Plugin {
 			.instance
 			.access_shared_handler(|s| s.ext.state_context.get())
 		{
-			state_context.load(
-				&mut self.instance.plugin_handle(),
-				&mut Cursor::new(buf),
-				context_type,
-			)
+			state_context.load(&mut self.instance.plugin_handle(), &mut &*buf, context_type)
 		} else if let Some(&state) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
-			state.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+			state.load(&mut self.instance.plugin_handle(), &mut &*buf)
 		} else {
 			return;
 		} {

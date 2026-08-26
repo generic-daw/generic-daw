@@ -1,6 +1,5 @@
 use crate::proto;
 use prost::Message as _;
-use std::io::Cursor;
 use yazi::{Format, decompress};
 
 #[derive(Debug)]
@@ -10,7 +9,7 @@ impl Reader {
 	#[must_use]
 	pub fn new(gdp: &[u8]) -> Option<Self> {
 		let gdp = decompress(gdp.strip_prefix(b"gdp")?, Format::Raw).ok()?.0;
-		proto::Project::decode(&mut Cursor::new(gdp)).map(Self).ok()
+		proto::Project::decode(&*gdp).map(Self).ok()
 	}
 
 	#[must_use]
