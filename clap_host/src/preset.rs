@@ -7,7 +7,7 @@ use std::{
 	fmt::{Display, Formatter, Write as _},
 	sync::{Arc, mpsc::Sender},
 };
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Preset {
@@ -89,17 +89,18 @@ impl Preset {
 							.into_iter()
 							.filter_map(Result::ok)
 							.filter(|dir_entry| dir_entry.file_type().is_file())
-							.filter(|dir_entry| {
+							.map(DirEntry::into_path)
+							.filter(|path| {
 								indexer.match_all
-									|| dir_entry.path().extension().is_some_and(|extension| {
+									|| path.extension().is_some_and(|extension| {
 										indexer
 											.file_types
 											.iter()
 											.any(|file_type| **file_type == *extension)
 									})
 							})
-							.for_each(|dir_entry| {
-								if let Some(path) = dir_entry.path().to_str()
+							.for_each(|path| {
+								if let Ok(path) = path.into_string()
 									&& let Ok(path) = CString::new(path)
 								{
 									let location = &Location::File(path.into());

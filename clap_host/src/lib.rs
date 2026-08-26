@@ -80,7 +80,7 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 
 pub fn find_plugin_paths(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
-) -> impl Iterator<Item = PathBuf> {
+) -> impl Iterator<Item = Arc<Path>> {
 	paths
 		.into_iter()
 		.flat_map(|path| WalkDir::new(path).follow_links(true))
@@ -92,11 +92,10 @@ pub fn find_plugin_paths(
 				dir_entry.file_type().is_file()
 			}
 		})
-		.filter(|dir_entry| {
-			dir_entry
-				.path()
-				.extension()
-				.is_some_and(|ext| ext == "clap")
-		})
 		.map(DirEntry::into_path)
+		.filter(|path| {
+			path.extension()
+				.is_some_and(|extension| extension == "clap")
+		})
+		.map(Arc::from)
 }

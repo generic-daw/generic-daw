@@ -11,18 +11,18 @@ use std::{
 pub struct PluginDescriptor {
 	pub name: Arc<str>,
 	pub id: Arc<CStr>,
-	pub path: Arc<str>,
+	pub path: Arc<Path>,
 }
 
 impl PluginDescriptor {
 	pub fn try_new(
 		value: &plugin::PluginDescriptor,
-		path: &Path,
+		path: &Arc<Path>,
 	) -> Result<Self, Option<str::Utf8Error>> {
 		Ok(Self {
 			name: value.name().ok_or(None)?.to_str()?.into(),
 			id: value.id().ok_or(None)?.into(),
-			path: path.to_str().ok_or(None)?.into(),
+			path: path.clone(),
 		})
 	}
 }

@@ -262,7 +262,7 @@ impl Arrangement {
 		let id = id.into();
 
 		for track in 0..self.tracks.len() {
-			if id.is_some_and(|node| self.tracks[track].id != node) {
+			if id.is_some_and(|id| self.tracks[track].id != id) {
 				continue;
 			}
 
@@ -278,7 +278,7 @@ impl Arrangement {
 		let id = id.into();
 
 		for track in 0..self.tracks.len() {
-			if id.is_some_and(|node| self.tracks[track].id != node) {
+			if id.is_some_and(|id| self.tracks[track].id != id) {
 				continue;
 			}
 

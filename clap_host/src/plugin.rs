@@ -24,7 +24,7 @@ use raw_window_handle::HasWindowHandle;
 use std::{
 	num::NonZero,
 	path::Path,
-	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
+	sync::{Arc, atomic::Ordering::Relaxed, mpsc::Receiver},
 };
 use utils::{NoClone, NoDebug};
 
@@ -39,10 +39,10 @@ pub struct Plugin {
 
 impl Plugin {
 	#[must_use]
-	pub fn descriptors(path: &Path) -> Option<Vec<PluginDescriptor>> {
+	pub fn descriptors(path: &Arc<Path>) -> Option<Vec<PluginDescriptor>> {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
-		let entry = unsafe { PluginEntry::load(path) }
+		let entry = unsafe { PluginEntry::load(&**path) }
 			.inspect_err(|err| warn!("{}: {err}", path.display()))
 			.ok()?;
 
