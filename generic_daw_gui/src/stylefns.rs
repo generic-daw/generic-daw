@@ -166,7 +166,6 @@ pub fn text_input_transparent(t: &Theme, _s: text_input::Status) -> text_input::
 	text_input::Style {
 		background: Color::TRANSPARENT.into(),
 		border: border::width(0),
-		icon: Color::TRANSPARENT,
 		placeholder: palette.background.base.text.scale_alpha(0.8),
 		value: palette.background.base.text,
 		selection: palette.primary.weak.color,

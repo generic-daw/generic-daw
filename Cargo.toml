@@ -87,3 +87,7 @@ panic = "abort"
 lto = true
 panic = "abort"
 codegen-units = 1
+
+[patch.crates-io]
+# https://github.com/pop-os/cosmic-text/pull/528
+cosmic-text = { git = "https://github.com/edwloef/cosmic-text", branch = "generic-daw" }

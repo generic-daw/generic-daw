@@ -11,7 +11,7 @@ use generic_daw_core::{Channels, NodeId, PanMode, Transport, Utility};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
 use iced::{
 	Center, Element, Fill, Fit, padding,
-	widget::{self, checkbox, column, container, radio, row, rule, scrollable, space, text, value},
+	widget::{self, checkbox, column, container, radio, row, rule, scrollable, space, text},
 };
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
 
@@ -252,7 +252,7 @@ impl Node {
 				scrollable(
 					row((0..transport.output_channels.get()).map(|channel| {
 						column![
-							container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+							container(text(channel + 1).size(13).line_height(1.0)).padding(1),
 							radio(channel, Some(self.output.left), |_| {
 								Message::OutputChangeChannels(self.id, self.output.left(channel))
 							})
@@ -285,7 +285,7 @@ impl Node {
 			scrollable(
 				row((0..16).map(|channel| {
 					column![
-						container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+						container(text(channel + 1).size(13).line_height(1.0)).padding(1),
 						checkbox(self.output.midi & (1 << channel) != 0)
 							.on_toggle(move |_| {
 								Message::OutputChangeChannels(

@@ -1593,8 +1593,8 @@ impl ArrangementView {
 														column![
 															center_y(
 																text_input(
-																	&format!("Track {}", i + 1),
-																	&node.name
+																	format!("Track {}", i + 1),
+																	&*node.name
 																)
 																.on_input(|name| {
 																	Message::ChannelNameChanged(
@@ -2057,7 +2057,7 @@ impl ArrangementView {
 				opaque(
 					mouse_area(ContextMenu::new(
 						column![
-							text_input(&placeholder.into_fragment(), &node.name)
+							text_input(placeholder, &*node.name)
 								.on_input(|name| Message::ChannelNameChanged(node.id, name.into()))
 								.padding(0)
 								.size(13)

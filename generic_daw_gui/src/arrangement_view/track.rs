@@ -15,9 +15,7 @@ use generic_daw_core::{
 use generic_daw_widget::menu::Menu;
 use iced::{
 	Center, Element, Fit, Shrink,
-	widget::{
-		Button, button, checkbox, column, container, radio, row, scrollable, space, text, value,
-	},
+	widget::{Button, button, checkbox, column, container, radio, row, scrollable, space, text},
 };
 use log::warn;
 use rtrb::Consumer;
@@ -209,7 +207,7 @@ impl Track {
 						scrollable(
 							row![
 								column((0..transport.input_channels).map(|channel| {
-									container(value(channel + 1).size(13).line_height(1.0))
+									container(text(channel + 1).size(13).line_height(1.0))
 										.padding(1)
 										.into()
 								}))
@@ -283,7 +281,7 @@ impl Track {
 					scrollable(
 						row![
 							column((0..16).map(|channel| {
-								container(value(channel + 1).size(13).line_height(1.0))
+								container(text(channel + 1).size(13).line_height(1.0))
 									.padding(1)
 									.into()
 							}))
