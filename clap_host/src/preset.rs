@@ -23,22 +23,19 @@ impl Display for Preset {
 }
 
 impl Preset {
-	pub fn start_discover(
-		plugin: &PluginInstance<Host>,
-		entry: PluginEntry,
-		host: HostInfo,
-		sender: Sender<MainThreadMessage>,
-	) {
+	pub fn start_discover(plugin: &PluginInstance<Host>, host: HostInfo) {
 		if plugin
 			.access_shared_handler(|s| s.ext.preset_load.get())
 			.is_some()
 		{
+			let entry = plugin.entry().clone();
 			let descriptor = plugin.access_shared_handler(|s| s.descriptor.clone());
-			std::thread::spawn(move || Self::discover(&entry, &descriptor, &host, &sender));
+			let sender = plugin.access_shared_handler(|s| s.sender.clone());
+			std::thread::spawn(move || Self::do_discover(&entry, &descriptor, &host, &sender));
 		}
 	}
 
-	fn discover(
+	fn do_discover(
 		entry: &PluginEntry,
 		descriptor: &PluginDescriptor,
 		host: &HostInfo,

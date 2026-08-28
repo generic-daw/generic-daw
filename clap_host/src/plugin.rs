@@ -70,7 +70,7 @@ impl Plugin {
 		let (sender, receiver) = std::sync::mpsc::channel();
 
 		let mut instance = PluginInstance::new(
-			|()| Shared::new(descriptor.clone(), sender.clone()),
+			|()| Shared::new(descriptor.clone(), sender),
 			|shared| MainThread::new(shared),
 			&entry,
 			&descriptor.id,
@@ -79,7 +79,7 @@ impl Plugin {
 		.inspect_err(|err| warn!("{descriptor}: {err}"))
 		.ok()?;
 
-		Preset::start_discover(&instance, entry, host, sender);
+		Preset::start_discover(&instance, host);
 
 		let plugin = Self {
 			gui: Gui::new(&mut instance),
