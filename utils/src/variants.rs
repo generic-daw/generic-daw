@@ -5,20 +5,32 @@ macro_rules! variants {
 		$vis:vis enum $ident:ident {
 			$(
 				$(#[$variant_meta:meta])*
-				$variant:ident,
-			)+
+				$variant:ident $( = $expr:expr)?
+			),+ $(,)?
 		}
 	) => {
 		$(#[$meta])*
 		$vis enum $ident {
 			$(
 				$(#[$variant_meta])*
-				$variant,
+				$variant $( = $expr)?,
 			)+
 		}
 
 		impl $ident {
 			pub const VARIANTS: &[Self] = &[$(Self::$variant,)+];
+		}
+	};
+
+	(
+		$(#[$meta:meta])*
+		$vis:vis enum $ident:ident {}
+	) => {
+		$(#[$meta])*
+		$vis enum $ident {}
+
+		impl $ident {
+			pub const VARIANTS: &[Self] = &[];
 		}
 	};
 }

@@ -1,13 +1,13 @@
 use crate::{
 	action::Action,
-	components::{PICK_LIST_HANDLE, number_input},
+	components::{number_input, pick_list_handle},
 	config::Config,
 	daw,
 	icons::{grip_vertical, plus, rotate_ccw, save, x},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, pick_list_with_radius,
-		scrollable_style, sweeten_column_style, sweeten_column_with_radius, weak_bordered_box,
-		weakest_bordered_box,
+		scrollable_style, scrollable_with_container, sweeten_column_style,
+		sweeten_column_with_radius, weak_bordered_box, weakest_bordered_box,
 	},
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
@@ -17,7 +17,9 @@ use generic_daw_core::{
 	get_input_devices, get_input_ports, get_output_devices, get_output_ports,
 };
 use iced::{
-	Center, Element, Fill, Font, Task, border, keyboard,
+	Center, Element, Fill, Font, Task, border,
+	font::Weight,
+	keyboard,
 	mouse::Interaction,
 	padding,
 	widget::{
@@ -156,7 +158,11 @@ impl ConfigView {
 		}
 	}
 
-	pub fn update(&mut self, message: Message, loaded_config: &Config) -> Action<Config, Message> {
+	pub fn update(
+		&mut self,
+		message: Message,
+		loaded_config: &Config,
+	) -> Action<daw::Instruction, Message> {
 		match message {
 			Message::AddSamplePathFileDialog => {
 				return window::run(self.main_window_id, |window| {
@@ -218,7 +224,11 @@ impl ConfigView {
 			Message::ChangedScaleFactor(scale_factor) => {
 				self.config.scale_factor = scale_factor;
 			}
-			Message::WriteConfig => return Action::instruction(self.config.clone()),
+			Message::WriteConfig => {
+				return Action::instruction(daw::Instruction::Message(daw::Message::LoadConfig(
+					self.config.clone().into(),
+				)));
+			}
 			Message::ResetConfigToLast => self.config = loaded_config.clone(),
 		}
 
@@ -226,41 +236,102 @@ impl ConfigView {
 	}
 
 	pub fn view(&self, loaded_config: &Config) -> Element<'_, Message> {
-		container(
-			scrollable(
-				column![
-					text("Settings")
-						.size(LINE_HEIGHT)
-						.line_height(1.0)
-						.font(Font::MONOSPACE),
-					container(rule::horizontal(1)).padding(padding::vertical(5)),
-					row![
-						"Sample Paths",
-						space::horizontal(),
-						button(plus())
-							.style(button_with_radius(button::primary, 5))
-							.padding(0)
-							.on_press(Message::AddSamplePathFileDialog),
-						space().width(5)
-					]
-					.align_y(Center),
-					container(
-						sweeten::column(
+		scrollable(
+			column![
+				text("Settings")
+					.size(LINE_HEIGHT)
+					.line_height(1.0)
+					.font(Font::DEFAULT.weight(Weight::Bold)),
+				rule::horizontal(1),
+				row![
+					"Sample Paths",
+					space::horizontal(),
+					button(plus())
+						.style(button_with_radius(button::primary, 5))
+						.padding(0)
+						.on_press(Message::AddSamplePathFileDialog),
+					space().width(5)
+				]
+				.align_y(Center),
+				container(
+					sweeten::column(
+						self.config
+							.sample_paths
+							.iter()
+							.enumerate()
+							.map(|(index, path)| {
+								row![
+									value(path.display())
+										.font(Font::MONOSPACE)
+										.wrapping(text::Wrapping::None)
+										.ellipsis(text::Ellipsis::Middle)
+										.width(Fill),
+									button(x())
+										.style(button_with_radius(button::danger, 5))
+										.padding(0)
+										.on_press(Message::RemoveSamplePath(index))
+								]
+								.spacing(5)
+								.align_y(Center)
+							})
+							.map(|widget| row![
+								mouse_area(grip_vertical()).interaction(Interaction::Grab),
+								opaque(widget)
+							]
+							.align_y(Center)
+							.into())
+					)
+					.padding(padding::all(5).left(2))
+					.spacing(5)
+					.on_drag(Message::MoveSamplePath)
+					.style(sweeten_column_with_radius(sweeten_column_style, 5))
+				)
+				.style(container_with_radius(weak_bordered_box, 5)),
+				rule::horizontal(1),
+				row![
+					"CLAP Plugin Paths",
+					space::horizontal(),
+					button(plus())
+						.style(button_with_radius(button::primary, 5))
+						.padding(0)
+						.on_press(Message::AddClapPathFileDialog),
+					space().width(5)
+				],
+				container(
+					column![
+						column(DEFAULT_CLAP_PATHS.iter().map(|path| {
+							row![
+								mouse_area(grip_vertical()).interaction(Interaction::NoDrop),
+								value(path.display())
+									.font(Font::MONOSPACE)
+									.width(Fill)
+									.wrapping(text::Wrapping::None)
+									.ellipsis(text::Ellipsis::Middle),
+								button(x())
+									.style(button_with_radius(button::danger, 5))
+									.padding(0)
+							]
+							.spacing(5)
+							.align_y(Center)
+							.into()
+						}))
+						.spacing(5),
+						(!self.config.clap_paths.is_empty()).then(|| sweeten::column(
 							self.config
-								.sample_paths
+								.clap_paths
 								.iter()
 								.enumerate()
 								.map(|(index, path)| {
 									row![
 										value(path.display())
 											.font(Font::MONOSPACE)
+											.width(Fill)
 											.wrapping(text::Wrapping::None)
-											.ellipsis(text::Ellipsis::Middle)
-											.width(Fill),
+											.ellipsis(text::Ellipsis::Middle),
 										button(x())
 											.style(button_with_radius(button::danger, 5))
 											.padding(0)
-											.on_press(Message::RemoveSamplePath(index))
+											.on_press(Message::RemoveClapPath(index))
 									]
 									.spacing(5)
 									.align_y(Center)
@@ -272,423 +343,334 @@ impl ConfigView {
 								.align_y(Center)
 								.into())
 						)
-						.padding(padding::all(5).left(2))
 						.spacing(5)
-						.on_drag(Message::MoveSamplePath)
-						.style(sweeten_column_with_radius(sweeten_column_style, 5))
-					)
-					.style(container_with_radius(weak_bordered_box, 5)),
-					rule::horizontal(1),
+						.on_drag(Message::MoveClapPath)
+						.style(sweeten_column_with_radius(sweeten_column_style, 5)))
+					]
+					.padding(padding::all(5).left(2))
+					.spacing(5)
+				)
+				.style(container_with_radius(weak_bordered_box, 5)),
+				rule::horizontal(1),
+				row![
+					text("Host:").width(Fill),
 					row![
-						"CLAP Plugin Paths",
-						space::horizontal(),
-						button(plus())
-							.style(button_with_radius(button::primary, 5))
-							.padding(0)
-							.on_press(Message::AddClapPathFileDialog),
-						space().width(5)
-					],
-					container(
-						column![
-							column(DEFAULT_CLAP_PATHS.iter().map(|path| {
-								row![
-									mouse_area(grip_vertical()).interaction(Interaction::NoDrop),
-									value(path.display())
-										.font(Font::MONOSPACE)
-										.width(Fill)
-										.wrapping(text::Wrapping::None)
-										.ellipsis(text::Ellipsis::Middle),
-									button(x())
-										.style(button_with_radius(button::danger, 5))
-										.padding(0)
-								]
-								.spacing(5)
-								.align_y(Center)
-								.into()
-							}))
-							.spacing(5),
-							(!self.config.clap_paths.is_empty()).then(|| sweeten::column(
+						pick_list(self.config.audio.devices.get_host(), &*self.hosts, |host| {
+							if self.hosts.contains(host) {
+								host.name().to_owned()
+							} else {
+								format!("Unknown ({host})")
+							}
+						})
+						.on_select(|host| Message::ChangedHost(Some(host)))
+						.handle(pick_list_handle())
+						.placeholder("Default")
+						.width(Fill)
+						.style(pick_list_with_radius(border::left(5)))
+						.menu_style(menu_style),
+						button(rotate_ccw())
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding(5)
+							.on_press_maybe(
 								self.config
-									.clap_paths
-									.iter()
-									.enumerate()
-									.map(|(index, path)| {
-										row![
-											value(path.display())
-												.font(Font::MONOSPACE)
-												.width(Fill)
-												.wrapping(text::Wrapping::None)
-												.ellipsis(text::Ellipsis::Middle),
-											button(x())
-												.style(button_with_radius(button::danger, 5))
-												.padding(0)
-												.on_press(Message::RemoveClapPath(index))
-										]
-										.spacing(5)
-										.align_y(Center)
-									})
-									.map(|widget| row![
-										mouse_area(grip_vertical()).interaction(Interaction::Grab),
-										opaque(widget)
-									]
-									.align_y(Center)
-									.into())
+									.audio
+									.devices
+									.get_host()
+									.map(|_| Message::ChangedHost(None))
 							)
-							.spacing(5)
-							.on_drag(Message::MoveClapPath)
-							.style(sweeten_column_with_radius(sweeten_column_style, 5)))
-						]
-						.padding(padding::all(5).left(2))
-						.spacing(5)
-					)
-					.style(container_with_radius(weak_bordered_box, 5)),
-					rule::horizontal(1),
+					]
+				]
+				.align_y(Center),
+				column![
 					row![
-						text("Host:").width(Fill),
+						text("Audio Input:").width(Fill),
 						row![
-							pick_list(self.config.audio.devices.get_host(), &*self.hosts, |host| {
-								if self.hosts.contains(host) {
-									host.name().to_owned()
-								} else {
-									format!("Unknown ({host})")
-								}
-							})
-							.on_select(|host| Message::ChangedHost(Some(host)))
-							.handle(PICK_LIST_HANDLE)
+							pick_list(
+								self.config.audio.devices.get_input(),
+								self.input_devices
+									.get(
+										&self
+											.config
+											.audio
+											.devices
+											.get_host()
+											.unwrap_or_else(|| *DEFAULT_HOST)
+									)
+									.map_or_default(|input_devices| &**input_devices),
+								|id| self.input_device_info.get(id).map_or_else(
+									|| format!("Unknown ({})", id.id()),
+									|device| device.name().to_owned()
+								)
+							)
+							.on_select(|id| Message::ChangedAudioInput(Some(id)))
+							.handle(pick_list_handle())
 							.placeholder("Default")
 							.width(Fill)
-							.style(pick_list_with_radius(border::left(5)))
+							.style(pick_list_with_radius(border::top_left(5)))
 							.menu_style(menu_style),
 							button(rotate_ccw())
-								.style(button_with_radius(button::primary, border::right(5)))
+								.style(button_with_radius(button::primary, border::top_right(5)))
 								.padding(5)
 								.on_press_maybe(
 									self.config
 										.audio
 										.devices
-										.get_host()
-										.map(|_| Message::ChangedHost(None))
+										.get_input()
+										.map(|_| Message::ChangedAudioInput(None))
 								)
 						]
 					]
 					.align_y(Center),
-					column![
-						row![
-							text("Audio Input:").width(Fill),
-							row![
-								pick_list(
-									self.config.audio.devices.get_input(),
-									self.input_devices
-										.get(
-											&self
-												.config
-												.audio
-												.devices
-												.get_host()
-												.unwrap_or_else(|| *DEFAULT_HOST)
-										)
-										.map_or_default(|input_devices| &**input_devices),
-									|id| self.input_device_info.get(id).map_or_else(
-										|| format!("Unknown ({})", id.id()),
-										|device| device.name().to_owned()
-									)
-								)
-								.on_select(|id| Message::ChangedAudioInput(Some(id)))
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(Fill)
-								.style(pick_list_with_radius(border::top_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::top_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.audio
-											.devices
-											.get_input()
-											.map(|_| Message::ChangedAudioInput(None))
-									)
-							]
-						]
-						.align_y(Center),
-						row![
-							text("Audio Output:").width(Fill),
-							row![
-								pick_list(
-									self.config.audio.devices.get_output(),
-									self.output_devices
-										.get(
-											&self
-												.config
-												.audio
-												.devices
-												.get_host()
-												.unwrap_or_else(|| *DEFAULT_HOST)
-										)
-										.map_or_default(|devices| &**devices),
-									|id| self.output_device_info.get(id).map_or_else(
-										|| format!("Unknown ({})", id.id()),
-										|device| device.name().to_owned()
-									)
-								)
-								.on_select(|id| Message::ChangedAudioOutput(Some(id)))
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(Fill)
-								.style(pick_list_with_radius(border::bottom_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::bottom_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.audio
-											.devices
-											.get_output()
-											.map(|_| Message::ChangedAudioOutput(None))
-									)
-							]
-						]
-						.align_y(Center),
-					],
-					column![
-						row![
-							text("Sample Rate:").width(Fill),
-							row![
-								pick_list(
-									self.config.audio.sample_rate,
-									SAMPLE_RATES,
-									|sample_rate| format!("{sample_rate} hz")
-								)
-								.on_select(|sample_rate| Message::ChangedSampleRate(Some(
-									sample_rate
-								)))
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(Fill)
-								.style(pick_list_with_radius(border::top_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::top_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.audio
-											.sample_rate
-											.map(|_| Message::ChangedSampleRate(None))
-									)
-							]
-						]
-						.align_y(Center),
-						row![
-							text("Buffer Size:").width(Fill),
-							row![
-								pick_list(
-									self.config.audio.buffer_size,
-									BUFFER_SIZES,
-									|buffer_size| format!("{buffer_size} smp")
-								)
-								.on_select(|buffer_size| {
-									Message::ChangedBufferSize(Some(buffer_size))
-								})
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(Fill)
-								.style(pick_list_with_radius(border::bottom_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::bottom_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.audio
-											.buffer_size
-											.map(|_| Message::ChangedBufferSize(None))
-									)
-							]
-						]
-						.align_y(Center)
-					],
-					rule::horizontal(1),
-					column![
-						row![
-							text("MIDI Input:").width(Fill),
-							row![
-								pick_list(
-									self.config.midi.input.as_ref(),
-									&*self.input_ports,
-									|id| self.input_port_info.get(id).map_or_else(
-										|| format!("Unknown ({id})"),
-										|device| (**device).to_owned()
-									)
-								)
-								.on_select(|id| Message::ChangedMidiInput(Some(id)))
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("None")
-								.width(Fill)
-								.style(pick_list_with_radius(border::top_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::top_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.midi
-											.input
-											.as_ref()
-											.map(|_| Message::ChangedMidiInput(None))
-									)
-							]
-						]
-						.align_y(Center),
-						row![
-							text("MIDI Output:").width(Fill),
-							row![
-								pick_list(
-									self.config.midi.output.as_ref(),
-									&*self.output_ports,
-									|id| self.output_port_info.get(id).map_or_else(
-										|| format!("Unknown ({id})"),
-										|device| (**device).to_owned()
-									)
-								)
-								.on_select(|id| Message::ChangedMidiOutput(Some(id)))
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("None")
-								.width(Fill)
-								.style(pick_list_with_radius(border::bottom_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::bottom_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										self.config
-											.midi
-											.output
-											.as_ref()
-											.map(|_| Message::ChangedMidiOutput(None))
-									)
-							]
-						]
-						.align_y(Center),
-					],
-					rule::horizontal(1),
 					row![
+						text("Audio Output:").width(Fill),
 						row![
-							checkbox(self.config.autosave.enabled)
-								.label("Autosave every ")
-								.on_toggle(|_| Message::ToggledAutosave),
-							number_input(
-								1..=999,
-								self.config.autosave.interval.get().into(),
-								300,
-								5
+							pick_list(
+								self.config.audio.devices.get_output(),
+								self.output_devices
+									.get(
+										&self
+											.config
+											.audio
+											.devices
+											.get_host()
+											.unwrap_or_else(|| *DEFAULT_HOST)
+									)
+									.map_or_default(|devices| &**devices),
+								|id| self.output_device_info.get(id).map_or_else(
+									|| format!("Unknown ({})", id.id()),
+									|device| device.name().to_owned()
+								)
 							)
+							.on_select(|id| Message::ChangedAudioOutput(Some(id)))
+							.handle(pick_list_handle())
+							.placeholder("Default")
+							.width(Fill)
+							.style(pick_list_with_radius(border::bottom_left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::bottom_right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.audio
+										.devices
+										.get_output()
+										.map(|_| Message::ChangedAudioOutput(None))
+								)
+						]
+					]
+					.align_y(Center),
+				],
+				column![
+					row![
+						text("Sample Rate:").width(Fill),
+						row![
+							pick_list(
+								self.config.audio.sample_rate,
+								SAMPLE_RATES,
+								|sample_rate| format!("{sample_rate} hz")
+							)
+							.on_select(|sample_rate| Message::ChangedSampleRate(Some(sample_rate)))
+							.handle(pick_list_handle())
+							.placeholder("Default")
+							.width(Fill)
+							.style(pick_list_with_radius(border::top_left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::top_right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.audio
+										.sample_rate
+										.map(|_| Message::ChangedSampleRate(None))
+								)
+						]
+					]
+					.align_y(Center),
+					row![
+						text("Buffer Size:").width(Fill),
+						row![
+							pick_list(
+								self.config.audio.buffer_size,
+								BUFFER_SIZES,
+								|buffer_size| format!("{buffer_size} smp")
+							)
+							.on_select(|buffer_size| {
+								Message::ChangedBufferSize(Some(buffer_size))
+							})
+							.handle(pick_list_handle())
+							.placeholder("Default")
+							.width(Fill)
+							.style(pick_list_with_radius(border::bottom_left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::bottom_right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.audio
+										.buffer_size
+										.map(|_| Message::ChangedBufferSize(None))
+								)
+						]
+					]
+					.align_y(Center)
+				],
+				rule::horizontal(1),
+				column![
+					row![
+						text("MIDI Input:").width(Fill),
+						row![
+							pick_list(self.config.midi.input.as_ref(), &*self.input_ports, |id| {
+								self.input_port_info.get(id).map_or_else(
+									|| format!("Unknown ({id})"),
+									|device| (**device).to_owned(),
+								)
+							})
+							.on_select(|id| Message::ChangedMidiInput(Some(id)))
+							.handle(pick_list_handle())
+							.placeholder("None")
+							.width(Fill)
+							.style(pick_list_with_radius(border::top_left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::top_right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.midi
+										.input
+										.as_ref()
+										.map(|_| Message::ChangedMidiInput(None))
+								)
+						]
+					]
+					.align_y(Center),
+					row![
+						text("MIDI Output:").width(Fill),
+						row![
+							pick_list(
+								self.config.midi.output.as_ref(),
+								&*self.output_ports,
+								|id| self.output_port_info.get(id).map_or_else(
+									|| format!("Unknown ({id})"),
+									|device| (**device).to_owned()
+								)
+							)
+							.on_select(|id| Message::ChangedMidiOutput(Some(id)))
+							.handle(pick_list_handle())
+							.placeholder("None")
+							.width(Fill)
+							.style(pick_list_with_radius(border::bottom_left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::bottom_right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.midi
+										.output
+										.as_ref()
+										.map(|_| Message::ChangedMidiOutput(None))
+								)
+						]
+					]
+					.align_y(Center),
+				],
+				rule::horizontal(1),
+				row![
+					row![
+						checkbox(self.config.autosave.enabled)
+							.label("Autosave every ")
+							.on_toggle(|_| Message::ToggledAutosave),
+						number_input(1..=999, self.config.autosave.interval.get().into(), 300, 5)
 							.map(|interval| Message::ChangedAutosaveInterval(
 								interval.map(|interval| interval as u16)
 							)),
-							" s"
-						]
-						.width(Fill)
-						.align_y(Center),
-						container(
-							checkbox(self.config.open_last_project)
-								.label("Open last project on startup")
-								.on_toggle(|_| Message::ToggledOpenLastProject)
-						)
-						.width(Fill)
+						" s"
 					]
+					.width(Fill)
 					.align_y(Center),
-					rule::horizontal(1),
-					row![
-						"Scale factor:",
-						text!("{:.1}", self.config.scale_factor).font(Font::MONOSPACE),
-						slider(
-							-1.0..=1.0,
-							self.config.scale_factor.log2(),
-							|scale_factor| Message::ChangedScaleFactor(
-								(scale_factor.exp2() * 10.0).round() / 10.0
-							)
+					container(
+						checkbox(self.config.open_last_project)
+							.label("Open last project on startup")
+							.on_toggle(|_| Message::ToggledOpenLastProject)
+					)
+					.width(Fill)
+				]
+				.align_y(Center),
+				rule::horizontal(1),
+				row![
+					"Scale factor:",
+					text!("{:.1}", self.config.scale_factor).font(Font::MONOSPACE),
+					slider(
+						-1.0..=1.0,
+						self.config.scale_factor.log2(),
+						|scale_factor| Message::ChangedScaleFactor(
+							(scale_factor.exp2() * 10.0).round() / 10.0
 						)
-						.step(f32::EPSILON),
-						button(rotate_ccw())
-							.style(button_with_radius(button::primary, 5))
-							.padding(5)
-							.on_press_maybe(
-								(self.config.scale_factor != 1.0)
-									.then_some(Message::ChangedScaleFactor(1.0))
-							),
-					]
-					.align_y(Center)
-					.spacing(10),
+					)
+					.step(f32::EPSILON),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, 5))
+						.padding(5)
+						.on_press_maybe(
+							(self.config.scale_factor != 1.0)
+								.then_some(Message::ChangedScaleFactor(1.0))
+						),
+				]
+				.align_y(Center)
+				.spacing(10),
+				row![
+					text("Theme:").width(Fill),
 					row![
-						text("Theme:").width(Fill),
-						row![
-							pick_list(Some(self.config.theme), Theme::VARIANTS, |&t| {
-								iced::Theme::from(t).to_string()
-							})
-							.on_select(Message::ChangedTheme)
-							.handle(PICK_LIST_HANDLE)
-							.width(Fill)
-							.style(pick_list_with_radius(border::left(5)))
-							.menu_style(menu_style),
-							button(rotate_ccw())
-								.style(button_with_radius(button::primary, border::right(5)))
-								.padding(5)
-								.on_press_maybe(
-									(self.config.theme != Theme::CatppuccinFrappe)
-										.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
-								)
-						]
-					]
-					.align_y(Center),
-					rule::horizontal(1),
-					row![
-						iced(TEXT_HEIGHT),
-						space::horizontal(),
-						button(save())
-							.style(button_with_radius(button::primary, border::left(5)))
-							.padding(5)
-							.on_press_maybe(
-								(self.config != *loaded_config).then_some(Message::WriteConfig)
-							),
+						pick_list(Some(self.config.theme), Theme::VARIANTS, |&t| {
+							iced::Theme::from(t).to_string()
+						})
+						.on_select(Message::ChangedTheme)
+						.handle(pick_list_handle())
+						.width(Fill)
+						.style(pick_list_with_radius(border::left(5)))
+						.menu_style(menu_style),
 						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.config != *loaded_config)
-									.then_some(Message::ResetConfigToLast)
+								(self.config.theme != Theme::CatppuccinFrappe)
+									.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
 							)
 					]
-					.align_y(Center)
 				]
-				.spacing(10)
-				.padding(10)
-				.width(540),
-			)
-			.spacing(5)
-			.style(scrollable_style),
+				.align_y(Center),
+				rule::horizontal(1),
+				row![
+					iced(TEXT_HEIGHT),
+					space::horizontal(),
+					button(save())
+						.style(button_with_radius(button::primary, border::left(5)))
+						.padding(5)
+						.on_press_maybe(
+							(self.config != *loaded_config).then_some(Message::WriteConfig)
+						),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, border::right(5)))
+						.padding(5)
+						.on_press_maybe(
+							(self.config != *loaded_config).then_some(Message::ResetConfigToLast)
+						)
+				]
+				.align_y(Center)
+			]
+			.spacing(10)
+			.padding(10),
 		)
-		.style(container_with_radius(weakest_bordered_box, 5))
+		.width(550)
+		.spacing(5)
+		.style(scrollable_with_container(
+			scrollable_style,
+			container_with_radius(weakest_bordered_box, 10),
+		))
 		.into()
 	}
 

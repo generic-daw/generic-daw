@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utils::variants;
 
 variants! {
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum Theme {
 	Light,
 	Dark,

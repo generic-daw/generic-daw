@@ -13,10 +13,10 @@ use crate::{
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		button_with_radius, container_with_radius, menu_style, scrollable_style, selectable_box,
-		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
-		sweeten_row_style, sweeten_row_with_radius, text_input_transparent, text_input_with_radius,
-		weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
+		button_with_radius, container_with_radius, menu_style, selectable_box, slider_with_radius,
+		split_style, sweeten_column_style, sweeten_column_with_radius, sweeten_row_style,
+		sweeten_row_with_radius, text_input_transparent, text_input_with_radius, weak_bordered_box,
+		weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -1881,7 +1881,6 @@ impl ArrangementView {
 				.direction(scrollable::Direction::Horizontal(
 					scrollable::Scrollbar::hidden(),
 				))
-				.style(scrollable_style)
 				.width(Fill)
 			]
 			.spacing(5),
@@ -2008,9 +2007,9 @@ impl ArrangementView {
 					.on_drag(|node| Message::PluginMove(self.selected, node))
 					.style(sweeten_column_with_radius(sweeten_column_style, 5)),
 				)
-				.spacing(5)
-				.style(scrollable_style)
-				.height(Fill)
+				.direction(scrollable::Direction::Vertical(
+					scrollable::Scrollbar::hidden(),
+				))
 			],
 			state.plugins_pane_split_at,
 		)

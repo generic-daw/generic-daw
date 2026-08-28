@@ -6,7 +6,9 @@ use crate::{
 	components::icon_button,
 	daw::{RECORDINGS_DIR, format_now},
 	icons::{keyboard_music, mic, square_arrow_right_enter},
-	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
+	stylefns::{
+		button_with_radius, container_with_radius, scrollable_with_container, weaker_bordered_box,
+	},
 };
 use generic_daw_core::{
 	Channels, Clip, NodeId, TimedMidiAction, Transport,
@@ -277,38 +279,39 @@ impl Track {
 			.spacing(5)
 			.height(Shrink),
 			row![
-				Menu::new(keyboard_music().size(13.0), move || container(
-					scrollable(
-						row![
-							column((0..16).map(|channel| {
-								container(text(channel + 1).size(13).line_height(1.0))
-									.padding(1)
-									.into()
-							}))
-							.spacing(5)
-							.align_x(Center),
-							column((0..16).map(|channel| {
-								checkbox(self.input.midi & (1 << channel) != 0)
-									.on_toggle(move |_| {
-										Message::InputChangeChannels(
-											self.id,
-											self.input.midi(self.input.midi ^ (1 << channel)),
-										)
-									})
-									.size(15)
-									.into()
-							}))
-							.spacing(5)
-							.align_x(Center),
-						]
+				Menu::new(keyboard_music().size(13.0), move || scrollable(
+					row![
+						column((0..16).map(|channel| {
+							container(text(channel + 1).size(13).line_height(1.0))
+								.padding(1)
+								.into()
+						}))
 						.spacing(5)
-					)
-					.direction(scrollable::Direction::Vertical(
-						scrollable::Scrollbar::hidden(),
-					))
+						.align_x(Center),
+						column((0..16).map(|channel| {
+							checkbox(self.input.midi & (1 << channel) != 0)
+								.on_toggle(move |_| {
+									Message::InputChangeChannels(
+										self.id,
+										self.input.midi(self.input.midi ^ (1 << channel)),
+									)
+								})
+								.size(15)
+								.into()
+						}))
+						.spacing(5)
+						.align_x(Center),
+					]
+					.padding(5)
+					.spacing(5)
 				)
-				.padding(5)
-				.style(container_with_radius(weaker_bordered_box, 5))
+				.direction(scrollable::Direction::Vertical(
+					scrollable::Scrollbar::hidden(),
+				))
+				.style(scrollable_with_container(
+					scrollable::default,
+					container_with_radius(weaker_bordered_box, 5)
+				))
 				.into())
 				.padding(1)
 				.style(button_with_radius(

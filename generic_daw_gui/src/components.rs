@@ -102,19 +102,21 @@ pub fn text_icon_button<'a, Message: 'a>(
 		.padding(1)
 }
 
-pub const PICK_LIST_HANDLE: pick_list::Handle<Font> = pick_list::Handle::Dynamic {
-	closed: pick_list::Icon {
-		font: LUCIDE_FONT,
-		code_point: chevron_down().glyph(),
-		size: None,
-		line_height: text::LineHeight::Relative(1.0),
-		shaping: text::Shaping::Basic,
-	},
-	open: pick_list::Icon {
-		font: LUCIDE_FONT,
-		code_point: chevron_up().glyph(),
-		size: None,
-		line_height: text::LineHeight::Relative(1.0),
-		shaping: text::Shaping::Basic,
-	},
-};
+pub fn pick_list_handle() -> pick_list::Handle<Font> {
+	pick_list::Handle::Dynamic {
+		closed: pick_list::Icon {
+			font: LUCIDE_FONT,
+			code_point: chevron_down().glyph(),
+			size: None,
+			line_height: text::LineHeight::Relative(1.0),
+			shaping: text::Shaping::Basic,
+		},
+		open: pick_list::Icon {
+			font: LUCIDE_FONT,
+			code_point: chevron_up().glyph(),
+			size: None,
+			line_height: text::LineHeight::Relative(1.0),
+			shaping: text::Shaping::Basic,
+		},
+	}
+}

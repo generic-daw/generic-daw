@@ -267,8 +267,8 @@ impl Tab {
 
 	fn radius(self) -> border::Radius {
 		match self {
-			Self::Playlist | Self::PianoRoll => border::left(5),
-			Self::Mixer => border::top(5),
+			Self::Playlist | Self::PianoRoll => border::left(10),
+			Self::Mixer => border::top(10),
 		}
 	}
 }
@@ -416,11 +416,11 @@ impl Daw {
 			}
 			Message::FileTree(message) => return self.handle_file_tree_message(message),
 			Message::ConfigView(message) => {
-				if let Some(config_view) = self.config_view.as_mut() {
+				if let Some(config_view) = &mut self.config_view {
 					return config_view
 						.update(message, &self.config)
-						.handle(Message::ConfigView, |config| {
-							self.update(Message::LoadConfig(config.into()))
+						.handle(Message::ConfigView, |instruction| {
+							self.handle_instruction(instruction)
 						});
 				}
 			}
@@ -932,7 +932,7 @@ impl Daw {
 			}
 			Message::OnBottomPaneDrag(split_at) => {
 				self.state.bottom_pane_split_at = if split_at >= 30.0 {
-					split_at.clamp(300.0, 1000.0)
+					split_at.clamp(286.6, 1000.0)
 				} else {
 					0.0
 				};
@@ -1440,7 +1440,9 @@ impl Daw {
 								.align_x(Center)
 								.spacing(10)
 							)
-							.spacing(10)
+							.direction(scrollable::Direction::Vertical(
+								scrollable::Scrollbar::hidden(),
+							))
 						]
 						.align_x(Center)
 						.spacing(20),

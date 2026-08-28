@@ -16,7 +16,7 @@ use std::{
 pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| STATE_DIR.join("state.toml").into());
 
 pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
-pub const DEFAULT_BOTTOM_PANE_POSITON: f32 = 400.0;
+pub const DEFAULT_BOTTOM_PANE_POSITON: f32 = 406.6;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]

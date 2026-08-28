@@ -5,7 +5,7 @@ use crate::{
 		arrow_up_down, between_horizontal_start, between_vertical_start,
 		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, replace, rotate_ccw,
 	},
-	stylefns::{container_with_radius, weaker_bordered_box},
+	stylefns::{container_with_radius, scrollable_with_container, weaker_bordered_box},
 };
 use generic_daw_core::{Channels, NodeId, PanMode, Transport, Utility};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
@@ -273,40 +273,41 @@ impl Node {
 				))
 				.width(Fit.max(328))
 			]
+			.padding(5)
 			.spacing(5),
 		)
-		.padding(5)
 		.style(container_with_radius(weaker_bordered_box, 5))
 		.into()
 	}
 
 	pub fn midi_output_context_menu(&self) -> Element<'_, Message> {
-		container(
-			scrollable(
-				row((0..16).map(|channel| {
-					column![
-						container(text(channel + 1).size(13).line_height(1.0)).padding(1),
-						checkbox(self.output.midi & (1 << channel) != 0)
-							.on_toggle(move |_| {
-								Message::OutputChangeChannels(
-									self.id,
-									self.output.midi(self.output.midi ^ (1 << channel)),
-								)
-							})
-							.size(15)
-					]
-					.align_x(Center)
-					.spacing(5)
-					.into()
-				}))
-				.spacing(5),
-			)
-			.direction(scrollable::Direction::Horizontal(
-				scrollable::Scrollbar::hidden(),
-			)),
+		scrollable(
+			row((0..16).map(|channel| {
+				column![
+					container(text(channel + 1).size(13).line_height(1.0)).padding(1),
+					checkbox(self.output.midi & (1 << channel) != 0)
+						.on_toggle(move |_| {
+							Message::OutputChangeChannels(
+								self.id,
+								self.output.midi(self.output.midi ^ (1 << channel)),
+							)
+						})
+						.size(15)
+				]
+				.align_x(Center)
+				.spacing(5)
+				.into()
+			}))
+			.padding(5)
+			.spacing(5),
 		)
-		.padding(5)
-		.style(container_with_radius(weaker_bordered_box, 5))
+		.direction(scrollable::Direction::Horizontal(
+			scrollable::Scrollbar::hidden(),
+		))
+		.style(scrollable_with_container(
+			scrollable::default,
+			container_with_radius(weaker_bordered_box, 5),
+		))
 		.into()
 	}
 }

@@ -87,6 +87,17 @@ pub fn scrollable_style(t: &Theme, s: scrollable::Status) -> scrollable::Style {
 	style
 }
 
+pub fn scrollable_with_container(
+	f: impl Fn(&Theme, scrollable::Status) -> scrollable::Style,
+	container: impl Fn(&Theme) -> container::Style,
+) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
+	move |t, s| {
+		let mut style = f(t, s);
+		style.container = container(t);
+		style
+	}
+}
+
 pub fn selectable_box(
 	f: impl Fn(&Theme) -> container::Style,
 	s: bool,
