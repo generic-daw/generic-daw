@@ -3,6 +3,7 @@ use crate::{
 	icons::{file, file_headphone, file_music, file_play},
 	widget::LINE_HEIGHT,
 };
+use generic_daw_widget::virtualized::Virtualized;
 use iced::{
 	Element, Fill,
 	widget::{button, mouse_area, row, text},
@@ -43,29 +44,33 @@ impl File {
 
 	pub fn view(&self) -> (Element<'_, Message>, f32) {
 		(
-			button(
-				mouse_area(
-					row![
-						match self.kind {
-							FileKind::Midi => file_music(),
-							FileKind::Audio => file_headphone(),
-							FileKind::Project => file_play(),
-							FileKind::Unknown => file(),
-						},
-						text(&*self.name)
-							.wrapping(text::Wrapping::None)
-							.ellipsis(text::Ellipsis::End)
-					]
-					.padding(1)
-					.spacing(2)
-					.width(Fill),
+			Virtualized::new(|| {
+				button(
+					mouse_area(
+						row![
+							match self.kind {
+								FileKind::Midi => file_music(),
+								FileKind::Audio => file_headphone(),
+								FileKind::Project => file_play(),
+								FileKind::Unknown => file(),
+							},
+							text(&*self.name)
+								.wrapping(text::Wrapping::None)
+								.ellipsis(text::Ellipsis::End)
+						]
+						.padding(1)
+						.spacing(2)
+						.width(Fill),
+					)
+					.on_press(Message::DragFile(self.path.clone(), self.kind))
+					.on_double_click(Message::OpenFile(self.path.clone(), self.kind)),
 				)
-				.on_press(Message::DragFile(self.path.clone(), self.kind))
-				.on_double_click(Message::OpenFile(self.path.clone(), self.kind)),
-			)
-			.padding(0)
-			.style(button::text)
-			.on_press_with(|| unreachable!())
+				.padding(0)
+				.height(LINE_HEIGHT + 2.0)
+				.style(button::text)
+				.on_press_with(|| unreachable!())
+				.into()
+			})
 			.into(),
 			LINE_HEIGHT + 2.0,
 		)

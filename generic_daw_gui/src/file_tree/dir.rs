@@ -7,9 +7,9 @@ use crate::{
 	},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_widget::context_menu::ContextMenu;
+use generic_daw_widget::{context_menu::ContextMenu, virtualized::Virtualized};
 use iced::{
-	Element, Fill, Task,
+	Element, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
 	padding,
 	widget::{button, column, container, row, rule, tooltip, value},
@@ -134,17 +134,14 @@ impl Dir {
 		let mut height = 0.0;
 		(
 			column![
-				ContextMenu::new(
+				Virtualized::new(move || ContextMenu::new(
 					match &self.children {
 						Status::Unloaded =>
 							labeled_icon_button(chevron_right(), &*self.name, button::text)
-								.width(Fill)
 								.on_press(Message::Action(self.id, Action::ToggleOpen))
 								.into(),
 						Status::Loading | Status::Syncing { .. } =>
-							labeled_icon_button(hourglass(), &*self.name, button::text)
-								.width(Fill)
-								.into(),
+							labeled_icon_button(hourglass(), &*self.name, button::text).into(),
 						Status::Loaded { open, .. } => labeled_icon_button(
 							if *open {
 								chevron_down()
@@ -154,12 +151,10 @@ impl Dir {
 							&*self.name,
 							button::text
 						)
-						.width(Fill)
 						.on_press(Message::Action(self.id, Action::ToggleOpen))
 						.into(),
 						Status::Errored(err) => Element::new(tooltip(
 							labeled_icon_button(triangle_alert(), &*self.name, button_warning_text)
-								.width(Fill)
 								.on_press(Message::Action(self.id, Action::ToggleOpen)),
 							container(value(err).line_height(1.0))
 								.padding(3)
@@ -189,7 +184,8 @@ impl Dir {
 					.width(if cfg!(target_os = "macos") { 160 } else { 200 })
 					.style(container_with_radius(weaker_bordered_box, 5))
 					.into(),
-				),
+				)
+				.into()),
 				if let Status::Loaded {
 					dirs,
 					files,

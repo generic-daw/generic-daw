@@ -7,7 +7,7 @@ use crate::{
 };
 use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle};
 use iced::{
-	Element, Font, Theme, border, padding,
+	Element, Fill, Font, Theme, border, padding,
 	widget::{Button, button, container, pick_list, right, row, text, text_input},
 };
 use std::ops::RangeInclusive;
@@ -33,10 +33,13 @@ pub fn labeled_icon_button<'a, Message: 'a>(
 				.wrapping(text::Wrapping::None)
 				.ellipsis(text::Ellipsis::End)
 		]
-		.spacing(2),
+		.padding(1)
+		.spacing(2)
+		.width(Fill),
 	)
+	.padding(0)
+	.height(LINE_HEIGHT + 2.0)
 	.style(button_with_radius(style, 0))
-	.padding(1)
 }
 
 pub fn menu_entry<'a, Message: 'a>(
@@ -93,15 +96,6 @@ pub fn number_input<'a>(
 	.into()
 }
 
-pub fn text_icon_button<'a, Message: 'a>(
-	i: impl text::IntoFragment<'a>,
-	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
-) -> Button<'a, Message> {
-	button(container(text(i).size(13).line_height(1.0)).center(13))
-		.style(button_with_radius(style, 0))
-		.padding(1)
-}
-
 pub fn pick_list_handle() -> pick_list::Handle<Font> {
 	pick_list::Handle::Dynamic {
 		closed: pick_list::Icon {
@@ -119,4 +113,13 @@ pub fn pick_list_handle() -> pick_list::Handle<Font> {
 			shaping: text::Shaping::Basic,
 		},
 	}
+}
+
+pub fn text_icon_button<'a, Message: 'a>(
+	i: impl text::IntoFragment<'a>,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message> {
+	button(container(text(i).size(13).line_height(1.0)).center(13))
+		.style(button_with_radius(style, 0))
+		.padding(1)
 }
