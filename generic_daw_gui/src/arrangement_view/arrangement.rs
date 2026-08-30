@@ -1178,7 +1178,7 @@ impl Arrangement {
 	pub fn clip_slip_to(&mut self, track: usize, clip: usize, mut pos: BeatTime) {
 		if let Clip::Audio(audio) = &self.tracks[track].clips[clip] {
 			pos = pos.min(
-				(self.samples[&audio.sample].len(&self.transport) / audio.stretch
+				(self.samples[&audio.sample].len(&self.transport) / audio.stretch.abs()
 					- audio.position.len())
 				.to_beat_time(&self.transport),
 			);
