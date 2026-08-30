@@ -40,7 +40,8 @@ pub enum Status {
 struct State {
 	status: Status,
 	last_height: f32,
-	autoscroll_start: Option<Instant>,
+	horizontal_autoscroll_start: Option<Instant>,
+	vertical_autoscroll_start: Option<Instant>,
 	last_autoscroll: Option<Instant>,
 }
 
@@ -157,7 +158,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			}
 
 			if let Some(cursor) = cursor.position_in(viewport) {
-				state.autoscroll_start = None;
+				state.horizontal_autoscroll_start = None;
+				state.vertical_autoscroll_start = None;
 				state.last_autoscroll = None;
 				break 'block cursor;
 			}
@@ -166,7 +168,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				return;
 			}
 
-			let Some(cursor) = cursor.land().position_from(viewport.position()) else {
+			let Some(cursor) = cursor.position_from(viewport.position()) else {
 				return;
 			};
 
@@ -187,29 +189,30 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				break 'block clamped;
 			};
 
-			if state.last_autoscroll == Some(now) {
-			} else if let Some(autoscroll_start) = state.autoscroll_start {
-				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
-
-				let delta = Vector::new(
-					if cursor.x == clamped.x {
-						0.0
-					} else {
-						20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
-					},
-					if !shell.is_event_captured() || cursor.y == clamped.y {
-						0.0
-					} else {
-						20.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
-					},
-				);
-
-				shell.publish((self.pan)(delta, height, visible));
-
-				state.last_autoscroll = Some(now);
-			} else {
-				state.autoscroll_start = Some(now);
+			if state.last_autoscroll.replace(now) == Some(now) {
+				break 'block clamped;
 			}
+
+			let delta = Vector::new(
+				if !shell.is_event_captured() || cursor.x == clamped.x {
+					state.horizontal_autoscroll_start = None;
+					0.0
+				} else {
+					let autoscroll_start = *state.horizontal_autoscroll_start.get_or_insert(now);
+					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
+					20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
+				},
+				if !shell.is_event_captured() || cursor.y == clamped.y {
+					state.vertical_autoscroll_start = None;
+					0.0
+				} else {
+					let autoscroll_start = *state.vertical_autoscroll_start.get_or_insert(now);
+					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
+					20.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
+				},
+			);
+
+			shell.publish((self.pan)(delta, height, visible));
 
 			clamped
 		};
