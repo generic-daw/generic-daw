@@ -236,19 +236,25 @@ impl Track {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
 				};
-				let fac = clip.position.stretch_start_to(pos, &state.transport);
-				clip.fade_start.len /= fac;
-				clip.fade_end.len /= fac;
-				clip.stretch *= fac;
+				let len = clip.position.len() * clip.stretch.abs();
+				let end = clip.position.end(&state.transport);
+				clip.position.move_to(pos.min(end - BeatTime::TICK));
+				clip.position.trim_end_to(end, &state.transport);
+				let stretch = clip.stretch;
+				clip.stretch = (len / clip.position.len()).copysign(stretch);
+				clip.fade_start.len = clip.fade_start.len * stretch / clip.stretch;
+				clip.fade_end.len = clip.fade_end.len * stretch / clip.stretch;
 			}
 			NodeAction::ClipStretchEndTo(id, pos) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
 				};
-				let fac = clip.position.stretch_end_to(pos, &state.transport);
-				clip.fade_start.len /= fac;
-				clip.fade_end.len /= fac;
-				clip.stretch *= fac;
+				let len = clip.position.len() * clip.stretch.abs();
+				clip.position.trim_end_to(pos, &state.transport);
+				let stretch = clip.stretch;
+				clip.stretch = (len / clip.position.len()).copysign(clip.stretch);
+				clip.fade_start.len = clip.fade_start.len * stretch / clip.stretch;
+				clip.fade_end.len = clip.fade_end.len * stretch / clip.stretch;
 			}
 			NodeAction::ClipReverse(id) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {

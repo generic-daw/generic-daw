@@ -66,20 +66,6 @@ impl OffsetBeatSpan {
 		self.position.move_to(new_start);
 	}
 
-	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) -> f64 {
-		let len = self.len();
-		let end = self.end(transport);
-		self.move_to(new_start);
-		self.trim_end_to(end, transport);
-		len / self.len()
-	}
-
-	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) -> f64 {
-		let len = self.len();
-		self.trim_end_to(new_end, transport);
-		len / self.len()
-	}
-
 	pub fn reverse(&mut self, len: SecondsTime, stretch: f64) {
 		self.offset = len.saturating_sub(self.offset() + self.len() * stretch);
 	}
