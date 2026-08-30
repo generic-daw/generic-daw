@@ -29,7 +29,6 @@ use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
-	theme::{Custom, palette::Seed},
 	time::every,
 	widget::{
 		bottom_center, button, center, checkbox, column, combo_box, container, mouse_area, opaque,
@@ -1474,25 +1473,9 @@ impl Daw {
 	}
 
 	pub fn theme(&self, window: window::Id) -> Theme {
-		static TRANSPARENT: LazyLock<Theme> = LazyLock::new(|| {
-			Theme::Custom(Arc::new(Custom::new(
-				"transparent",
-				Seed {
-					background: Color::TRANSPARENT,
-					text: Color::TRANSPARENT,
-					primary: Color::TRANSPARENT,
-					success: Color::TRANSPARENT,
-					warning: Color::TRANSPARENT,
-					danger: Color::TRANSPARENT,
-				},
-			)))
-		});
-
-		if window == self.main_window_id {
-			self.config.theme.into()
-		} else {
-			TRANSPARENT.clone()
-		}
+		self.clap_host
+			.theme(window)
+			.unwrap_or_else(|| self.config.theme.into())
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> f32 {

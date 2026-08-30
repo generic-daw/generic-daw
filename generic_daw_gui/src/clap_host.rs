@@ -15,7 +15,8 @@ pub use generic_daw_core::clap_host::*;
 use generic_daw_core::{Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
-	Center, Element, Fill, Font, Subscription, Task, padding,
+	Center, Color, Element, Fill, Font, Subscription, Task, Theme, padding,
+	theme::{Custom, palette::Seed},
 	time::every,
 	widget::{column, combo_box, container, row, rule, scrollable, space, text, text_input},
 	window,
@@ -26,7 +27,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	iter::repeat,
 	ops::Deref as _,
-	sync::mpsc::Receiver,
+	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
 use utils::{NoClone, NoDebug, natural_cmp};
@@ -480,6 +481,28 @@ impl ClapHost {
 			.get(&window)
 			.and_then(|id| self.plugins.get(id))
 			.map(|plugin| plugin.descriptor().name.deref().to_owned())
+	}
+
+	pub fn theme(&self, window: window::Id) -> Option<Theme> {
+		static TRANSPARENT: LazyLock<Theme> = LazyLock::new(|| {
+			Theme::Custom(Arc::new(Custom::new(
+				"transparent",
+				Seed {
+					background: Color::TRANSPARENT,
+					text: Color::TRANSPARENT,
+					primary: Color::TRANSPARENT,
+					success: Color::TRANSPARENT,
+					warning: Color::TRANSPARENT,
+					danger: Color::TRANSPARENT,
+				},
+			)))
+		});
+
+		self.plugin_of_window
+			.get(&window)
+			.and_then(|id| self.plugins.get(id))
+			.filter(|plugin| plugin.has_gui())
+			.map(|_| TRANSPARENT.clone())
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> Option<f32> {
