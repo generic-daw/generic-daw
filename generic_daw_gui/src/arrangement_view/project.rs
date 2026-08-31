@@ -518,9 +518,9 @@ impl Arrangement {
 					};
 				};
 
-				messages.push(arrangement_view::Message::PluginAdd(
+				messages.push(arrangement_view::Message::PluginAddTo(
 					node,
-					descriptor.clone(),
+					Box::new(descriptor.clone()),
 					false,
 				));
 

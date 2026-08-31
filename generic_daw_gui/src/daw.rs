@@ -9,6 +9,7 @@ use crate::{
 		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, magnet, menu, metronome,
 		panel_bottom_dashed, pause, play, plus, sliders_vertical, square,
 	},
+	plugin_picker::{self, PluginPicker},
 	state::{DEFAULT_SPLIT_HEIGHT, DEFAULT_SPLIT_WIDTH, MIN_SPLIT_HEIGHT, MIN_SPLIT_WIDTH, State},
 	stylefns::{
 		button_with_radius, container_with_radius, progress_bar_with_radius, selectable_box,
@@ -31,7 +32,7 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		bottom_center, button, center, checkbox, column, combo_box, container, mouse_area, opaque,
+		bottom_center, button, center, checkbox, column, container, mouse_area, opaque,
 		progress_bar, right, row, rule, scrollable, slider, space, stack, text,
 	},
 	window,
@@ -49,7 +50,7 @@ use std::{
 	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
-use utils::{NoClone, NoDebug, natural_cmp, unique_id};
+use utils::{NoClone, NoDebug, unique_id};
 
 unique_id!(scan);
 unique_id!(project);
@@ -115,6 +116,7 @@ pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
 pub enum Instruction {
 	Message(Message),
 	Freeze(NodeId),
+	PluginLoad(PluginDescriptor),
 	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
 	PluginCopyState(PluginId, PluginId),
 	PluginActivate(PluginId, Option<Box<clap_host::AudioThread>>),
@@ -126,6 +128,7 @@ pub enum Message {
 	Arrangement(Project, arrangement_view::Message),
 	ClapHost(clap_host::Message),
 	FileTree(file_tree::Message),
+	PluginPicker(plugin_picker::Message),
 	ConfigView(config_view::Message),
 
 	CloseRequested(window::Id),
@@ -138,7 +141,7 @@ pub enum Message {
 
 	ScanProgress(Scan, f32),
 	ScanStatus(Scan, Option<Arc<str>>),
-	PluginScanned(Scan, PluginDescriptor),
+	PluginScanned(Scan, Box<PluginDescriptor>),
 	ScanFinished(Scan),
 
 	NewFile,
@@ -165,6 +168,7 @@ pub enum Message {
 	RenderFile(Arc<Path>),
 	RenderedFile,
 
+	TogglePluginPicker,
 	ToggleConfigView,
 	LoadConfig(Box<Config>),
 
@@ -268,7 +272,7 @@ impl Tab {
 	fn radius(self) -> border::Radius {
 		match self {
 			Self::Playlist | Self::PianoRoll => border::left(10),
-			Self::Mixer => border::top(10),
+			Self::Mixer => border::radius(10).bottom_left(0),
 		}
 	}
 }
@@ -282,9 +286,10 @@ pub struct Daw {
 	arrangement_view: ArrangementView,
 	clap_host: ClapHost,
 	file_tree: FileTree,
+	plugin_picker: Option<PluginPicker>,
 	config_view: Option<ConfigView>,
 
-	plugins: combo_box::State<PluginDescriptor>,
+	plugins: plugin_picker::State,
 	bpm_tapper: BpmTapper,
 
 	progress: Option<f32>,
@@ -354,8 +359,9 @@ impl Daw {
 			clap_host,
 			file_tree,
 			config_view: None,
+			plugin_picker: None,
 
-			plugins: combo_box::State::default(),
+			plugins: plugin_picker::State::default(),
 			bpm_tapper: BpmTapper::default(),
 
 			progress: None,
@@ -415,6 +421,15 @@ impl Daw {
 					});
 			}
 			Message::FileTree(message) => return self.handle_file_tree_message(message),
+			Message::PluginPicker(message) => {
+				if let Some(plugin_picker) = &mut self.plugin_picker {
+					return plugin_picker
+						.update(message, &self.plugins)
+						.handle(Message::PluginPicker, |instruction| {
+							self.handle_instruction(instruction)
+						});
+				}
+			}
 			Message::ConfigView(message) => {
 				if let Some(config_view) = &mut self.config_view {
 					return config_view
@@ -435,6 +450,8 @@ impl Daw {
 				NoClone(NoDebug(processor)),
 				view,
 			) => {
+				self.plugin_picker = None;
+
 				self.top_pane = Tab::Playlist;
 				self.bottom_pane = self.bottom_pane.map(|_| Tab::Mixer);
 				self.project = project;
@@ -469,11 +486,8 @@ impl Daw {
 				}
 			}
 			Message::PluginScanned(scan, descriptor) => {
-				if self.scan == Some(scan)
-					&& let Err(i) = self.plugins.options().binary_search_by(|d| {
-						natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes())
-					}) {
-					self.plugins.insert(i, descriptor);
+				if self.scan == Some(scan) {
+					self.plugins.add(*descriptor, self.plugin_picker.as_mut());
 				}
 			}
 			Message::ScanFinished(scan) => {
@@ -603,7 +617,7 @@ impl Daw {
 						self.arrangement_view.arrangement.transport().sample_rate,
 						self.arrangement_view.arrangement.transport().frames,
 						self.config.clone(),
-						self.plugins.clone().into_options(),
+						self.plugins.descriptors().to_owned(),
 					);
 				}
 			}
@@ -675,6 +689,17 @@ impl Daw {
 				self.clap_host.set_render_mode(RenderMode::Realtime);
 				self.progress = None;
 			}
+			Message::TogglePluginPicker => {
+				let mut fut = Task::none();
+				self.plugin_picker = if self.plugin_picker.is_some() {
+					None
+				} else {
+					let plugin_picker;
+					(plugin_picker, fut) = PluginPicker::create(&self.plugins);
+					Some(plugin_picker)
+				};
+				return fut.map(Message::PluginPicker);
+			}
 			Message::ToggleConfigView => {
 				self.config_view = if self.config_view.is_some() {
 					None
@@ -711,7 +736,7 @@ impl Daw {
 			}
 			Message::RescanPlugins => {
 				let scan = Scan::unique();
-				self.plugins = combo_box::State::default();
+				self.plugins.clear(self.plugin_picker.as_mut());
 				self.scan = Some(scan);
 				self.scan_progress = Some(0.0);
 				self.scan_status = None;
@@ -739,7 +764,10 @@ impl Daw {
 							if let Some(descriptors) = Plugin::descriptors(&path) {
 								for descriptor in descriptors {
 									sender
-										.try_send(Message::PluginScanned(scan, descriptor))
+										.try_send(Message::PluginScanned(
+											scan,
+											Box::new(descriptor),
+										))
 										.unwrap();
 								}
 							}
@@ -972,6 +1000,12 @@ impl Daw {
 				self.progress = Some(0.0);
 				self.clap_host.set_render_mode(RenderMode::Offline);
 				return self.arrangement_view.arrangement.freeze(node, self.project);
+			}
+			Instruction::PluginLoad(descriptor) => {
+				return self.update(Message::Arrangement(
+					self.project,
+					arrangement_view::Message::PluginAdd(Box::new(descriptor)),
+				));
 			}
 			Instruction::PluginAdd(id, plugin, receiver) => {
 				return self
@@ -1227,12 +1261,9 @@ impl Daw {
 							container(
 								SelectArea::new(
 									container(
-										self.arrangement_view
-											.view(self.top_pane, &self.state, &self.plugins)
-											.map(|message| Message::Arrangement(
-												self.project,
-												message
-											)),
+										self.arrangement_view.view(self.top_pane, &self.state).map(
+											|message| Message::Arrangement(self.project, message)
+										),
 									)
 									.padding(self.bottom_pane.map_or_default(|_| 5))
 									.style(container_with_radius(
@@ -1253,11 +1284,7 @@ impl Daw {
 								SelectArea::new(
 									container(
 										self.arrangement_view
-											.view(
-												self.bottom_pane.unwrap(),
-												&self.state,
-												&self.plugins,
-											)
+											.view(self.bottom_pane.unwrap(), &self.state)
 											.map(|message| Message::Arrangement(
 												self.project,
 												message
@@ -1303,6 +1330,15 @@ impl Daw {
 				.loading()
 				.then(|| mouse_area(space().width(Fill).height(Fill))
 					.interaction(Interaction::Progress)),
+			self.plugin_picker.as_ref().map(|plugin_picker| opaque(
+				mouse_area(
+					center(opaque(
+						plugin_picker.view(&self.plugins).map(Message::PluginPicker)
+					))
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+				)
+				.on_press(Message::TogglePluginPicker),
+			)),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
 					center(opaque(
@@ -1534,6 +1570,18 @@ impl Daw {
 						repeat,
 						..
 					} => ConfigView::keybinds(&key, modifiers, repeat)
+						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
+					_ => None,
+				})
+			} else if self.plugin_picker.is_some() {
+				keyboard::listen().filter_map(|event| match event {
+					keyboard::Event::KeyPressed {
+						key,
+						physical_key,
+						modifiers,
+						repeat,
+						..
+					} => PluginPicker::keybinds(&key, modifiers, repeat)
 						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
 					_ => None,
 				})

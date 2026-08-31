@@ -13,10 +13,10 @@ use crate::{
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_WIDTH, MIN_SPLIT_WIDTH, State},
 	stylefns::{
-		button_with_radius, container_with_radius, menu_style, selectable_box, slider_with_radius,
-		split_style, sweeten_column_style, sweeten_column_with_radius, sweeten_row_style,
-		sweeten_row_with_radius, text_input_transparent, text_input_with_radius, weak_bordered_box,
-		weaker_bordered_box, weakest_bordered_box,
+		button_with_radius, container_with_radius, selectable_box, slider_with_radius, split_style,
+		sweeten_column_style, sweeten_column_with_radius, sweeten_row_style,
+		sweeten_row_with_radius, text_input_transparent, weak_bordered_box, weaker_bordered_box,
+		weakest_bordered_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -44,7 +44,7 @@ use iced::{
 	padding, stream,
 	time::every,
 	widget::{
-		button, center, center_x, center_y, column, combo_box, container, mouse_area, opaque,
+		button, center, center_x, center_y, column, container, mouse_area, opaque,
 		operation::snap_to_end, row, rule, scrollable, slider, space, text, text_input,
 		vertical_slider,
 	},
@@ -111,7 +111,9 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
-	PluginAdd(NodeId, PluginDescriptor, bool),
+	PluginPicker,
+	PluginAdd(Box<PluginDescriptor>),
+	PluginAddTo(NodeId, Box<PluginDescriptor>, bool),
 	PluginRemove(NodeId, usize),
 	PluginMove(NodeId, DragEvent),
 	PluginDuplicate(NodeId, usize),
@@ -365,8 +367,21 @@ impl ArrangementView {
 			}
 			Message::ChannelToggleEnabled(node) => self.arrangement.channel_toggle_enabled(node),
 			Message::ChannelToggleBypassed(node) => self.arrangement.channel_toggle_bypassed(node),
-			Message::PluginAdd(node, descriptor, show) => {
-				if let Some((plugin, instruction)) = self.arrangement.plugin_add(node, descriptor) {
+			Message::PluginPicker => {
+				return Action::instruction(daw::Instruction::Message(
+					daw::Message::TogglePluginPicker,
+				));
+			}
+			Message::PluginAdd(descriptor) => {
+				return self.update(
+					Message::PluginAddTo(self.selected, descriptor, true),
+					config,
+					state,
+				);
+			}
+			Message::PluginAddTo(node, descriptor, show) => {
+				if let Some((plugin, instruction)) = self.arrangement.plugin_add(node, *descriptor)
+				{
 					let mut action = Action::instruction(instruction);
 					if show {
 						action = Action::batch([
@@ -1515,15 +1530,10 @@ impl ArrangementView {
 		}
 	}
 
-	pub fn view<'a>(
-		&'a self,
-		tab: Tab,
-		state: &'a State,
-		plugins: &'a combo_box::State<PluginDescriptor>,
-	) -> Element<'a, Message> {
+	pub fn view<'a>(&'a self, tab: Tab, state: &'a State) -> Element<'a, Message> {
 		match tab {
 			Tab::Playlist => self.view_playlist(state),
-			Tab::Mixer => self.view_mixer(state, plugins),
+			Tab::Mixer => self.view_mixer(state),
 			Tab::PianoRoll => self.view_piano_roll(state),
 		}
 	}
@@ -1821,11 +1831,7 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn view_mixer<'a>(
-		&'a self,
-		state: &'a State,
-		plugins: &'a combo_box::State<PluginDescriptor>,
-	) -> Element<'a, Message> {
+	fn view_mixer<'a>(&'a self, state: &'a State) -> Element<'a, Message> {
 		let node = self.arrangement.node(self.selected);
 
 		let enabled = node.enabled
@@ -1883,15 +1889,8 @@ impl ArrangementView {
 			]
 			.spacing(5)
 			.width(Fill.min(MIN_SPLIT_WIDTH)),
-			column![
-				combo_box(plugins, "Add Plugin", None, move |descriptor| {
-					Message::PluginAdd(self.selected, descriptor, true)
-				})
-				.input_style(text_input_with_radius(text_input::default, 5))
-				.menu_style(menu_style)
-				.width(Fill),
-				rule::horizontal(1),
-				scrollable(
+			scrollable(
+				column![
 					sweeten::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
 						let button_style = |cond: bool| {
 							if !plugin.active || !enabled {
@@ -2005,12 +2004,18 @@ impl ArrangementView {
 					.spacing(5)
 					.on_drag(|node| Message::PluginMove(self.selected, node))
 					.style(sweeten_column_with_radius(sweeten_column_style, 5)),
-				)
-				.direction(scrollable::Direction::Vertical(
-					scrollable::Scrollbar::hidden(),
-				))
-			]
-			.spacing(5)
+					button(plus().size(LINE_HEIGHT + 6.0))
+						.padding(5)
+						.style(button_with_radius(button::primary, f32::INFINITY))
+						.on_press(Message::PluginPicker)
+				]
+				.width(Fill)
+				.align_x(Center)
+				.spacing(5),
+			)
+			.direction(scrollable::Direction::Vertical(
+				scrollable::Scrollbar::hidden(),
+			))
 			.width(Fill.min(MIN_SPLIT_WIDTH)),
 			state.plugins_pane_split_at,
 		)

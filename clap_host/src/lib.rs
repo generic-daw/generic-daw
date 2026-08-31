@@ -12,6 +12,7 @@ mod audio_thread;
 mod event_buffers;
 mod event_ports_config;
 pub mod events;
+mod feature;
 mod gui;
 mod host;
 mod main_thread;
@@ -31,6 +32,7 @@ pub use clack_host::{
 	host::HostInfo,
 	utils::{BeatTime, ClapId, Cookie, SecondsTime},
 };
+pub use feature::{Capability, Category, Feature, Subcategory};
 pub use main_thread::MainThreadMessage;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
