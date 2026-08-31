@@ -9,7 +9,10 @@ use crate::{
 		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, magnet, menu, metronome,
 		panel_bottom_dashed, pause, play, plus, sliders_vertical, square,
 	},
-	state::{DEFAULT_BOTTOM_PANE_POSITON, DEFAULT_SPLIT_POSITION, State},
+	state::{
+		DEFAULT_HORIZONTAL_SPLIT_AT, DEFAULT_VERTICAL_SPLIT_AT, MIN_HORIZONTAL_SPLIT_AT,
+		MIN_VERTICAL_SPLIT_AT, State,
+	},
 	stylefns::{
 		button_with_radius, container_with_radius, progress_bar_with_radius, selectable_box,
 		split_style, weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
@@ -856,7 +859,7 @@ impl Daw {
 			}
 			Message::BottomPane(bottom_pane) => {
 				if self.state.bottom_pane_split_at == 0.0 {
-					self.state.bottom_pane_split_at = DEFAULT_BOTTOM_PANE_POSITON;
+					self.state.bottom_pane_split_at = DEFAULT_VERTICAL_SPLIT_AT;
 					self.state.write();
 				}
 
@@ -924,18 +927,22 @@ impl Daw {
 				}
 			}
 			Message::OnFileTreeDrag(split_at) => {
-				self.state.file_tree_split_at = if split_at >= 20.0 {
-					split_at.clamp(200.0, 1000.0)
+				self.state.file_tree_split_at = if split_at >= 0.1 * MIN_HORIZONTAL_SPLIT_AT {
+					split_at.max(MIN_HORIZONTAL_SPLIT_AT)
 				} else {
 					0.0
 				};
 			}
 			Message::OnBottomPaneDrag(split_at) => {
-				self.state.bottom_pane_split_at = if split_at >= 30.0 {
-					split_at.clamp(286.6, 1000.0)
+				self.state.bottom_pane_split_at = if split_at >= 0.1 * MIN_VERTICAL_SPLIT_AT {
+					split_at.max(MIN_VERTICAL_SPLIT_AT)
 				} else {
 					0.0
 				};
+
+				if self.state.bottom_pane_split_at != 0.0 && self.bottom_pane.is_none() {
+					return self.update(Message::MovePaneUp);
+				}
 			}
 			Message::OnBottomPaneDragEnd => {
 				if self.state.bottom_pane_split_at == 0.0 {
@@ -946,13 +953,13 @@ impl Daw {
 			Message::OnFileTreeDragEnd => self.state.write(),
 			Message::OnFileTreeDoubleClick => {
 				return Task::batch([
-					self.update(Message::OnFileTreeDrag(DEFAULT_SPLIT_POSITION)),
+					self.update(Message::OnFileTreeDrag(DEFAULT_HORIZONTAL_SPLIT_AT)),
 					self.update(Message::OnFileTreeDragEnd),
 				]);
 			}
 			Message::OnBottomPaneDoubleClick => {
 				return Task::batch([
-					self.update(Message::OnBottomPaneDrag(DEFAULT_BOTTOM_PANE_POSITON)),
+					self.update(Message::OnBottomPaneDrag(DEFAULT_VERTICAL_SPLIT_AT)),
 					self.update(Message::OnFileTreeDragEnd),
 				]);
 			}
@@ -1212,48 +1219,54 @@ impl Daw {
 				.align_y(Center)
 				.spacing(10),
 				vertical_split(
-					stack![
+					(self.state.file_tree_split_at != 0.0).then(|| stack![
 						self.file_tree.view().map(Message::FileTree),
 						self.files_hovered.then(|| center(plus().size(40.0))
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
-					],
-					self.bottom_pane.map_or_else(
-						|| self
-							.arrangement_view
-							.view(self.top_pane, &self.state, &self.plugins)
-							.map(|message| Message::Arrangement(self.project, message)),
-						|bottom_pane| horizontal_split(
-							SelectArea::new(
+					]),
+					container(
+						horizontal_split(
+							container(
+								SelectArea::new(
+									container(
+										self.arrangement_view
+											.view(self.top_pane, &self.state, &self.plugins)
+											.map(|message| {
+												Message::Arrangement(self.project, message)
+											}),
+									)
+									.padding(self.bottom_pane.map_or_default(|_| 5))
+									.style(container_with_radius(
+										selectable_box(
+											container::transparent,
+											self.bottom_pane.is_some() && !self.bottom_selected,
+										),
+										self.top_pane.radius(),
+									)),
+								)
+								.on_select_maybe(
+									(self.bottom_pane.is_some() && self.bottom_selected)
+										.then_some(Message::BottomSelected(false)),
+								),
+							)
+							.height(Fill.min(MIN_VERTICAL_SPLIT_AT)),
+							(self.state.bottom_pane_split_at != 0.0).then(|| SelectArea::new(
 								container(
 									self.arrangement_view
-										.view(self.top_pane, &self.state, &self.plugins)
-										.map(|message| Message::Arrangement(self.project, message))
+										.view(self.bottom_pane.unwrap(), &self.state, &self.plugins,)
+										.map(|message| {
+											Message::Arrangement(self.project, message)
+										}),
 								)
 								.padding(5)
 								.style(container_with_radius(
-									selectable_box(container::transparent, !self.bottom_selected),
-									self.top_pane.radius()
-								))
+									selectable_box(container::transparent, self.bottom_selected,),
+									self.bottom_pane.unwrap().radius(),
+								)),
 							)
 							.on_select_maybe(
-								self.bottom_selected
-									.then_some(Message::BottomSelected(false))
-							),
-							SelectArea::new(
-								container(
-									self.arrangement_view
-										.view(bottom_pane, &self.state, &self.plugins)
-										.map(|message| Message::Arrangement(self.project, message))
-								)
-								.padding(5)
-								.style(container_with_radius(
-									selectable_box(container::transparent, self.bottom_selected),
-									bottom_pane.radius()
-								))
-							)
-							.on_select_maybe(
-								(!self.bottom_selected).then_some(Message::BottomSelected(true))
-							),
+								(!self.bottom_selected).then_some(Message::BottomSelected(true)),
+							)),
 							self.state.bottom_pane_split_at,
 							Message::OnBottomPaneDrag,
 						)
@@ -1262,8 +1275,8 @@ impl Daw {
 						.strategy(Strategy::End)
 						.focus_delay(Duration::ZERO)
 						.style(split_style)
-						.into()
-					),
+					)
+					.width(Fill.min(2.0 * MIN_HORIZONTAL_SPLIT_AT + 21.0)),
 					self.state.file_tree_split_at,
 					Message::OnFileTreeDrag
 				)

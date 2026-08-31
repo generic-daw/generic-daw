@@ -11,7 +11,7 @@ use crate::{
 		snowflake, volume_2, x,
 	},
 	operation::scroll_into_view,
-	state::{DEFAULT_SPLIT_POSITION, State},
+	state::{DEFAULT_HORIZONTAL_SPLIT_AT, MIN_HORIZONTAL_SPLIT_AT, State},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, selectable_box, slider_with_radius,
 		split_style, sweeten_column_style, sweeten_column_with_radius, sweeten_row_style,
@@ -1013,13 +1013,11 @@ impl ArrangementView {
 				}
 				Tab::Mixer | Tab::PianoRoll => {}
 			},
-			Message::OnDrag(split_at) => {
-				state.plugins_pane_split_at = split_at.clamp(200.0, 400.0);
-			}
+			Message::OnDrag(split_at) => state.plugins_pane_split_at = split_at,
 			Message::OnDragEnd => state.write(),
 			Message::OnDoubleClick => {
 				return Action::batch([
-					self.update(Message::OnDrag(DEFAULT_SPLIT_POSITION), config, state),
+					self.update(Message::OnDrag(DEFAULT_HORIZONTAL_SPLIT_AT), config, state),
 					self.update(Message::OnDragEnd, config, state),
 				]);
 			}
@@ -1881,9 +1879,9 @@ impl ArrangementView {
 				.direction(scrollable::Direction::Horizontal(
 					scrollable::Scrollbar::hidden(),
 				))
-				.width(Fill)
 			]
-			.spacing(5),
+			.spacing(5)
+			.width(Fill.min(MIN_HORIZONTAL_SPLIT_AT)),
 			column![
 				combo_box(plugins, "Add Plugin", None, move |descriptor| {
 					Message::PluginAdd(self.selected, descriptor, true)
@@ -1891,7 +1889,7 @@ impl ArrangementView {
 				.input_style(text_input_with_radius(text_input::default, 5))
 				.menu_style(menu_style)
 				.width(Fill),
-				container(rule::horizontal(1)).padding(padding::vertical(5)),
+				rule::horizontal(1),
 				scrollable(
 					sweeten::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
 						let button_style = |cond: bool| {
@@ -2010,7 +2008,9 @@ impl ArrangementView {
 				.direction(scrollable::Direction::Vertical(
 					scrollable::Scrollbar::hidden(),
 				))
-			],
+			]
+			.spacing(5)
+			.width(Fill.min(MIN_HORIZONTAL_SPLIT_AT)),
 			state.plugins_pane_split_at,
 		)
 		.on_drag(Message::OnDrag)

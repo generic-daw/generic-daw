@@ -165,9 +165,9 @@ impl Operation for Block {
 		state: &mut dyn std::any::Any,
 	) {
 		if !self.0
-			&& let Some(&Self(block)) = state.downcast_ref()
+			&& let Some(Self(block)) = state.downcast_mut()
 		{
-			self.0 = block;
+			self.0 = std::mem::take(block);
 		}
 	}
 }
