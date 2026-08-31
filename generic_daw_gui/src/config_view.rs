@@ -496,9 +496,7 @@ impl ConfigView {
 								BUFFER_SIZES,
 								|buffer_size| format!("{buffer_size} smp")
 							)
-							.on_select(|buffer_size| {
-								Message::ChangedBufferSize(Some(buffer_size))
-							})
+							.on_select(|buffer_size| Message::ChangedBufferSize(Some(buffer_size)))
 							.handle(pick_list_handle())
 							.placeholder("Default")
 							.width(Fill)

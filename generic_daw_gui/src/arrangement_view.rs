@@ -11,7 +11,7 @@ use crate::{
 		snowflake, volume_2, x,
 	},
 	operation::scroll_into_view,
-	state::{DEFAULT_HORIZONTAL_SPLIT_AT, MIN_HORIZONTAL_SPLIT_AT, State},
+	state::{DEFAULT_SPLIT_WIDTH, MIN_SPLIT_WIDTH, State},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, selectable_box, slider_with_radius,
 		split_style, sweeten_column_style, sweeten_column_with_radius, sweeten_row_style,
@@ -1017,7 +1017,7 @@ impl ArrangementView {
 			Message::OnDragEnd => state.write(),
 			Message::OnDoubleClick => {
 				return Action::batch([
-					self.update(Message::OnDrag(DEFAULT_HORIZONTAL_SPLIT_AT), config, state),
+					self.update(Message::OnDrag(DEFAULT_SPLIT_WIDTH), config, state),
 					self.update(Message::OnDragEnd, config, state),
 				]);
 			}
@@ -1881,7 +1881,7 @@ impl ArrangementView {
 				))
 			]
 			.spacing(5)
-			.width(Fill.min(MIN_HORIZONTAL_SPLIT_AT)),
+			.width(Fill.min(MIN_SPLIT_WIDTH)),
 			column![
 				combo_box(plugins, "Add Plugin", None, move |descriptor| {
 					Message::PluginAdd(self.selected, descriptor, true)
@@ -2010,7 +2010,7 @@ impl ArrangementView {
 				))
 			]
 			.spacing(5)
-			.width(Fill.min(MIN_HORIZONTAL_SPLIT_AT)),
+			.width(Fill.min(MIN_SPLIT_WIDTH)),
 			state.plugins_pane_split_at,
 		)
 		.on_drag(Message::OnDrag)

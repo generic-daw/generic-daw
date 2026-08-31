@@ -15,10 +15,10 @@ use std::{
 
 pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| STATE_DIR.join("state.toml").into());
 
-pub const MIN_VERTICAL_SPLIT_AT: f32 = 300.0;
-pub const MIN_HORIZONTAL_SPLIT_AT: f32 = 200.0;
-pub const DEFAULT_VERTICAL_SPLIT_AT: f32 = 400.0;
-pub const DEFAULT_HORIZONTAL_SPLIT_AT: f32 = 300.0;
+pub const MIN_SPLIT_WIDTH: f32 = 200.0;
+pub const MIN_SPLIT_HEIGHT: f32 = 300.0;
+pub const DEFAULT_SPLIT_WIDTH: f32 = 300.0;
+pub const DEFAULT_SPLIT_HEIGHT: f32 = 400.0;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
@@ -37,9 +37,9 @@ impl Default for State {
 	fn default() -> Self {
 		Self {
 			last_project: None,
-			file_tree_split_at: DEFAULT_HORIZONTAL_SPLIT_AT,
-			plugins_pane_split_at: DEFAULT_HORIZONTAL_SPLIT_AT,
-			bottom_pane_split_at: DEFAULT_VERTICAL_SPLIT_AT,
+			file_tree_split_at: DEFAULT_SPLIT_WIDTH,
+			plugins_pane_split_at: DEFAULT_SPLIT_WIDTH,
+			bottom_pane_split_at: DEFAULT_SPLIT_HEIGHT,
 			show_seconds: false,
 			metronome: false,
 			autoscroll: false,
