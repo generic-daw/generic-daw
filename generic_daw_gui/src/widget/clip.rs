@@ -144,10 +144,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				Inner::AudioClip(inner) => {
 					frames_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
 				}
-				Inner::MidiClip(..) => 1.0,
-				Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
-					frames_per_px(playlist.scale, self.transport)
-				}
+				Inner::MidiClip(..) | Inner::MidiRecording(..) => 1.0,
+				Inner::AudioRecording(..) => frames_per_px(playlist.scale, self.transport),
 			},
 			volume: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.volume,
