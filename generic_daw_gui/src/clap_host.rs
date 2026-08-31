@@ -15,7 +15,7 @@ pub use generic_daw_core::clap_host::*;
 use generic_daw_core::{Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
-	Center, Color, Element, Fill, Font, Subscription, Task, Theme, padding,
+	Center, Color, Element, Fill, Font, Subscription, Task, Theme,
 	theme::{Custom, palette::Seed},
 	time::every,
 	widget::{column, combo_box, container, row, rule, scrollable, space, text, text_input},
@@ -428,7 +428,7 @@ impl ClapHost {
 					.menu_style(menu_style)),
 				]
 				.align_y(Center),
-				container(rule::horizontal(1)).padding(padding::vertical(5)),
+				rule::horizontal(1),
 				scrollable(
 					row(plugin.params().map(|param| {
 						column![
@@ -472,6 +472,7 @@ impl ClapHost {
 				.style(scrollable_style)
 			]
 			.padding(10)
+			.spacing(5)
 			.into(),
 		)
 	}

@@ -1,5 +1,5 @@
 use crate::{
-	components::{labeled_icon_button, menu_entry},
+	components::{file_tree_entry, menu_entry},
 	file_tree::{Action, Message, file::File},
 	icons::{chevron_down, chevron_right, folder_open, folder_sync, hourglass, triangle_alert},
 	stylefns::{
@@ -137,12 +137,12 @@ impl Dir {
 				Virtualized::new(move || ContextMenu::new(
 					match &self.children {
 						Status::Unloaded =>
-							labeled_icon_button(chevron_right(), &*self.name, button::text)
+							file_tree_entry(chevron_right(), &*self.name, button::text)
 								.on_press(Message::Action(self.id, Action::ToggleOpen))
 								.into(),
 						Status::Loading | Status::Syncing { .. } =>
-							labeled_icon_button(hourglass(), &*self.name, button::text).into(),
-						Status::Loaded { open, .. } => labeled_icon_button(
+							file_tree_entry(hourglass(), &*self.name, button::text).into(),
+						Status::Loaded { open, .. } => file_tree_entry(
 							if *open {
 								chevron_down()
 							} else {
@@ -154,7 +154,7 @@ impl Dir {
 						.on_press(Message::Action(self.id, Action::ToggleOpen))
 						.into(),
 						Status::Errored(err) => Element::new(tooltip(
-							labeled_icon_button(triangle_alert(), &*self.name, button_warning_text)
+							file_tree_entry(triangle_alert(), &*self.name, button_warning_text)
 								.on_press(Message::Action(self.id, Action::ToggleOpen)),
 							container(value(err).line_height(1.0))
 								.padding(3)

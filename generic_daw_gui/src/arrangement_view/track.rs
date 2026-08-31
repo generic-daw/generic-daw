@@ -276,8 +276,7 @@ impl Track {
 				)
 				.on_press(Message::InputToggleAudioRecording(self.id)),
 			]
-			.spacing(5)
-			.height(Shrink),
+			.spacing(5),
 			row![
 				Menu::new(keyboard_music().size(13.0), move || scrollable(
 					row![
@@ -331,8 +330,7 @@ impl Track {
 				Self::arm_button(enabled, self.midi_consumer.is_some(), true)
 					.on_press(Message::InputToggleMidiRecording(self.id)),
 			]
-			.spacing(5)
-			.height(Shrink),
+			.spacing(5),
 		]
 		.spacing(5)
 		.into()

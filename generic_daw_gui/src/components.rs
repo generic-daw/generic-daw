@@ -12,16 +12,7 @@ use iced::{
 };
 use std::ops::RangeInclusive;
 
-pub fn icon_button<'a, Message: 'a>(
-	i: Icon,
-	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
-) -> Button<'a, Message> {
-	button(i.size(13.0))
-		.style(button_with_radius(style, 0))
-		.padding(1)
-}
-
-pub fn labeled_icon_button<'a, Message: 'a>(
+pub fn file_tree_entry<'a, Message: 'a>(
 	i: Icon,
 	l: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
@@ -42,17 +33,28 @@ pub fn labeled_icon_button<'a, Message: 'a>(
 	.style(button_with_radius(style, 0))
 }
 
+pub fn icon_button<'a, Message: 'a>(
+	i: Icon,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message> {
+	button(i.size(13.0))
+		.style(button_with_radius(style, 0))
+		.padding(1)
+}
+
 pub fn menu_entry<'a, Message: 'a>(
 	i: impl Into<Option<Icon>>,
 	l: impl text::IntoFragment<'a>,
 	r: impl text::IntoFragment<'a>,
 ) -> Button<'a, Message> {
-	button(row![
-		i.into()
-			.map(|i| container(i.size(TEXT_HEIGHT)).padding(padding::right(5))),
-		text(l).line_height(1.0),
-		right(text(r).line_height(1.0).style(text::secondary))
-	])
+	button(
+		row![
+			i.into().map(|i| i.size(TEXT_HEIGHT)),
+			text(l).line_height(1.0),
+			right(text(r).line_height(1.0).style(text::secondary))
+		]
+		.spacing(5),
+	)
 	.style(button_with_radius(button::text, 0))
 	.padding(5)
 }
@@ -119,7 +121,14 @@ pub fn text_icon_button<'a, Message: 'a>(
 	i: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message> {
-	button(container(text(i).size(13).line_height(1.0)).center(13))
-		.style(button_with_radius(style, 0))
-		.padding(1)
+	button(
+		text(i)
+			.size(13)
+			.line_height(1.0)
+			.width(13)
+			.height(13)
+			.center(),
+	)
+	.style(button_with_radius(style, 0))
+	.padding(1)
 }

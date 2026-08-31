@@ -1735,8 +1735,9 @@ impl ArrangementView {
 						.style(button_with_radius(button::primary, f32::INFINITY))
 						.on_press(Message::TrackAdd),
 				)
-				.padding(padding::right(5).top(5))
+				.padding(padding::right(5))
 			]
+			.spacing(5)
 			.align_x(Center),
 			Playlist::new(
 				&self.playlist,
@@ -1866,13 +1867,13 @@ impl ArrangementView {
 						.on_drag(Message::ChannelMove)
 						.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
 						.spacing(5)),
-						center_y(
-							button(plus().size(LINE_HEIGHT + 6.0))
-								.padding(5)
-								.style(button_with_radius(button::primary, f32::INFINITY))
-								.on_press(Message::ChannelAdd)
-						)
+						button(plus().size(LINE_HEIGHT + 6.0))
+							.padding(5)
+							.style(button_with_radius(button::primary, f32::INFINITY))
+							.on_press(Message::ChannelAdd)
 					]
+					.height(Fill)
+					.align_y(Center)
 					.spacing(5),
 				)
 				.id("mixer")
