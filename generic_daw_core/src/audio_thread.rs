@@ -156,9 +156,9 @@ pub enum MidiPatternAction {
 #[derive(Debug)]
 pub enum Update {
 	Recorded(usize),
-	Interrupted(SecondsTime),
-	AudioInterrupted(NodeId),
-	MidiInterrupted(NodeId),
+	RecordingInterrupted(SecondsTime),
+	AudioRecordingInterrupted(NodeId),
+	MidiRecordingInterrupted(NodeId),
 	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
@@ -404,7 +404,7 @@ impl AudioThread {
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
 		self.updates
-			.push(Update::Interrupted(self.transport().position));
+			.push(Update::RecordingInterrupted(self.transport().position));
 		self.updates.extend(acc);
 	}
 
@@ -477,13 +477,13 @@ impl AudioThread {
 				Message::TogglePlayback => {
 					self.transport_mut().playing ^= true;
 					let position = self.transport().position;
-					self.updates.push(Update::Interrupted(position));
+					self.updates.push(Update::RecordingInterrupted(position));
 				}
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
 				Message::Position(version, position) => {
 					self.transport_mut().version = version;
 					self.transport_mut().position = position;
-					self.updates.push(Update::Interrupted(position));
+					self.updates.push(Update::RecordingInterrupted(position));
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
 				Message::Reset => {
@@ -638,7 +638,7 @@ impl AudioThread {
 				self.updates.push(Update::Recorded(frames));
 				if looped.is_some() {
 					let position = self.transport().position;
-					self.updates.push(Update::Interrupted(position));
+					self.updates.push(Update::RecordingInterrupted(position));
 				}
 			}
 
@@ -812,7 +812,7 @@ impl AudioThread {
 		self.audio_graph
 			.for_each_node_mut(|node, _| node.collect_updates(&mut self.updates));
 		self.updates
-			.push(Update::Interrupted(self.transport().position));
+			.push(Update::RecordingInterrupted(self.transport().position));
 		self.updates.extend(acc);
 	}
 

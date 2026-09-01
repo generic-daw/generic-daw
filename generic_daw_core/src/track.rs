@@ -277,13 +277,13 @@ impl Track {
 				if (self.input.left != input.left || self.input.right != input.right)
 					&& self.audio_producer.is_some()
 				{
-					updates.push(Update::AudioInterrupted(self.channel.id()));
+					updates.push(Update::AudioRecordingInterrupted(self.channel.id()));
 				}
 
 				if self.input.midi != input.midi
 					&& let Some(producer) = &mut self.midi_producer
 				{
-					updates.push(Update::MidiInterrupted(self.channel.id()));
+					updates.push(Update::MidiRecordingInterrupted(self.channel.id()));
 
 					for (&(channel, key), &velocity) in &state.playing {
 						if input.midi & (1 << channel.as_int()) != 0
@@ -305,7 +305,7 @@ impl Track {
 			NodeAction::InputSetAudioRecording(producer) => {
 				self.audio_producer = producer;
 				if self.audio_producer.is_none() {
-					updates.push(Update::AudioInterrupted(self.channel.id()));
+					updates.push(Update::AudioRecordingInterrupted(self.channel.id()));
 				}
 			}
 			NodeAction::InputSetMidiRecording(producer) => {
@@ -325,7 +325,7 @@ impl Track {
 						}
 					}
 				} else {
-					updates.push(Update::MidiInterrupted(self.channel.id()));
+					updates.push(Update::MidiRecordingInterrupted(self.channel.id()));
 				}
 			}
 			action => self.channel.apply(action),

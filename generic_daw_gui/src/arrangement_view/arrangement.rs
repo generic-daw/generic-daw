@@ -212,13 +212,13 @@ impl Arrangement {
 						);
 					}
 				}
-				Update::Interrupted(position) => {
-					self.audio_interrupted(None);
-					self.midi_interrupted(None);
+				Update::RecordingInterrupted(position) => {
+					self.audio_recording_interrupted(None);
+					self.midi_recording_interrupted(None);
 					self.transport.position = position;
 				}
-				Update::AudioInterrupted(id) => self.audio_interrupted(id),
-				Update::MidiInterrupted(id) => self.midi_interrupted(id),
+				Update::AudioRecordingInterrupted(id) => self.audio_recording_interrupted(id),
+				Update::MidiRecordingInterrupted(id) => self.midi_recording_interrupted(id),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -258,7 +258,7 @@ impl Arrangement {
 		messages
 	}
 
-	fn audio_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
+	fn audio_recording_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
 		let id = id.into();
 
 		for track in 0..self.tracks.len() {
@@ -274,7 +274,7 @@ impl Arrangement {
 		}
 	}
 
-	fn midi_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
+	fn midi_recording_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
 		let id = id.into();
 
 		for track in 0..self.tracks.len() {
