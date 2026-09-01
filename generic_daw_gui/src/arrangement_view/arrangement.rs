@@ -1303,7 +1303,7 @@ impl Arrangement {
 			)
 		});
 
-		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+		let (progress_sender, progress_receiver) = smol::channel::bounded(1);
 		let mut writer = WavWriter::new(
 			BufWriter::new(File::create(path).unwrap()),
 			WavSpec {
@@ -1332,7 +1332,7 @@ impl Arrangement {
 							writer.write_sample(r).unwrap();
 						}
 					},
-					|f| progress_sender.try_send(f).unwrap(),
+					|f| _ = progress_sender.force_send(f).unwrap(),
 				);
 				p_sender.send((PullSlot::Full(processor), pool)).unwrap();
 			}))
@@ -1378,7 +1378,7 @@ impl Arrangement {
 			return Task::done(daw::Message::RenderedFile);
 		};
 
-		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+		let (progress_sender, progress_receiver) = smol::channel::bounded(1);
 
 		let (p_sender, receiver) = oneshot::channel();
 		let p_receiver = self.request_processor_and_pool(PullSlot::Empty(receiver));
@@ -1391,7 +1391,7 @@ impl Arrangement {
 					node,
 					beat_range,
 					|samples| recording.recorded(samples),
-					|f| progress_sender.try_send(f).unwrap(),
+					|f| _ = progress_sender.force_send(f).unwrap(),
 				);
 				p_sender.send((PullSlot::Full(processor), pool)).unwrap();
 
