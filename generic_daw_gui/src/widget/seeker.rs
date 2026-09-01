@@ -189,7 +189,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				break 'block clamped;
 			};
 
-			if state.last_autoscroll.replace(now) == Some(now) {
+			let Some(last_frame) = state.last_autoscroll.replace(now) else {
+				break 'block clamped;
+			};
+
+			if last_frame == now {
 				break 'block clamped;
 			}
 
@@ -199,16 +203,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					0.0
 				} else {
 					let autoscroll_start = *state.horizontal_autoscroll_start.get_or_insert(now);
-					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
-					20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
+					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().powf(1.5)
+						- (last_frame - autoscroll_start).as_secs_f32().powf(1.5);
+					1000.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
 				},
 				if !shell.is_event_captured() || cursor.y == clamped.y {
 					state.vertical_autoscroll_start = None;
 					0.0
 				} else {
 					let autoscroll_start = *state.vertical_autoscroll_start.get_or_insert(now);
-					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
-					20.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
+					let autoscroll_amt = (now - autoscroll_start).as_secs_f32().powf(1.5)
+						- (last_frame - autoscroll_start).as_secs_f32().powf(1.5);
+					1000.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
 				},
 			);
 
