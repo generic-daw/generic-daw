@@ -1,6 +1,6 @@
 use crate::{
 	file_tree::Message,
-	icons::{file, file_headphone, file_music, file_play},
+	icons::{file, file_headphone, file_music, file_play, file_video_camera},
 	widget::LINE_HEIGHT,
 };
 use generic_daw_widget::virtualized::Virtualized;
@@ -8,7 +8,7 @@ use iced::{
 	Element, Fill,
 	widget::{button, mouse_area, row, text},
 };
-use infer::{audio::is_midi, is_audio};
+use infer::{audio::is_midi, is_audio, is_video};
 use smol::io::AsyncReadExt as _;
 use std::{io, path::Path, sync::Arc};
 
@@ -16,6 +16,7 @@ use std::{io, path::Path, sync::Arc};
 pub enum FileKind {
 	Midi,
 	Audio,
+	Video,
 	Project,
 	#[default]
 	Unknown,
@@ -51,6 +52,7 @@ impl File {
 							match self.kind {
 								FileKind::Midi => file_music(),
 								FileKind::Audio => file_headphone(),
+								FileKind::Video => file_video_camera(),
 								FileKind::Project => file_play(),
 								FileKind::Unknown => file(),
 							},
@@ -83,13 +85,15 @@ impl File {
 
 async fn file_kind(path: &Path) -> io::Result<FileKind> {
 	let mut file = smol::fs::File::open(path).await?;
-	let limit = file.metadata().await?.len().min(36) as usize;
-	let buf = &mut [0; 36][..limit];
+	let limit = file.metadata().await?.len().min(257) as usize;
+	let buf = &mut [0; 257][..limit];
 	file.read_exact(buf).await?;
 	Ok(if is_midi(buf) {
 		FileKind::Midi
 	} else if is_audio(buf) {
 		FileKind::Audio
+	} else if is_video(buf) {
+		FileKind::Video
 	} else if buf.get(..3) == Some(b"gdp") {
 		FileKind::Project
 	} else {
