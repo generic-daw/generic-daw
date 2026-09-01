@@ -129,7 +129,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		self.needs_reset = false;
 
-		audio.copy_from_slice(&self.output_audio(node)[..audio.len()]);
+		audio.copy_from_slice(&self.entry_mut(node).buffers().audio[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
@@ -268,40 +268,58 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph.get_mut(&node).unwrap()
 	}
 
-	pub fn for_node(&mut self, node: NodeId, f: impl FnOnce(&Node, &[[f32; 2]])) {
+	pub fn for_node(
+		&mut self,
+		node: NodeId,
+		f: impl FnOnce(&Node, &Node::State, &[[f32; 2]], &[Node::Event]),
+	) {
 		let entry = self.graph.get_mut(&node).unwrap();
+		let node = &*entry.node_uncontended();
+		let buffers = &*entry.read_buffers_uncontended();
+		f(node, &self.state, &buffers.audio, &buffers.events);
+	}
+
+	pub fn for_node_mut(
+		&mut self,
+		node: NodeId,
+		f: impl FnOnce(&mut Node, &mut Node::State, &mut [[f32; 2]], &mut [Node::Event]),
+	) {
+		let entry = self.graph.get_mut(&node).unwrap();
+		let node = &mut *entry.node_uncontended();
+		let buffers = &mut *entry.write_buffers_uncontended();
 		f(
-			&*entry.node_uncontended(),
-			&entry.read_buffers_uncontended().audio,
+			node,
+			&mut self.state,
+			&mut buffers.audio,
+			&mut buffers.events,
 		);
 	}
 
-	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node, &mut Node::State)) {
-		f(self.graph.get_mut(&node).unwrap().node(), &mut self.state);
+	pub fn for_each_node(
+		&mut self,
+		mut f: impl FnMut(&Node, &Node::State, &[[f32; 2]], &[Node::Event]),
+	) {
+		for entry in self.graph.values_mut() {
+			let node = &*entry.node_uncontended();
+			let buffers = &*entry.read_buffers_uncontended();
+			f(node, &self.state, &buffers.audio, &buffers.events);
+		}
 	}
 
-	pub fn for_each_node(&mut self, mut f: impl FnMut(&Node, &[[f32; 2]], &[Node::Event])) {
+	pub fn for_each_node_mut(
+		&mut self,
+		mut f: impl FnMut(&mut Node, &mut Node::State, &mut [[f32; 2]], &mut [Node::Event]),
+	) {
 		for entry in self.graph.values_mut() {
+			let node = &mut *entry.node_uncontended();
+			let buffers = &mut *entry.write_buffers_uncontended();
 			f(
-				&*entry.node_uncontended(),
-				&entry.read_buffers_uncontended().audio,
-				&entry.read_buffers_uncontended().events,
+				node,
+				&mut self.state,
+				&mut buffers.audio,
+				&mut buffers.events,
 			);
 		}
-	}
-
-	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node, &mut Node::State)) {
-		for entry in self.graph.values_mut() {
-			f(entry.node(), &mut self.state);
-		}
-	}
-
-	pub fn output_audio(&mut self, node: NodeId) -> &mut [[f32; 2]] {
-		&mut self.entry_mut(node).buffers().audio
-	}
-
-	pub fn output_events(&mut self, node: NodeId) -> &mut [Node::Event] {
-		&mut self.entry_mut(node).buffers().events
 	}
 
 	pub fn latency(&self, node: NodeId) -> usize {

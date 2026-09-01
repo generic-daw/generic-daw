@@ -122,8 +122,8 @@ pub enum Message {
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleActive(NodeId, usize),
 
-	SampleLoaded(Option<(Box<SamplePair>, Option<usize>, BeatTime)>),
-	MidiPatternLoaded(Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>),
+	SampleLoaded(Option<Box<SamplePair>>),
+	MidiPatternLoaded(Option<Box<MidiPatternPair>>),
 	AudioClipAdd(SampleId, Option<usize>, BeatTime),
 	MidiClipAdd(MidiPatternId, Option<usize>, BeatTime),
 
@@ -449,20 +449,14 @@ impl ArrangementView {
 			}
 			Message::SampleLoaded(loaded) => {
 				self.loading -= 1;
-
-				if let Some((sample, track, pos)) = loaded {
-					let id = sample.gui.id;
+				if let Some(sample) = loaded {
 					self.arrangement.add_sample(*sample);
-					return self.update(Message::AudioClipAdd(id, track, pos), config, state);
 				}
 			}
 			Message::MidiPatternLoaded(loaded) => {
 				self.loading -= 1;
-
-				if let Some((pattern, track, pos)) = loaded {
-					let id = pattern.gui.id;
+				if let Some(pattern) = loaded {
 					self.arrangement.add_midi_pattern(*pattern);
-					return self.update(Message::MidiClipAdd(id, track, pos), config, state);
 				}
 			}
 			Message::AudioClipAdd(id, track, pos) => {
@@ -1087,11 +1081,17 @@ impl ArrangementView {
 						self.loading += 1;
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
-							Message::MidiPatternLoaded(
-								MidiPatternPair::from_midi(&path, &transport)
-									.map(|pair| (Box::new(pair), track, pos)),
-							)
+							MidiPatternPair::from_midi(&path, &transport)
 						}))
+						.then(move |pattern| {
+							if let Some(pattern) = pattern {
+								let id = pattern.gui.id;
+								Task::done(Message::MidiPatternLoaded(Some(Box::new(pattern))))
+									.chain(Task::done(Message::MidiClipAdd(id, track, pos)))
+							} else {
+								Task::done(Message::MidiPatternLoaded(None))
+							}
+						})
 						.into()
 					} else if let Some(sample) = self
 						.arrangement
@@ -1102,24 +1102,30 @@ impl ArrangementView {
 						self.update(Message::AudioClipAdd(sample.id, track, pos), config, state)
 					} else {
 						self.loading += 1;
-						Task::future(unblock(move || {
-							Message::SampleLoaded(
-								SamplePair::new(path).map(|pair| (Box::new(pair), track, pos)),
-							)
-						}))
-						.into()
+						Task::future(unblock(|| SamplePair::new(path)))
+							.then(move |sample| {
+								if let Some(sample) = sample {
+									let id = sample.gui.id;
+									Task::done(Message::SampleLoaded(Some(Box::new(sample))))
+										.chain(Task::done(Message::AudioClipAdd(id, track, pos)))
+								} else {
+									Task::done(Message::SampleLoaded(None))
+								}
+							})
+							.into()
 					}
 				} else {
 					self.loading += 1;
-					self.update(
-						Message::MidiPatternLoaded(Some((
-							Box::new(MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern")),
-							track,
-							pos,
-						))),
-						config,
-						state,
-					)
+					let pattern = MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern");
+					let id = pattern.gui.id;
+					Action::batch([
+						self.update(
+							Message::MidiPatternLoaded(Some(Box::new(pattern))),
+							config,
+							state,
+						),
+						self.update(Message::MidiClipAdd(id, track, pos), config, state),
+					])
 				};
 			}
 			playlist::Action::Open(track, clip) => {

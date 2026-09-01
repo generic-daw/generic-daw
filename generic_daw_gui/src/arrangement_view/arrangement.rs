@@ -872,32 +872,36 @@ impl Arrangement {
 		self.send(Message::NodeDisconnect(from, to));
 	}
 
+	pub fn gc(&mut self, clip: impl Into<Clip>) {
+		match clip.into() {
+			Clip::Audio(clip) => self.gc_sample(clip.sample),
+			Clip::Midi(clip) => self.gc_midi_pattern(clip.pattern),
+		}
+	}
+
+	fn gc_sample(&mut self, sample: SampleId) {
+		if self.samples[&sample].refs == 0 {
+			self.samples.remove(&sample);
+			self.send(Message::SampleRemove(
+				sample,
+				Box::new(MaybeUninit::uninit()),
+			));
+		}
+	}
+
+	fn gc_midi_pattern(&mut self, pattern: MidiPatternId) {
+		if self.midi_patterns[&pattern].refs == 0 {
+			self.midi_patterns.remove(&pattern);
+			self.send(Message::MidiPatternRemove(
+				pattern,
+				Box::new(MaybeUninit::uninit()),
+			));
+		}
+	}
+
 	pub fn add_sample(&mut self, sample: SamplePair) {
 		self.samples.insert(sample.gui.id, sample.gui);
 		self.send(Message::SampleAdd(sample.core));
-	}
-
-	pub fn gc(&mut self, clip: impl Into<Clip>) {
-		match clip.into() {
-			Clip::Audio(clip) => {
-				if self.samples[&clip.sample].refs == 0 {
-					self.samples.remove(&clip.sample);
-					self.send(Message::SampleRemove(
-						clip.sample,
-						Box::new(MaybeUninit::uninit()),
-					));
-				}
-			}
-			Clip::Midi(clip) => {
-				if self.midi_patterns[&clip.pattern].refs == 0 {
-					self.midi_patterns.remove(&clip.pattern);
-					self.send(Message::MidiPatternRemove(
-						clip.pattern,
-						Box::new(MaybeUninit::uninit()),
-					));
-				}
-			}
-		}
 	}
 
 	pub fn add_midi_pattern(&mut self, pattern: MidiPatternPair) {
