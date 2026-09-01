@@ -95,7 +95,11 @@ impl Channel {
 				}
 				Some(Some(processor)) => processor,
 				Some(None) => continue,
-				None if state.render_mode == RenderMode::Realtime => continue,
+				None if state.render_mode == RenderMode::Realtime => {
+					audio.fill([0.0; 2]);
+					events.clear();
+					continue;
+				}
 				None => match plugin.processor.recv() {
 					Some(Some(processor)) => processor,
 					_ => continue,
