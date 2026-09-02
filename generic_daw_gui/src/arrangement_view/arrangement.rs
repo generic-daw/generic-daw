@@ -15,10 +15,10 @@ use crate::{
 	daw::{self, FREEZES_DIR, format_now},
 };
 use generic_daw_core::{
-	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
-	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool, TimedMidiAction, Transport,
-	Update, Version, build_streams,
+	AudioClip, AudioPreview, AudioPreviewId, AudioThread, Batch, Channels, Clip, ClipId, Message,
+	MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId,
+	NodeImpl as _, PanMode, PluginId, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool,
+	TimedMidiAction, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -56,6 +56,7 @@ pub struct Arrangement {
 	samples: BTreeMap<SampleId, Sample>,
 	midi_patterns: BTreeMap<MidiPatternId, MidiPattern>,
 	solo: Option<NodeId>,
+	audio_preview: Option<(AudioPreviewId, SampleId)>,
 
 	tracks: Vec<Track>,
 	channels: Vec<Channel>,
@@ -107,6 +108,7 @@ impl Arrangement {
 				samples: BTreeMap::new(),
 				midi_patterns: BTreeMap::new(),
 				solo: None,
+				audio_preview: None,
 
 				tracks: Vec::new(),
 				channels: Vec::new(),
@@ -219,6 +221,15 @@ impl Arrangement {
 				}
 				Update::AudioRecordingInterrupted(id) => self.audio_recording_interrupted(id),
 				Update::MidiRecordingInterrupted(id) => self.midi_recording_interrupted(id),
+				Update::AudioPreviewEnded(ended) => {
+					if let Some((id, sample)) = self.audio_preview
+						&& id == ended
+					{
+						self.audio_preview = None;
+						self.samples.get_mut(&sample).unwrap().refs -= 1;
+						self.gc_sample(sample);
+					}
+				}
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -494,6 +505,32 @@ impl Arrangement {
 		self.node_action(id, NodeAction::PluginParamChanged(index, clap_id, value));
 	}
 
+	pub fn audio_preview(&self) -> Option<SampleId> {
+		self.audio_preview.map(|(_, sample)| sample)
+	}
+
+	pub fn set_audio_preview(&mut self, sample: Option<SampleId>) {
+		if sample.is_none() && self.audio_preview.is_none() {
+			return;
+		}
+
+		if let Some(sample) = sample {
+			self.samples.get_mut(&sample).unwrap().refs += 1;
+		}
+
+		let audio_preview = sample.map(AudioPreview::new);
+		self.send(Message::AudioPreview(audio_preview));
+
+		if let Some((_, sample)) = self.audio_preview {
+			self.samples.get_mut(&sample).unwrap().refs -= 1;
+			self.gc_sample(sample);
+		}
+
+		self.audio_preview = audio_preview
+			.map(|audio_preview| audio_preview.id())
+			.zip(sample);
+	}
+
 	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {
 		if self.transport.bpm != bpm {
 			self.transport.bpm = bpm;
@@ -509,6 +546,8 @@ impl Arrangement {
 	}
 
 	pub fn stop(&mut self) {
+		self.set_audio_preview(None);
+
 		if self.transport.playing {
 			self.toggle_playback();
 		}

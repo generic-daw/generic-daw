@@ -130,7 +130,7 @@ impl Dir {
 		}
 	}
 
-	pub fn view(&self) -> (Element<'_, Message>, f32) {
+	pub fn view<'a>(&'a self, audio_preview: Option<&'a Path>) -> (Element<'a, Message>, f32) {
 		let mut height = 0.0;
 		(
 			column![
@@ -200,8 +200,8 @@ impl Dir {
 				{
 					let children = column(
 						dirs.iter()
-							.map(Self::view)
-							.chain(files.iter().map(File::view))
+							.map(|dir| dir.view(audio_preview))
+							.chain(files.iter().map(|file| file.view(audio_preview)))
 							.map(|(e, h)| {
 								height += h;
 								e

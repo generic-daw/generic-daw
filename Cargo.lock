@@ -1931,9 +1931,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.21"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7955dfc218a8afb29dfeffd540e3a6e96baeb94fe7138228dd7cc6937fbbf96"
+checksum = "8d8f1ea3f21fd3405dcaf6c9b5c1630af9afc422d9073ea39c5f6d6c772e08ed"
 dependencies = [
  "bitflags 2.13.1",
  "libc",
@@ -2034,9 +2034,9 @@ dependencies = [
 
 [[package]]
 name = "lyon_algorithms"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8575c0d003ae459399623c4def180c63b77f343b1a7fee64f249b349e7699a31"
+checksum = "cdfa8785f95e57914ddb35e3b59994aeba6f5e79e9cfd03da1c269f010f36009"
 dependencies = [
  "lyon_path",
  "num-traits",
@@ -2065,9 +2065,9 @@ dependencies = [
 
 [[package]]
 name = "lyon_tessellation"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e43b7e44161571868f5c931d12583592c223c5583eef86b08aa02b7048a3552"
+checksum = "dabea159dc6eea9171a541b458134b70ca95e3162d068132b2b3b9bc01aad06e"
 dependencies = [
  "float_next_after",
  "lyon_path",
@@ -2627,9 +2627,9 @@ checksum = "cfe21416a02c693fb9f980befcb230ecc70b0b3d1cc4abf88b9675c4c1457f0c"
 
 [[package]]
 name = "open"
-version = "5.4.2"
+version = "5.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade3be4664bc1ef537ce133015f04c176b737815c2ba9fd60edf212d6e90dd55"
+checksum = "7c603ab8300cf18bc3b14146b19fe3dfcc4843ae5a400cd0e7a30b95aa366634"
 dependencies = [
  "is-wsl",
  "libc",
@@ -3261,9 +3261,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.15.2"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 
 [[package]]
 name = "smol"

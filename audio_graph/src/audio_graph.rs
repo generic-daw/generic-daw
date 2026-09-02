@@ -268,22 +268,22 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph.get_mut(&node).unwrap()
 	}
 
-	pub fn for_node(
+	pub fn for_node<T>(
 		&mut self,
 		node: NodeId,
-		f: impl FnOnce(&Node, &Node::State, &[[f32; 2]], &[Node::Event]),
-	) {
+		f: impl FnOnce(&Node, &Node::State, &[[f32; 2]], &[Node::Event]) -> T,
+	) -> T {
 		let entry = self.graph.get_mut(&node).unwrap();
 		let node = &*entry.node_uncontended();
 		let buffers = &*entry.read_buffers_uncontended();
-		f(node, &self.state, &buffers.audio, &buffers.events);
+		f(node, &self.state, &buffers.audio, &buffers.events)
 	}
 
-	pub fn for_node_mut(
+	pub fn for_node_mut<T>(
 		&mut self,
 		node: NodeId,
-		f: impl FnOnce(&mut Node, &mut Node::State, &mut [[f32; 2]], &mut [Node::Event]),
-	) {
+		f: impl FnOnce(&mut Node, &mut Node::State, &mut [[f32; 2]], &mut [Node::Event]) -> T,
+	) -> T {
 		let entry = self.graph.get_mut(&node).unwrap();
 		let node = &mut *entry.node_uncontended();
 		let buffers = &mut *entry.write_buffers_uncontended();
@@ -292,7 +292,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			&mut self.state,
 			&mut buffers.audio,
 			&mut buffers.events,
-		);
+		)
 	}
 
 	pub fn for_each_node(

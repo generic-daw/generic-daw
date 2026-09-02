@@ -11,7 +11,7 @@ pub struct Virtualized<'a, Message> {
 	size: Size<Length>,
 }
 
-impl<'a, Message: 'static> Virtualized<'a, Message> {
+impl<'a, Message> Virtualized<'a, Message> {
 	pub fn new(f: impl Fn() -> Element<'a, Message, Theme, Renderer> + 'a) -> Self {
 		let cache = f();
 		Self {

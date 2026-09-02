@@ -28,8 +28,10 @@ use std::{
 };
 use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
+unique_id!(audio_preview_id);
 unique_id!(version);
 
+pub use audio_preview_id::Id as AudioPreviewId;
 pub use version::Id as Version;
 
 static ON_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/on_bar_click.pcm");
@@ -52,6 +54,7 @@ pub enum Message {
 	NodeDisconnect(NodeId, NodeId),
 	NodeToggleKind(NodeId),
 
+	AudioPreview(Option<AudioPreview>),
 	Bpm(NonZero<u16>),
 	Numerator(NonZero<u8>),
 	TogglePlayback,
@@ -159,6 +162,7 @@ pub enum Update {
 	RecordingInterrupted(SecondsTime),
 	AudioRecordingInterrupted(NodeId),
 	MidiRecordingInterrupted(NodeId),
+	AudioPreviewEnded(AudioPreviewId),
 	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
@@ -308,10 +312,34 @@ impl WorkList for Inject<'_> {
 	}
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct AudioPreview {
+	id: AudioPreviewId,
+	sample: SampleId,
+	cursor: SecondsTime,
+}
+
+impl AudioPreview {
+	#[must_use]
+	pub fn new(sample: SampleId) -> Self {
+		Self {
+			id: AudioPreviewId::unique(),
+			sample,
+			cursor: SecondsTime::ZERO,
+		}
+	}
+
+	#[must_use]
+	pub fn id(&self) -> AudioPreviewId {
+		self.id
+	}
+}
+
 #[derive(Debug)]
 pub struct AudioThread {
 	audio_graph: AudioGraph<Node>,
 	master: NodeId,
+	audio_preview: Option<AudioPreview>,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	needs_update: bool,
@@ -354,6 +382,7 @@ impl AudioThread {
 		let processor = Self {
 			audio_graph,
 			master,
+			audio_preview: None,
 			producer,
 			consumer,
 			needs_update: false,
@@ -472,6 +501,7 @@ impl AudioThread {
 				Message::NodeToggleKind(node) => self
 					.audio_graph
 					.for_node_mut(node, |node, state, _, _| node.toggle_kind(&state.transport)),
+				Message::AudioPreview(audio_preview) => self.audio_preview = audio_preview,
 				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => {
@@ -579,6 +609,7 @@ impl AudioThread {
 
 			self.audio_graph.process_all(pool, frames);
 			self.metronome(frames);
+			self.audio_preview(frames);
 
 			let out_len = usize::from(self.transport().output_channels.get()) * frames;
 			self.write_out(midi_output.as_deref_mut(), &mut audio_output[..out_len]);
@@ -692,6 +723,41 @@ impl AudioThread {
 							audio[1] += r;
 						});
 				});
+		}
+	}
+
+	fn audio_preview(&mut self, frames: usize) {
+		let Some(audio_preview) = &mut self.audio_preview else {
+			return;
+		};
+
+		let has_ended = self
+			.audio_graph
+			.for_node_mut(self.master, |_, state, audio, _| {
+				let sample = &state.samples[&audio_preview.sample];
+
+				let play_pos = audio_preview.cursor.to_frames(&state.transport);
+				let len = sample.len(&state.transport).to_frames(&state.transport);
+
+				let resample_ratio = 1.0 / sample.resample_ratio(&state.transport);
+
+				resample_cubic(&sample.samples, resample_ratio, play_pos)
+					.take(len - play_pos)
+					.zip(&mut audio[..frames])
+					.for_each(|([l, r], audio)| {
+						audio[0] += l;
+						audio[1] += r;
+					});
+
+				audio_preview.cursor += SecondsTime::from_frames(frames, &state.transport);
+
+				play_pos + frames >= len
+			});
+
+		if has_ended {
+			self.updates
+				.push(Update::AudioPreviewEnded(audio_preview.id()));
+			self.audio_preview = None;
 		}
 	}
 

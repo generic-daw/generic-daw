@@ -2,7 +2,7 @@ use crate::stylefns::{scrollable_style, scrollable_with_container, weakest_borde
 use dir::{Dir, DirId};
 use file::File;
 use iced::{
-	Element, Fill, Task, padding,
+	Element, Fill, Task,
 	widget::{column, scrollable},
 };
 use std::{path::Path, sync::Arc};
@@ -39,18 +39,16 @@ impl FileTree {
 		}
 	}
 
-	pub fn view(&self) -> Element<'_, Message> {
-		scrollable(
-			column(self.dirs.iter().map(|dir| dir.view().0)).padding(padding::all(1).left(0)),
-		)
-		.width(Fill)
-		.height(Fill)
-		.spacing(5)
-		.style(scrollable_with_container(
-			scrollable_style,
-			weakest_bordered_box,
-		))
-		.into()
+	pub fn view<'a>(&'a self, audio_preview: Option<&'a Path>) -> Element<'a, Message> {
+		scrollable(column(self.dirs.iter().map(|dir| dir.view(audio_preview).0)).padding(1))
+			.width(Fill)
+			.height(Fill)
+			.spacing(5)
+			.style(scrollable_with_container(
+				scrollable_style,
+				weakest_bordered_box,
+			))
+			.into()
 	}
 
 	pub fn update(&mut self, id: DirId, action: Action) -> Option<Task<Message>> {

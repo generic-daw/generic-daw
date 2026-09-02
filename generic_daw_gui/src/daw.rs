@@ -975,7 +975,12 @@ impl Daw {
 				}
 				self.state.write();
 			}
-			Message::OnFileTreeDragEnd => self.state.write(),
+			Message::OnFileTreeDragEnd => {
+				if self.state.file_tree_split_at == 0.0 {
+					self.arrangement_view.arrangement.set_audio_preview(None);
+				}
+				self.state.write();
+			}
 			Message::OnFileTreeDoubleClick => {
 				return Task::batch([
 					self.update(Message::OnFileTreeDrag(DEFAULT_SPLIT_WIDTH)),
@@ -1061,9 +1066,17 @@ impl Daw {
 				}
 			}
 			file_tree::Message::OpenFile(file, kind) => {
-				if kind == FileKind::Project {
-					return self.update(Message::OpenFile(file));
-				}
+				return if kind == FileKind::Project {
+					self.update(Message::OpenFile(file))
+				} else {
+					let project = self.project;
+					self.arrangement_view
+						.preview_file(file, &self.config, &mut self.state)
+						.handle(
+							move |message| Message::Arrangement(project, message),
+							|instruction| self.handle_instruction(instruction),
+						)
+				};
 			}
 			file_tree::Message::OpenDir(dir) => {
 				if let Err(err) = open::that_detached(&*dir) {
@@ -1133,7 +1146,7 @@ impl Daw {
 								},
 								0
 							))
-							.padding(padding::all(5).left(4))
+							.padding(5)
 							.on_press(Message::ToggleMetronome),
 						button(
 							mouse_area(container(gavel()).padding(5)).on_press(Message::TappedBpm)
@@ -1251,7 +1264,16 @@ impl Daw {
 				.spacing(10),
 				vertical_split(
 					(self.state.file_tree_split_at != 0.0).then(|| stack![
-						self.file_tree.view().map(Message::FileTree),
+						self.file_tree
+							.view(
+								self.arrangement_view
+									.arrangement
+									.audio_preview()
+									.map(|sample| &*self.arrangement_view.arrangement.samples()
+										[&sample]
+										.path)
+							)
+							.map(Message::FileTree),
 						self.files_hovered.then(|| center(plus().size(40.0))
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					]

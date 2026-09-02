@@ -99,6 +99,8 @@ pub enum Message {
 	Disconnect(NodeId, NodeId),
 	ToggleKind(NodeId),
 
+	AudioPreview(SampleId),
+
 	ChannelAdd,
 	ChannelInsert(NodeId),
 	ChannelRemove(NodeId),
@@ -160,7 +162,7 @@ pub enum Message {
 	Join(Tab),
 	SelectAll(Tab),
 	SelectInverse(Tab),
-	UnselectAll(Tab),
+	Escape(Tab),
 	ToggleEnabled(Tab),
 	ToggleSolo(Tab),
 	Duplicate(Tab),
@@ -271,6 +273,7 @@ impl ArrangementView {
 					self.update_selection(|c| update_selection_delete_track(c, track));
 				}
 			}
+			Message::AudioPreview(sample) => self.arrangement.set_audio_preview(Some(sample)),
 			Message::ChannelAdd => {
 				self.selected = self.arrangement.add_channel();
 				return Action::batch([
@@ -849,7 +852,10 @@ impl ArrangementView {
 					}
 				}
 			},
-			Message::UnselectAll(tab) => self.unselect_all(tab),
+			Message::Escape(tab) => {
+				self.arrangement.set_audio_preview(None);
+				self.unselect_all(tab);
+			}
 			Message::ToggleEnabled(tab) => match tab {
 				Tab::Playlist => {
 					if self.arrangement.node(self.selected).ty == NodeType::Track {
@@ -2466,7 +2472,7 @@ impl ArrangementView {
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) if !repeat => Some(Message::Delete),
 				keyboard::Key::Named(keyboard::key::Named::Escape) if !repeat => {
-					Some(Message::UnselectAll)
+					Some(Message::Escape)
 				}
 				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::ArrowUp),
 				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::ArrowDown),
@@ -2571,6 +2577,35 @@ impl ArrangementView {
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
 		self.playlist.get_mut().status = playlist::Status::Hovering(file, kind, None);
+	}
+
+	pub fn preview_file(
+		&mut self,
+		path: Arc<Path>,
+		config: &Config,
+		state: &mut State,
+	) -> Action<daw::Instruction, Message> {
+		if let Some(sample) = self
+			.arrangement
+			.samples()
+			.values()
+			.find(|sample| sample.path == path)
+		{
+			self.update(Message::AudioPreview(sample.id), config, state)
+		} else {
+			self.loading += 1;
+			Task::future(unblock(|| SamplePair::new(path)))
+				.then(move |sample| {
+					if let Some(sample) = sample {
+						let id = sample.gui.id;
+						Task::done(Message::SampleLoaded(Some(Box::new(sample))))
+							.chain(Task::done(Message::AudioPreview(id)))
+					} else {
+						Task::done(Message::SampleLoaded(None))
+					}
+				})
+				.into()
+		}
 	}
 
 	pub fn finish(&mut self, tab: Tab) {

@@ -1,9 +1,9 @@
 use crate::{
 	file_tree::Message,
-	icons::{file, file_headphone, file_music, file_play, file_video_camera},
+	icons::{file, file_headphone, file_music, file_play, file_video_camera, play},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_widget::virtualized::Virtualized;
+use generic_daw_widget::{stateful::Stateful, virtualized::Virtualized};
 use iced::{
 	Element, Fill,
 	widget::{button, mouse_area, row, text},
@@ -34,39 +34,64 @@ impl File {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
 
-		let icon = file_kind(path).await.unwrap_or_default();
+		let kind = file_kind(path).await.unwrap_or_default();
 
 		Self {
 			path: path.into(),
 			name: name.into(),
-			kind: icon,
+			kind,
 		}
 	}
 
-	pub fn view(&self) -> (Element<'_, Message>, f32) {
+	pub fn view<'a>(&'a self, audio_preview: Option<&'a Path>) -> (Element<'a, Message>, f32) {
+		#[derive(Clone)]
+		enum Event {
+			Press,
+			Release,
+			Exit,
+		}
+
 		(
-			Virtualized::new(|| {
-				button(
-					mouse_area(
-						row![
-							match self.kind {
-								FileKind::Midi => file_music(),
-								FileKind::Audio => file_headphone(),
-								FileKind::Video => file_video_camera(),
-								FileKind::Project => file_play(),
-								FileKind::Unknown => file(),
-							},
-							text(&*self.name)
-								.wrapping(text::Wrapping::None)
-								.ellipsis(text::Ellipsis::End)
-						]
-						.padding(1)
-						.spacing(2)
-						.width(Fill),
-					)
-					.on_press(Message::DragFile(self.path.clone(), self.kind))
-					.on_double_click(Message::OpenFile(self.path.clone(), self.kind)),
-				)
+			Virtualized::new(move || {
+				button(Stateful::new(
+					|state, event| match event {
+						Event::Press => {
+							*state = true;
+							None
+						}
+						Event::Release => std::mem::take(state)
+							.then(|| Message::OpenFile(self.path.clone(), self.kind)),
+						Event::Exit => std::mem::take(state)
+							.then(|| Message::DragFile(self.path.clone(), self.kind)),
+					},
+					move |_| {
+						mouse_area(
+							row![
+								if Some(&*self.path) == audio_preview {
+									play()
+								} else {
+									match self.kind {
+										FileKind::Midi => file_music(),
+										FileKind::Audio => file_headphone(),
+										FileKind::Video => file_video_camera(),
+										FileKind::Project => file_play(),
+										FileKind::Unknown => file(),
+									}
+								},
+								text(&*self.name)
+									.wrapping(text::Wrapping::None)
+									.ellipsis(text::Ellipsis::End)
+							]
+							.padding(1)
+							.spacing(2)
+							.width(Fill),
+						)
+						.on_press(Event::Press)
+						.on_release(Event::Release)
+						.on_exit(Event::Exit)
+						.into()
+					},
+				))
 				.padding(0)
 				.height(LINE_HEIGHT + 2.0)
 				.style(button::text)
