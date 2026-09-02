@@ -510,7 +510,11 @@ impl Arrangement {
 	}
 
 	pub fn set_audio_preview(&mut self, sample: Option<SampleId>) {
-		if sample.is_none() && self.audio_preview.is_none() {
+		if sample == self.audio_preview() {
+			if sample.is_some() {
+				self.set_audio_preview(None);
+			}
+
 			return;
 		}
 
