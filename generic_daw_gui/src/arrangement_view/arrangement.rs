@@ -15,8 +15,8 @@ use crate::{
 	daw::{self, FREEZES_DIR, format_now},
 };
 use generic_daw_core::{
-	AudioClip, AudioPreview, AudioPreviewId, AudioThread, Batch, Channels, Clip, ClipId, Message,
-	MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId,
+	AudioClip, AudioPreview, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip,
+	MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId,
 	NodeImpl as _, PanMode, PluginId, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool,
 	TimedMidiAction, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
@@ -56,7 +56,7 @@ pub struct Arrangement {
 	samples: BTreeMap<SampleId, Sample>,
 	midi_patterns: BTreeMap<MidiPatternId, MidiPattern>,
 	solo: Option<NodeId>,
-	audio_preview: Option<(AudioPreviewId, SampleId)>,
+	audio_preview: Option<(Version, SampleId)>,
 
 	tracks: Vec<Track>,
 	channels: Vec<Channel>,
@@ -222,8 +222,8 @@ impl Arrangement {
 				Update::AudioRecordingInterrupted(id) => self.audio_recording_interrupted(id),
 				Update::MidiRecordingInterrupted(id) => self.midi_recording_interrupted(id),
 				Update::AudioPreviewEnded(ended) => {
-					if let Some((id, sample)) = self.audio_preview
-						&& id == ended
+					if let Some((version, sample)) = self.audio_preview
+						&& version == ended
 					{
 						self.audio_preview = None;
 						self.samples.get_mut(&sample).unwrap().refs -= 1;
@@ -527,7 +527,7 @@ impl Arrangement {
 		}
 
 		self.audio_preview = audio_preview
-			.map(|audio_preview| audio_preview.id())
+			.map(|audio_preview| audio_preview.version())
 			.zip(sample);
 	}
 

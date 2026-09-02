@@ -28,10 +28,8 @@ use std::{
 };
 use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
-unique_id!(audio_preview_id);
 unique_id!(version);
 
-pub use audio_preview_id::Id as AudioPreviewId;
 pub use version::Id as Version;
 
 static ON_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/on_bar_click.pcm");
@@ -162,7 +160,7 @@ pub enum Update {
 	RecordingInterrupted(SecondsTime),
 	AudioRecordingInterrupted(NodeId),
 	MidiRecordingInterrupted(NodeId),
-	AudioPreviewEnded(AudioPreviewId),
+	AudioPreviewEnded(Version),
 	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
@@ -314,7 +312,7 @@ impl WorkList for Inject<'_> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioPreview {
-	id: AudioPreviewId,
+	version: Version,
 	sample: SampleId,
 	cursor: SecondsTime,
 }
@@ -323,15 +321,15 @@ impl AudioPreview {
 	#[must_use]
 	pub fn new(sample: SampleId) -> Self {
 		Self {
-			id: AudioPreviewId::unique(),
+			version: Version::unique(),
 			sample,
 			cursor: SecondsTime::ZERO,
 		}
 	}
 
 	#[must_use]
-	pub fn id(&self) -> AudioPreviewId {
-		self.id
+	pub fn version(&self) -> Version {
+		self.version
 	}
 }
 
@@ -756,7 +754,7 @@ impl AudioThread {
 
 		if has_ended {
 			self.updates
-				.push(Update::AudioPreviewEnded(audio_preview.id()));
+				.push(Update::AudioPreviewEnded(audio_preview.version()));
 			self.audio_preview = None;
 		}
 	}
