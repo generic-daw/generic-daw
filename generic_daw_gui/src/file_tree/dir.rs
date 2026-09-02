@@ -1,5 +1,5 @@
 use crate::{
-	components::{file_tree_entry, menu_entry},
+	components::{file_tree_entry, menu_entry, virtualized},
 	file_tree::{Action, Message, file::File},
 	icons::{chevron_down, chevron_right, folder_open, folder_sync, hourglass, triangle_alert},
 	stylefns::{
@@ -7,7 +7,7 @@ use crate::{
 	},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_widget::{context_menu::ContextMenu, virtualized::Virtualized};
+use generic_daw_widget::context_menu::ContextMenu;
 use iced::{
 	Element, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
@@ -134,7 +134,7 @@ impl Dir {
 		let mut height = 0.0;
 		(
 			column![
-				Virtualized::new(move || ContextMenu::new(
+				virtualized(move || ContextMenu::new(
 					match &self.children {
 						Status::Unloaded =>
 							file_tree_entry(chevron_right(), &*self.name, button::text)

@@ -1,9 +1,10 @@
 use crate::{
+	components::virtualized,
 	file_tree::Message,
 	icons::{file, file_headphone, file_music, file_play, file_video_camera, play},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_widget::{stateful::Stateful, virtualized::Virtualized};
+use generic_daw_widget::stateful::Stateful;
 use iced::{
 	Element, Fill,
 	widget::{button, mouse_area, row, text},
@@ -52,7 +53,7 @@ impl File {
 		}
 
 		(
-			Virtualized::new(move || {
+			virtualized(move || {
 				button(Stateful::new(
 					|state, event| match event {
 						Event::Press => {
@@ -97,8 +98,7 @@ impl File {
 				.style(button::text)
 				.on_press_with(|| unreachable!())
 				.into()
-			})
-			.into(),
+			}),
 			LINE_HEIGHT + 2.0,
 		)
 	}

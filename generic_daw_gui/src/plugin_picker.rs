@@ -1,5 +1,6 @@
 use crate::{
 	action::Action,
+	components::virtualized,
 	daw,
 	stylefns::{
 		container_with_radius, scrollable_style, scrollable_with_container, selectable_box,
@@ -8,7 +9,6 @@ use crate::{
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::clap_host::{Category, Feature, PluginDescriptor, Subcategory};
-use generic_daw_widget::virtualized::Virtualized;
 use iced::{
 	Element, Fill, FillPortion, Font, Shrink, Task,
 	font::Weight,
@@ -184,7 +184,7 @@ impl PluginPicker {
 								.iter()
 								.map(|&i| &state.options[i])
 								.enumerate()
-								.map(|(i, descriptor)| Virtualized::new(move || {
+								.map(|(i, descriptor)| virtualized(move || {
 									mouse_area(
 										container(
 											row![
@@ -227,8 +227,7 @@ impl PluginPicker {
 									.on_enter(Message::Hover(i))
 									.on_press(Message::Select)
 									.into()
-								})
-								.into())
+								}))
 						)
 						.width(Fill)
 						.padding(5)

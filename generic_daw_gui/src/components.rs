@@ -5,12 +5,12 @@ use crate::{
 	},
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle};
+use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle, stateful::Stateful};
 use iced::{
 	Element, Fill, Font, Theme, border, padding,
-	widget::{Button, button, container, pick_list, right, row, text, text_input},
+	widget::{Button, button, container, pick_list, right, row, sensor, space, text, text_input},
 };
-use std::ops::RangeInclusive;
+use std::{cell::Cell, ops::RangeInclusive};
 
 pub fn file_tree_entry<'a, Message: 'a>(
 	i: Icon,
@@ -131,4 +131,29 @@ pub fn text_icon_button<'a, Message: 'a>(
 	)
 	.style(button_with_radius(style, 0))
 	.padding(1)
+}
+
+pub fn virtualized<'a, Message: 'static>(
+	f: impl Fn() -> Element<'a, Message> + 'a,
+) -> Element<'a, Message> {
+	let cache = f();
+	let size = cache.as_widget().size();
+	let cache = Cell::new(Some(cache));
+	Stateful::new(
+		|state, event: Option<_>| {
+			*state ^= event.is_none();
+			event
+		},
+		move |state| {
+			sensor(if *state {
+				cache.take().unwrap_or_else(&f).map(Some)
+			} else {
+				space().width(size.width).height(size.height).into()
+			})
+			.on_show(|_| None)
+			.on_hide(None)
+			.into()
+		},
+	)
+	.into()
 }
