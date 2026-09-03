@@ -1,6 +1,6 @@
 use generic_daw_core::{
 	MidiKey, Transport,
-	time::{BeatTime, SecondsTime},
+	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Vector;
 use std::ops::{Add, Neg};
@@ -70,6 +70,17 @@ impl Add<Delta<Self>> for SecondsTime {
 	fn add(self, rhs: Delta<Self>) -> Self::Output {
 		match rhs {
 			Delta::Positive(diff) => self + diff,
+			Delta::Negative(diff) => self.saturating_sub(diff),
+		}
+	}
+}
+
+impl Add<Delta<BeatTime>> for BeatRange {
+	type Output = Option<Self>;
+
+	fn add(self, rhs: Delta<BeatTime>) -> Self::Output {
+		match rhs {
+			Delta::Positive(diff) => Some(self + diff),
 			Delta::Negative(diff) => self.saturating_sub(diff),
 		}
 	}

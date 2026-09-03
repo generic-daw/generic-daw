@@ -1,6 +1,6 @@
 use crate::{
 	state::Grid,
-	widget::{ALPHA_1_3, LINE_HEIGHT, px_to_time, time_to_px},
+	widget::{ALPHA_1_3, Delta, LINE_HEIGHT, px_to_time, time_to_px},
 };
 use generic_daw_core::{
 	Transport,
@@ -29,8 +29,10 @@ use utils::NoDebug;
 pub enum Status {
 	SeekingBeats(BeatTime),
 	DraggingLoopBeats(BeatTime),
+	TrimmingLoopBeats(BeatTime),
 	SeekingSeconds(SecondsTime),
 	DraggingLoopSeconds(SecondsTime),
+	TrimmingLoopSeconds(SecondsTime),
 	Panning(Point),
 	#[default]
 	None,
@@ -249,6 +251,34 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 				}
 				Status::DraggingLoopBeats(last_time) => {
+					let abs_diff = self.grid.maybe_snap(
+						new_time.abs_diff(last_time),
+						*modifiers,
+						|abs_diff| {
+							abs_diff.round(self.grid.beats_snap_step(self.scale, self.transport))
+						},
+					);
+
+					if abs_diff != BeatTime::ZERO {
+						let time_delta = if new_time > last_time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
+
+						let loop_range = self.transport.loop_range.unwrap() + time_delta;
+
+						shell.publish((self.set_loop_range)(loop_range));
+						shell.capture_event();
+
+						state.status = if loop_range.is_some() {
+							Status::DraggingLoopBeats(last_time + time_delta)
+						} else {
+							Status::None
+						};
+					}
+				}
+				Status::TrimmingLoopBeats(last_time) => {
 					let time = self.grid.maybe_snap(new_time, *modifiers, |time| {
 						time.round(self.grid.beats_snap_step(self.scale, self.transport))
 					});
@@ -278,6 +308,40 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 				}
 				Status::DraggingLoopSeconds(last_time) => {
+					let new_time = new_time.to_seconds_time(self.transport);
+
+					let abs_diff = self
+						.grid
+						.maybe_snap(new_time.abs_diff(last_time), *modifiers, |abs_diff| {
+							abs_diff.round(self.grid.seconds_snap_step(self.scale))
+						})
+						.to_beat_time(self.transport);
+
+					if abs_diff != BeatTime::ZERO {
+						let time_delta = if new_time > last_time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
+
+						let loop_range = self.transport.loop_range.unwrap() + time_delta;
+
+						shell.publish((self.set_loop_range)(loop_range));
+						shell.capture_event();
+
+						state.status = if loop_range.is_some() {
+							Status::DraggingLoopSeconds(
+								last_time
+									+ time_delta.map(|time_delta| {
+										time_delta.to_seconds_time(self.transport)
+									}),
+							)
+						} else {
+							Status::None
+						};
+					}
+				}
+				Status::TrimmingLoopSeconds(last_time) => {
 					let time = self.grid.maybe_snap(
 						new_time.to_seconds_time(self.transport),
 						*modifiers,
@@ -342,24 +406,26 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					state.status = if modifiers.command() {
 						if let Some(loop_range) = self.transport.loop_range {
 							let (start, end) = (loop_range.start(), loop_range.end());
-							if time
+							if modifiers.shift() {
+								Status::DraggingLoopBeats(time)
+							} else if time
 								== self
 									.grid
 									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
 							{
-								Status::DraggingLoopBeats(end)
+								Status::TrimmingLoopBeats(end)
 							} else if time
 								== self
 									.grid
 									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
 							{
-								Status::DraggingLoopBeats(start)
+								Status::TrimmingLoopBeats(start)
 							} else {
 								shell.publish((self.set_loop_range)(None));
-								Status::DraggingLoopBeats(time)
+								Status::TrimmingLoopBeats(time)
 							}
 						} else {
-							Status::DraggingLoopBeats(time)
+							Status::TrimmingLoopBeats(time)
 						}
 					} else {
 						shell.publish((self.seek_to)(time));
@@ -379,24 +445,26 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 								loop_range.start().to_seconds_time(self.transport),
 								loop_range.end().to_seconds_time(self.transport),
 							);
-							if time
+							if modifiers.shift() {
+								Status::DraggingLoopSeconds(time)
+							} else if time
 								== self
 									.grid
 									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
 							{
-								Status::DraggingLoopSeconds(end)
+								Status::TrimmingLoopSeconds(end)
 							} else if time
 								== self
 									.grid
 									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
 							{
-								Status::DraggingLoopSeconds(start)
+								Status::TrimmingLoopSeconds(start)
 							} else {
 								shell.publish((self.set_loop_range)(None));
-								Status::DraggingLoopSeconds(time)
+								Status::TrimmingLoopSeconds(time)
 							}
 						} else {
-							Status::DraggingLoopSeconds(time)
+							Status::TrimmingLoopSeconds(time)
 						}
 					} else {
 						shell.publish((self.seek_to)(time.to_beat_time(self.transport)));
@@ -506,8 +574,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		match tree.state.downcast_ref::<State>().status {
 			Status::SeekingBeats(..)
 			| Status::DraggingLoopBeats(..)
+			| Status::TrimmingLoopBeats(..)
 			| Status::SeekingSeconds(..)
-			| Status::DraggingLoopSeconds(..) => Interaction::ResizingHorizontally,
+			| Status::DraggingLoopSeconds(..)
+			| Status::TrimmingLoopSeconds(..) => Interaction::ResizingHorizontally,
 			Status::Panning(..) => Interaction::Move,
 			Status::None => {
 				if cursor
