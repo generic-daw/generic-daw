@@ -200,7 +200,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			}
 
 			let delta = Vector::new(
-				if !shell.is_event_captured() || cursor.x == clamped.x {
+				if cursor.x == clamped.x {
 					state.horizontal_autoscroll_start = None;
 					0.0
 				} else {
