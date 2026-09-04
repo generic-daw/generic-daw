@@ -15,8 +15,7 @@ pub use generic_daw_core::clap_host::*;
 use generic_daw_core::{Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
-	Center, Color, Element, Fill, Font, Subscription, Task, Theme,
-	theme::{Custom, palette::Seed},
+	Center, Element, Fill, Font, Subscription, Task,
 	time::every,
 	widget::{column, combo_box, container, row, rule, scrollable, space, text, text_input},
 	window,
@@ -27,7 +26,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	iter::repeat,
 	ops::Deref as _,
-	sync::{Arc, LazyLock, mpsc::Receiver},
+	sync::mpsc::Receiver,
 	time::Duration,
 };
 use utils::{NoClone, NoDebug, natural_cmp};
@@ -211,10 +210,10 @@ impl ClapHost {
 					})
 				} else {
 					let (window, spawn) = window::open(window::Settings {
-						size: (640.0, 480.0).into(),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
 						level: window::Level::AlwaysOnTop,
+						blank: true,
 						..window::Settings::default()
 					});
 					self.window_of_plugin.insert(id, window);
@@ -402,13 +401,8 @@ impl ClapHost {
 
 	pub fn view(&self, window: window::Id) -> Option<Element<'_, Message>> {
 		let id = *self.plugin_of_window.get(&window)?;
-		let Some(plugin) = &self.plugins.get(&id) else {
-			return Some(space().into());
-		};
-
-		if plugin.has_gui() {
-			return Some(space().into());
-		}
+		let plugin = &self.plugins[&id];
+		debug_assert!(!plugin.has_gui());
 
 		Some(
 			column![
@@ -482,28 +476,6 @@ impl ClapHost {
 			.get(&window)
 			.and_then(|id| self.plugins.get(id))
 			.map(|plugin| plugin.descriptor().name.deref().to_owned())
-	}
-
-	pub fn theme(&self, window: window::Id) -> Option<Theme> {
-		static TRANSPARENT: LazyLock<Theme> = LazyLock::new(|| {
-			Theme::Custom(Arc::new(Custom::new(
-				"transparent",
-				Seed {
-					background: Color::TRANSPARENT,
-					text: Color::TRANSPARENT,
-					primary: Color::TRANSPARENT,
-					success: Color::TRANSPARENT,
-					warning: Color::TRANSPARENT,
-					danger: Color::TRANSPARENT,
-				},
-			)))
-		});
-
-		self.plugin_of_window
-			.get(&window)
-			.and_then(|id| self.plugins.get(id))
-			.filter(|plugin| plugin.has_gui())
-			.map(|_| TRANSPARENT.clone())
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> Option<f32> {

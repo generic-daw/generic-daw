@@ -1554,10 +1554,8 @@ impl Daw {
 			.unwrap_or_else(|| "Generic DAW".to_owned())
 	}
 
-	pub fn theme(&self, window: window::Id) -> Theme {
-		self.clap_host
-			.theme(window)
-			.unwrap_or_else(|| self.config.theme.into())
+	pub fn theme(&self, _window: window::Id) -> Theme {
+		self.config.theme.into()
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> f32 {
