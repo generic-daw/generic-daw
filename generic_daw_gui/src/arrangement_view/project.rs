@@ -447,24 +447,16 @@ impl Arrangement {
 
 		let mut load_channel = |arrangement: &mut Self, node: NodeId, channel: &proto::Channel| {
 			arrangement.channel_name_changed(node, channel.name.as_str().into());
-
-			if channel.volume != 1.0 {
-				arrangement.channel_volume_changed(node, channel.volume);
-			}
-
-			if channel.pan.pan_mode? != proto::PanMode::Stereo(proto::PanModeStereo { pan: 0.0 }) {
-				arrangement.channel_pan_changed(
-					node,
-					match channel.pan.pan_mode? {
-						proto::PanMode::Stereo(proto::PanModeStereo { pan }) => {
-							PanMode::Stereo(pan)
-						}
-						proto::PanMode::SplitStereo(proto::PanModeSplitStereo { l, r }) => {
-							PanMode::SplitStereo(l, r)
-						}
-					},
-				);
-			}
+			arrangement.channel_volume_changed(node, channel.volume);
+			arrangement.channel_pan_changed(
+				node,
+				match channel.pan.pan_mode? {
+					proto::PanMode::Stereo(proto::PanModeStereo { pan }) => PanMode::Stereo(pan),
+					proto::PanMode::SplitStereo(proto::PanModeSplitStereo { l, r }) => {
+						PanMode::SplitStereo(l, r)
+					}
+				},
+			);
 
 			if !channel.enabled {
 				arrangement.channel_toggle_enabled(node);
