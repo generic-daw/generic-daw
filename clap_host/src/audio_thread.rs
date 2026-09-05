@@ -1,5 +1,5 @@
 use crate::{
-	MainThreadMessage, ThreadPoolInjector,
+	ThreadPoolInjector,
 	audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers,
 	events::{EventImpl, TransportEvent},
@@ -11,13 +11,14 @@ use clack_extensions::{params::ParamInfoFlags, tail::TailLength};
 use clack_host::prelude::*;
 use log::{info, warn};
 use std::{cell::LazyCell, collections::HashSet, sync::atomic::Ordering::Relaxed};
-use utils::{NoClone, NoDebug};
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct AudioThread {
 	pub(crate) processor: NoDebug<PluginAudioProcessor<Host>>,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
+	param_count: usize,
 	requires_process: HashSet<ClapId>,
 	last_input: Option<u64>,
 	processing: bool,
@@ -35,6 +36,7 @@ impl AudioThread {
 			processor: NoDebug(processor.into()),
 			audio_buffers,
 			event_buffers,
+			param_count: params.len(),
 			requires_process: params
 				.iter()
 				.filter_map(|param| {
@@ -52,6 +54,11 @@ impl AudioThread {
 
 	pub fn push(&mut self, event: impl EventImpl) {
 		self.event_buffers.push(event);
+	}
+
+	#[must_use]
+	pub fn param_count(&self) -> usize {
+		self.param_count
 	}
 
 	#[must_use]
@@ -234,26 +241,5 @@ impl AudioThread {
 		self.audio_buffers.reset();
 		self.event_buffers.reset();
 		self.last_input = None;
-	}
-
-	pub fn deactivate(self) {
-		self.processor
-			.access_shared_handler(|s| s.sender.clone())
-			.send(MainThreadMessage::Deactivate(NoClone(self)))
-			.unwrap();
-	}
-
-	pub fn restart(self) {
-		self.processor
-			.access_shared_handler(|s| s.sender.clone())
-			.send(MainThreadMessage::Restart(NoClone(self)))
-			.unwrap();
-	}
-
-	pub fn destroy(self) {
-		self.processor
-			.access_shared_handler(|s| s.sender.clone())
-			.send(MainThreadMessage::Destroy(NoClone(self)))
-			.unwrap();
 	}
 }

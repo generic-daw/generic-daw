@@ -235,7 +235,8 @@ impl Arrangement {
 			None,
 		))
 		.chain(
-			task.map(NoClone)
+			task.map(Box::new)
+				.map(NoClone)
 				.map(arrangement_view::Message::Batch)
 				.map(move |message| daw::Message::Arrangement(project, message)),
 		)
@@ -694,7 +695,8 @@ impl Arrangement {
 				view,
 			))
 			.chain(Task::batch([
-				task.map(NoClone)
+				task.map(Box::new)
+					.map(NoClone)
 					.map(arrangement_view::Message::Batch)
 					.map(move |message| daw::Message::Arrangement(project, message)),
 				Task::run(stream::iter(messages), move |message| {

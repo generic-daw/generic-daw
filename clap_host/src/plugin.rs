@@ -26,7 +26,7 @@ use std::{
 	path::Path,
 	sync::{Arc, atomic::Ordering::Relaxed, mpsc::Receiver},
 };
-use utils::{NoClone, NoDebug};
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Plugin {
@@ -234,7 +234,7 @@ impl Plugin {
 		))
 	}
 
-	pub fn deactivate<Event: EventImpl>(&mut self, NoClone(mut processor): NoClone<AudioThread>) {
+	pub fn deactivate<Event: EventImpl>(&mut self, mut processor: AudioThread) {
 		self.instance.access_shared_handler(|s| {
 			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 		});

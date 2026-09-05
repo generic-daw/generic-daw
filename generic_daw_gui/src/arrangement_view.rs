@@ -90,7 +90,7 @@ pub use project::Feedback;
 #[derive(Clone, Debug)]
 pub enum Message {
 	ChangeConfig(NoClone<NoDebug<Box<(AudioThread, ThreadPool)>>>),
-	Batch(NoClone<Batch>),
+	Batch(NoClone<Box<Batch>>),
 	DrainQueue,
 	RequestUpdate,
 
@@ -250,7 +250,7 @@ impl ArrangementView {
 
 				let action = Action::batch(
 					self.arrangement
-						.update(msg)
+						.update(*msg)
 						.into_iter()
 						.map(daw::Message::ClapHost)
 						.map(daw::Instruction::Message)

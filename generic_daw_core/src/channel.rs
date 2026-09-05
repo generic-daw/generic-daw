@@ -1,51 +1,22 @@
 use crate::{
-	Channels, Event, Node, NodeAction, NodeId, PushSlot, Update,
-	audio_thread::{Inject, Scratch, State},
+	Channels, Event, Node, NodeAction, NodeId, Update,
+	audio_thread::{Scratch, State},
+	plugin::PluginSlot,
 };
 use audio_graph::Injector;
-use clap_host::{AudioThread, RenderMode, events::EventFlags};
 use dsp::Utility;
-use utils::{ShiftMoveExt as _, unique_id};
-
-unique_id!(plugin);
-
-pub use plugin::Id as PluginId;
-
-#[derive(Debug)]
-struct Plugin {
-	id: PluginId,
-	processor: PushSlot<Option<AudioThread>>,
-	mix: f32,
-}
-
-impl Drop for Plugin {
-	fn drop(&mut self) {
-		if let Some(processor) = self.processor.take().flatten() {
-			processor.destroy();
-		}
-	}
-}
-
-impl Plugin {
-	pub fn new(id: PluginId, processor: PushSlot<Option<AudioThread>>) -> Self {
-		Self {
-			id,
-			processor,
-			mix: 1.0,
-		}
-	}
-}
+use utils::ShiftMoveExt as _;
 
 #[derive(Debug)]
 pub struct Channel {
 	id: NodeId,
-	plugins: Vec<Plugin>,
+	plugins: Vec<PluginSlot>,
 	utility: Utility,
 	enabled: bool,
 	bypassed: bool,
 	output: Channels,
+	peaks: [f32; 2],
 	last_peaks: [f32; 2],
-	updates: Vec<Update>,
 }
 
 impl Channel {
@@ -58,8 +29,8 @@ impl Channel {
 			enabled: true,
 			bypassed: false,
 			output,
+			peaks: [0.0; 2],
 			last_peaks: [0.0; 2],
-			updates: Vec::new(),
 		}
 	}
 
@@ -71,97 +42,34 @@ impl Channel {
 		scratch: &mut Scratch,
 		injector: &Injector<Node>,
 	) -> usize {
-		let acc = self
-			.updates
-			.pop_if(|update| matches!(update, Update::Peaks(..)));
-
 		let mut latency = 0;
 
 		if self.bypassed {
 			scratch.audio[..audio.len()].copy_from_slice(audio);
-			scratch.events.clear();
-			scratch.events.extend_from_slice(events);
+			scratch.events.clone_from(events);
 		}
 
 		for plugin in &mut self.plugins {
-			let processor = match plugin.processor.try_recv() {
-				Some(Some(processor)) if state.render_mode == RenderMode::Realtime => processor,
-				Some(Some(processor)) if processor.needs_restart() => {
-					plugin.processor.take().flatten().unwrap().restart();
-					match plugin.processor.recv() {
-						Some(Some(processor)) => processor,
-						_ => continue,
-					}
-				}
-				Some(Some(processor)) => processor,
-				Some(None) => continue,
-				None if state.render_mode == RenderMode::Realtime => {
-					audio.fill([0.0; 2]);
-					events.clear();
-					continue;
-				}
-				None => match plugin.processor.recv() {
-					Some(Some(processor)) => processor,
-					_ => continue,
-				},
-			};
-
-			processor.push_all(events.drain(..));
-
-			processor.process::<Event>(
-				audio,
-				|event| {
-					if let Event::ParamValue {
-						param_id, value, ..
-					} = event
-					{
-						self.updates.push(Update::Param(plugin.id, param_id, value));
-					} else {
-						events.push(event);
-					}
-				},
-				Some(&state.transport.as_clap()),
-				Some(&mut |executor| {
-					let task_count = executor.task_count() as usize;
-					let executor = Inject(executor);
-					injector.inject(&executor, task_count);
-				}),
-				plugin.mix,
-			);
-
-			if !self.bypassed {
-				latency += processor.latency();
-			}
-
-			if processor.needs_restart() {
-				plugin.processor.take().flatten().unwrap().restart();
-			}
+			latency += plugin.process(state, audio, events, injector);
 		}
 
 		if self.bypassed {
+			latency = 0;
 			audio.copy_from_slice(&scratch.audio[..audio.len()]);
-			events.clear();
-			events.extend_from_slice(&scratch.events);
+			events.clone_from(&scratch.events);
 		}
 
 		self.utility.process(audio);
-		let mut peaks = max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 });
+		let peaks = max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 });
+		self.peaks = [self.peaks[0].max(peaks[0]), self.peaks[1].max(peaks[1])];
 
-		if let Some(Update::Peaks(_, p)) = acc {
-			peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
-		}
-
-		if peaks != self.last_peaks {
-			self.updates.push(Update::Peaks(self.id, peaks));
-		}
-
-		if self.enabled {
-			latency
-		} else {
+		if !self.enabled {
+			latency = 0;
 			audio.fill([0.0; 2]);
 			events.clear();
-			0
 		}
+
+		latency
 	}
 
 	#[must_use]
@@ -171,9 +79,7 @@ impl Channel {
 
 	pub fn reset(&mut self) {
 		for plugin in &mut self.plugins {
-			if let Some(Some(processor)) = plugin.processor.try_recv() {
-				processor.reset();
-			}
+			plugin.reset();
 		}
 	}
 
@@ -185,39 +91,29 @@ impl Channel {
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
 			NodeAction::PluginInsert(index, id, processor) => {
-				self.plugins.insert(index, Plugin::new(id, *processor));
+				self.plugins.insert(index, PluginSlot::new(id, *processor));
 			}
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
-			NodeAction::PluginDeactivate(index) => {
-				if let Some(slot) = self.plugins[index].processor.try_recv()
-					&& let Some(processor) = slot.take()
-				{
-					processor.deactivate();
-				}
-			}
+			NodeAction::PluginDeactivate(index) => self.plugins[index].deactivate(),
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
-			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
+			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix_changed(mix),
 			NodeAction::PluginParamChanged(index, param_id, value) => {
-				if let Some(Some(processor)) = self.plugins[index].processor.try_recv() {
-					processor.push(Event::ParamValue {
-						time: 0,
-						param_id,
-						value,
-						flags: EventFlags::IS_LIVE,
-					});
-				}
+				self.plugins[index].param_changed(param_id, value);
 			}
 			_ => panic!("{action:?}"),
 		}
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
-		if let Some(&Update::Peaks(_, peaks)) = self.updates.last() {
-			debug_assert_ne!(self.last_peaks, peaks);
+		let peaks = std::mem::take(&mut self.peaks);
+		if peaks != self.last_peaks {
 			self.last_peaks = peaks;
+			updates.push(Update::Peaks(self.id(), peaks));
 		}
 
-		updates.append(&mut self.updates);
+		for plugin in &mut self.plugins {
+			plugin.collect_updates(updates);
+		}
 	}
 
 	#[must_use]
@@ -227,9 +123,7 @@ impl Channel {
 
 	pub fn restart_all_plugins(&mut self) {
 		for plugin in &mut self.plugins {
-			if let Some(processor) = plugin.processor.take().flatten() {
-				processor.restart();
-			}
+			plugin.restart();
 		}
 	}
 }

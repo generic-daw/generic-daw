@@ -119,7 +119,8 @@ pub enum Instruction {
 	PluginLoad(PluginDescriptor),
 	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
 	PluginCopyState(PluginId, PluginId),
-	PluginActivate(PluginId, Option<Box<clap_host::AudioThread>>),
+	PluginActivate(PluginId, clap_host::AudioThread),
+	PluginRestart(PluginId, Option<clap_host::AudioThread>),
 	PluginParamChanged(PluginId, ClapId, f32),
 }
 
@@ -389,6 +390,7 @@ impl Daw {
 			Task::batch([
 				window,
 				batches
+					.map(Box::new)
 					.map(NoClone)
 					.map(arrangement_view::Message::Batch)
 					.map(move |message| Message::Arrangement(project, message)),
@@ -1032,10 +1034,31 @@ impl Daw {
 			}
 			Instruction::PluginActivate(id, processor) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
-					self.arrangement_view.arrangement.plugin_activate(
-						node,
-						index,
-						processor.map(|processor| *processor),
+					return Task::perform(
+						self.arrangement_view
+							.arrangement
+							.plugin_activate(node, index, processor),
+						move |message| {
+							Message::ClapHost(clap_host::Message::AudioThread(
+								id,
+								NoClone(Box::new(message.unwrap())),
+							))
+						},
+					);
+				}
+			}
+			Instruction::PluginRestart(id, processor) => {
+				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
+					return Task::perform(
+						self.arrangement_view
+							.arrangement
+							.plugin_restart(node, index, processor),
+						move |message| {
+							Message::ClapHost(clap_host::Message::AudioThread(
+								id,
+								NoClone(Box::new(message.unwrap())),
+							))
+						},
 					);
 				}
 			}

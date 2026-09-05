@@ -1,6 +1,6 @@
 use generic_daw_core::{
 	PluginId, PushSlot,
-	clap_host::{self, AudioThread, HostInfo, MainThreadMessage, PluginDescriptor},
+	clap_host::{self, HostInfo, MainThreadMessage, PluginDescriptor},
 };
 use std::sync::mpsc::Receiver;
 
@@ -10,7 +10,8 @@ pub struct Plugin {
 	pub descriptor: PluginDescriptor,
 	pub active: bool,
 	pub mix: f32,
-	pub s: oneshot::Sender<PushSlot<Option<AudioThread>>>,
+	pub s1: oneshot::Sender<PushSlot<generic_daw_core::Plugin>>,
+	pub s2: oneshot::Sender<PushSlot<PushSlot<generic_daw_core::Plugin>>>,
 }
 
 pub struct PluginPair {
@@ -24,18 +25,24 @@ impl PluginPair {
 		host: HostInfo,
 	) -> Option<(
 		Self,
-		PushSlot<Option<AudioThread>>,
+		PushSlot<PushSlot<generic_daw_core::Plugin>>,
 		Receiver<MainThreadMessage>,
 	)> {
 		let (core, receiver) = clap_host::Plugin::new(&descriptor, host)?;
-		let (s, r) = oneshot::channel();
+		let (s1, r1) = oneshot::channel();
+		let (s2, r2) = oneshot::channel();
 		let gui = Plugin {
 			id: PluginId::unique(),
 			descriptor,
 			active: false,
 			mix: 1.0,
-			s,
+			s1,
+			s2,
 		};
-		Some((Self { core, gui }, PushSlot::new(None, r), receiver))
+		Some((
+			Self { core, gui },
+			PushSlot::new(Some(PushSlot::new(None, r1)), r2),
+			receiver,
+		))
 	}
 }

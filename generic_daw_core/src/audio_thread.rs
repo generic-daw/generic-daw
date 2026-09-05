@@ -1,7 +1,7 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
-	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, PullSlot, PushSlot, Sample, SampleId,
-	ThreadPool,
+	MidiPatternId, Node, NodeId, PanMode, Plugin, PluginId, Point, PullSlot, PushSlot, Sample,
+	SampleId, ThreadPool,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -131,11 +131,7 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginInsert(
-		usize,
-		PluginId,
-		Box<PushSlot<Option<clap_host::AudioThread>>>,
-	),
+	PluginInsert(usize, PluginId, Box<PushSlot<PushSlot<Plugin>>>),
 	PluginRemove(usize),
 	PluginDeactivate(usize),
 	PluginMoveTo(usize, usize),
@@ -161,7 +157,6 @@ pub enum Update {
 	AudioRecordingInterrupted(NodeId),
 	MidiRecordingInterrupted(NodeId),
 	AudioPreviewEnded(Version),
-	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
 	Param(PluginId, ClapId, f32),
@@ -174,6 +169,8 @@ pub struct Batch {
 	pub version: Version,
 	pub position: SecondsTime,
 	pub updates: Vec<Update>,
+	pub load_duration: Duration,
+	pub load_frames: usize,
 	pub now: Instant,
 }
 
@@ -338,6 +335,8 @@ pub struct AudioThread {
 	audio_graph: AudioGraph<Node>,
 	master: NodeId,
 	audio_preview: Option<AudioPreview>,
+	load_duration: Duration,
+	load_frames: usize,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	needs_update: bool,
@@ -381,6 +380,8 @@ impl AudioThread {
 			audio_graph,
 			master,
 			audio_preview: None,
+			load_duration: Duration::ZERO,
+			load_frames: 0,
 			producer,
 			consumer,
 			needs_update: false,
@@ -427,12 +428,8 @@ impl AudioThread {
 		self.transport_mut().sample_rate = sample_rate;
 		self.transport_mut().frames = frames;
 
-		let acc = self
-			.updates
-			.pop_if(|update| matches!(update, Update::Load(..)));
 		self.updates
 			.push(Update::RecordingInterrupted(self.transport().position));
-		self.updates.extend(acc);
 	}
 
 	#[must_use]
@@ -546,19 +543,16 @@ impl AudioThread {
 		let start = Instant::now();
 		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
 
-		let acc = self
-			.updates
-			.pop_if(|update| matches!(update, Update::Load(..)));
-
-		if self.updates.capacity() == 0
-			&& let Some(updates) = self.update_buffers.pop()
-		{
-			self.updates = updates;
+		if self.updates.capacity() == 0 {
+			self.updates = self.update_buffers.pop().unwrap_or_default();
 		}
 
 		if let Some(action) = self.recv_events() {
-			self.updates.extend(acc);
 			return Some(action);
+		}
+
+		if self.updates.capacity() == 0 {
+			self.updates = self.update_buffers.pop().unwrap_or_default();
 		}
 
 		self.state_mut().midi_input.clear();
@@ -635,30 +629,34 @@ impl AudioThread {
 			.for_each_node_mut(|node, _, _, _| node.collect_updates(&mut self.updates));
 
 		let now = Instant::now();
-		let mut duration = now - start;
-		let mut frames = frames;
-
-		if let Some(Update::Load(d, f)) = acc {
-			duration += d;
-			frames += f;
-		}
-		self.updates.push(Update::Load(duration, frames));
+		self.load_duration += now - start;
+		self.load_frames += frames;
 
 		if std::mem::take(&mut self.needs_update)
 			|| self.transport().playing
 			|| self.updates.len() > 1
 		{
 			let batch = Batch {
-				version: self.transport().version,
-				position: self.transport().position,
+				version: self.audio_graph.state().transport.version,
+				position: self.audio_graph.state().transport.position,
 				updates: std::mem::take(&mut self.updates),
+				load_duration: std::mem::take(&mut self.load_duration),
+				load_frames: std::mem::take(&mut self.load_frames),
 				now,
 			};
 
-			if let Err(PushError::Full(Batch { updates, .. })) = self.producer.push(batch) {
+			if let Err(PushError::Full(Batch {
+				updates,
+				load_duration,
+				load_frames,
+				..
+			})) = self.producer.push(batch)
+			{
 				warn!("full ring buffer");
 				self.needs_update = true;
 				self.updates = updates;
+				self.load_duration = load_duration;
+				self.load_frames = load_frames;
 			}
 		}
 
@@ -819,10 +817,6 @@ impl AudioThread {
 		mut samples_fn: impl FnMut(&[[f32; 2]]),
 		mut progress_fn: impl FnMut(f64),
 	) {
-		let acc = self
-			.updates
-			.pop_if(|update| matches!(update, Update::Load(..)));
-
 		let old = *self.transport();
 		self.audio_graph.reset();
 		self.state_mut().reset();
@@ -883,7 +877,6 @@ impl AudioThread {
 			.for_each_node_mut(|node, _, _, _| node.collect_updates(&mut self.updates));
 		self.updates
 			.push(Update::RecordingInterrupted(self.transport().position));
-		self.updates.extend(acc);
 	}
 
 	fn state(&self) -> &State {

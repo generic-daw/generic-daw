@@ -1076,7 +1076,7 @@ impl<'a, Message: 'a> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for C
 }
 
 fn header_height(layout: &Layout<'_>) -> f32 {
-	if layout.bounds().height < 2.0 * LINE_HEIGHT {
+	if layout.bounds().height < 45.0 {
 		0.0
 	} else {
 		LINE_HEIGHT

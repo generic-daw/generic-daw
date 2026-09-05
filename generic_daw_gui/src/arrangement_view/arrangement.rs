@@ -15,10 +15,10 @@ use crate::{
 	daw::{self, FREEZES_DIR, format_now},
 };
 use generic_daw_core::{
-	AudioClip, AudioPreview, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip,
-	MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId,
-	NodeImpl as _, PanMode, PluginId, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool,
-	TimedMidiAction, Transport, Update, Version, build_streams,
+	AudioClip, AudioPreview, AudioProcessor, AudioThread, AudioThreadMessage, Batch, Channels,
+	Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
+	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point, PullSlot, PushSlot,
+	SampleId, Streams, ThreadPool, TimedMidiAction, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -186,6 +186,13 @@ impl Arrangement {
 	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
 		let mut messages = Vec::new();
 
+		let mix = self.transport.sample_rate.get() as f32 / batch.load_frames as f32;
+		let load = batch.load_duration.as_secs_f32() * mix;
+		self.load = Some(
+			self.load
+				.map_or(load, |new| (new * mix + load) / (mix + 1.0)),
+		);
+
 		let position = self.transport.position;
 
 		for update in batch.updates.drain(..) {
@@ -229,14 +236,6 @@ impl Arrangement {
 						self.samples.get_mut(&sample).unwrap().refs -= 1;
 						self.gc_sample(sample);
 					}
-				}
-				Update::Load(duration, frames) => {
-					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
-					let load = duration.as_secs_f32() * mix;
-					self.load = Some(
-						self.load
-							.map_or(load, |new| (new * mix + load) / (mix + 1.0)),
-					);
 				}
 				Update::Peaks(node, peaks) => {
 					if let Some(node) = self.nodes.get_mut(&node) {
@@ -477,16 +476,51 @@ impl Arrangement {
 		Some(instructions)
 	}
 
-	pub fn plugin_activate(
+	pub fn plugin_restart(
 		&mut self,
 		id: NodeId,
 		index: usize,
 		processor: Option<clap_host::AudioThread>,
-	) {
+	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
 		self.node_mut(id).plugins[index].active = processor.is_some();
+		let (s1, r1) = oneshot::channel();
+		let (s2, r2) = oneshot::channel();
+		let (sender, receiver) = oneshot::async_channel();
+		self.node_mut(id).plugins[index].s1 = s1;
+		let s2 = std::mem::replace(&mut self.node_mut(id).plugins[index].s2, s2);
+		s2.send(PushSlot::new(
+			Some(PushSlot::new(
+				processor.map(|processor| generic_daw_core::Plugin {
+					processor: AudioProcessor::new(processor),
+					sender,
+				}),
+				r1,
+			)),
+			r2,
+		))
+		.unwrap();
+		receiver
+	}
+
+	pub fn plugin_activate(
+		&mut self,
+		id: NodeId,
+		index: usize,
+		processor: clap_host::AudioThread,
+	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
+		self.node_mut(id).plugins[index].active = true;
 		let (s, r) = oneshot::channel();
-		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s, s);
-		s.send(PushSlot::new(Some(processor), r)).unwrap();
+		let (sender, receiver) = oneshot::async_channel();
+		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s1, s);
+		s.send(PushSlot::new(
+			Some(generic_daw_core::Plugin {
+				processor: AudioProcessor::new(processor),
+				sender,
+			}),
+			r,
+		))
+		.unwrap();
+		receiver
 	}
 
 	pub fn plugin_deactivate(&mut self, id: NodeId, index: usize) {

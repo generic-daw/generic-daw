@@ -21,7 +21,7 @@ pub use playlist::Playlist;
 pub use seeker::Seeker;
 pub use track::Track;
 
-pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
+pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.375;
 pub const TEXT_HEIGHT: f32 = 16.0;
 
 pub const ALPHA_1_3: f32 = 1.0 / 3.0;

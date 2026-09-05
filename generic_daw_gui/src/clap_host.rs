@@ -12,7 +12,7 @@ use crate::{
 use events::EventFlags;
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
-use generic_daw_core::{Event, PluginId, Transport};
+use generic_daw_core::{AudioThreadMessage, Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task,
@@ -33,7 +33,8 @@ use utils::{NoClone, NoDebug, natural_cmp};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	MainThread(PluginId, Box<MainThreadMessage>),
+	MainThread(PluginId, MainThreadMessage),
+	AudioThread(PluginId, NoClone<Box<AudioThreadMessage>>),
 	PluginParamValueChange(PluginId, ClapId, f32),
 	HostParamValueChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
@@ -97,7 +98,10 @@ impl ClapHost {
 
 		match message {
 			Message::MainThread(id, msg) => {
-				return self.handle_main_thread_message(id, *msg, transport);
+				return self.handle_main_thread_message(id, msg, transport);
+			}
+			Message::AudioThread(id, NoClone(msg)) => {
+				return self.handle_audio_thread_message(id, *msg, transport);
 			}
 			Message::PluginParamValueChange(id, param_id, value) => {
 				plugin!(id).param_adjust_value(param_id, value);
@@ -169,13 +173,11 @@ impl ClapHost {
 				}
 			}
 			Message::Activate(id) => {
-				let plugin = plugin!(id);
-				return Action::instruction(daw::Instruction::PluginActivate(
-					id,
-					plugin
-						.activate(transport.sample_rate, transport.frames)
-						.map(Box::new),
-				));
+				if let Some(processor) =
+					plugin!(id).activate(transport.sample_rate, transport.frames)
+				{
+					return Action::instruction(daw::Instruction::PluginActivate(id, processor));
+				}
 			}
 			Message::SetState(id, state) => {
 				plugin!(id, Message::SetState(id, state))
@@ -301,7 +303,7 @@ impl ClapHost {
 			};
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(&id) else {
-					let message = Message::MainThread(id, Box::new($expr));
+					let message = Message::MainThread(id, $expr);
 					info!("retrying {message:?}");
 					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
 						.into();
@@ -329,23 +331,6 @@ impl ClapHost {
 						.into_iter()
 						.map(|message| self.update(message, transport)),
 				);
-			}
-			MainThreadMessage::Restart(processor) => {
-				let plugin = plugin!(MainThreadMessage::Restart(processor));
-				plugin.deactivate::<Event>(processor);
-				return Action::instruction(daw::Instruction::PluginActivate(
-					id,
-					plugin
-						.activate(transport.sample_rate, transport.frames)
-						.map(Box::new),
-				));
-			}
-			MainThreadMessage::Deactivate(processor) => {
-				plugin!(MainThreadMessage::Deactivate(processor)).deactivate::<Event>(processor);
-			}
-			MainThreadMessage::Destroy(processor) => {
-				plugin!(MainThreadMessage::Destroy(processor)).deactivate::<Event>(processor);
-				return self.update(Message::DestroyInactive(id), transport);
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.window_of_plugin.get(&id)
@@ -394,6 +379,47 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::PresetLoaded(preset) => _ = self.preset_of_plugin.insert(id, preset),
+		}
+
+		Action::none()
+	}
+
+	fn handle_audio_thread_message(
+		&mut self,
+		id: PluginId,
+		message: AudioThreadMessage,
+		transport: &Transport,
+	) -> Action<daw::Instruction, Message> {
+		macro_rules! plugin {
+			($expr:expr) => {{
+				let Some(plugin) = self.plugins.get_mut(&id) else {
+					let message = Message::AudioThread(id, NoClone(Box::new($expr)));
+					info!("retrying {message:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
+						.into();
+				};
+				plugin
+			}};
+		}
+
+		match message {
+			AudioThreadMessage::Restart(processor) => {
+				let plugin = plugin!(AudioThreadMessage::Restart(processor));
+				plugin.deactivate::<Event>(processor.into_clap());
+				return Action::instruction(daw::Instruction::PluginRestart(
+					id,
+					plugin.activate(transport.sample_rate, transport.frames),
+				));
+			}
+			AudioThreadMessage::Deactivate(processor) => {
+				plugin!(AudioThreadMessage::Deactivate(processor))
+					.deactivate::<Event>(processor.into_clap());
+			}
+			AudioThreadMessage::Destroy(processor) => {
+				plugin!(AudioThreadMessage::Destroy(processor))
+					.deactivate::<Event>(processor.into_clap());
+				return self.update(Message::DestroyInactive(id), transport);
+			}
 		}
 
 		Action::none()
@@ -522,7 +548,7 @@ impl ClapHost {
 				}
 			}))
 			.discard(),
-			Task::run(stream, move |msg| Message::MainThread(id, Box::new(msg))),
+			Task::run(stream, move |msg| Message::MainThread(id, msg)),
 		])
 	}
 

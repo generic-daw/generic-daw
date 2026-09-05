@@ -8,6 +8,7 @@ mod midi_clip;
 mod midi_note;
 mod midi_pattern;
 mod node;
+mod plugin;
 mod sample;
 mod slot;
 mod stream;
@@ -23,7 +24,7 @@ pub use audio_thread::{
 	TimedMidiAction, Transport, Update, Version,
 };
 pub use bpm_tapper::BpmTapper;
-pub use channel::{Channel, PluginId};
+pub use channel::Channel;
 pub use clap_host;
 pub use clip::{Clip, ClipId};
 pub use cpal::{DeviceDescription, DeviceId, HostId};
@@ -34,6 +35,7 @@ pub use midi_note::{Key, MidiKey, MidiNote, MidiNoteId};
 pub use midi_pattern::{MidiPattern, MidiPatternId};
 pub use midly::num::{u4, u7};
 pub use node::Node;
+pub use plugin::{AudioProcessor, AudioThreadMessage, Plugin, PluginId};
 pub use sample::{Sample, SampleId};
 pub use slot::{PullSlot, PushSlot};
 pub use stream::{

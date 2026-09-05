@@ -10,18 +10,26 @@ impl<T> PushSlot<T> {
 	}
 
 	pub fn try_recv(&mut self) -> Option<&mut T> {
-		if let Ok(t) = self.r.try_recv() {
+		if self.t.is_none()
+			&& let Ok(t) = self.r.try_recv()
+		{
 			*self = t;
 		}
 
-		self.t.as_mut()
+		self.as_mut()
 	}
 
 	pub fn recv(&mut self) -> Option<&mut T> {
-		if let Ok(t) = self.r.recv_ref() {
+		if self.t.is_none()
+			&& let Ok(t) = self.r.recv_ref()
+		{
 			*self = t;
 		}
 
+		self.as_mut()
+	}
+
+	pub fn as_mut(&mut self) -> Option<&mut T> {
 		self.t.as_mut()
 	}
 
