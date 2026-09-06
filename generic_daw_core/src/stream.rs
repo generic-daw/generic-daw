@@ -485,27 +485,29 @@ fn build_audio_output_stream(
 	let frames = frames.or(NonZero::new(2048)).unwrap();
 	let sample_format = device.default_output_config().unwrap().sample_format();
 
-	let callback = build_audio_output_callback(
-		sample_rate,
-		frames,
-		input_channels,
-		channels,
-		processor,
-		midi_output,
-		midi_consumer,
-		audio_consumer,
-	);
+	let callback = || {
+		build_audio_output_callback(
+			sample_rate,
+			frames,
+			input_channels,
+			channels,
+			processor,
+			midi_output,
+			midi_consumer,
+			audio_consumer,
+		)
+	};
 
 	macro_rules! build_audio_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
 			if sample_format == SampleFormat::F32 {
-				device.build_output_stream(config, callback, |err| error!("{err}"), None)
+				device.build_output_stream(config, callback(), |err| error!("{err}"), None)
 			} else {
 				match sample_format {
 					$(
 						$pat => device.build_output_stream(
 							config,
-							bridge_audio_output_callback::<$ty>(frames, channels, callback),
+							bridge_audio_output_callback::<$ty>(frames, channels, callback()),
 							|err| error!("{err}"),
 							None,
 						),
