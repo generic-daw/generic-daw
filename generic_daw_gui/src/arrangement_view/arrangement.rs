@@ -263,7 +263,9 @@ impl Arrangement {
 			position
 		};
 
-		self.send(Message::ReturnUpdate(batch.updates));
+		if batch.updates.capacity() != 0 {
+			self.send(Message::ReturnUpdate(batch.updates));
+		}
 
 		messages
 	}

@@ -519,6 +519,7 @@ impl AudioThread {
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {
 					debug_assert!(update.is_empty());
+					debug_assert!(update.capacity() != 0);
 					self.update_buffers.push(update);
 				}
 				Message::RequestProcessor(sender, slot) => {
@@ -633,10 +634,11 @@ impl AudioThread {
 		self.load_duration += now - start;
 		self.load_frames += frames;
 
-		if std::mem::take(&mut self.needs_update)
-			|| self.transport().playing
-			|| self.updates.len() > 1
-		{
+		if std::mem::take(&mut self.needs_update) || !self.updates.is_empty() {
+			if self.updates.is_empty() && self.updates.capacity() != 0 {
+				self.update_buffers.push(std::mem::take(&mut self.updates));
+			}
+
 			let batch = Batch {
 				version: self.audio_graph.state().transport.version,
 				position: self.audio_graph.state().transport.position,
