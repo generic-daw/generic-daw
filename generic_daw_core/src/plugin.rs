@@ -48,23 +48,18 @@ pub struct Plugin {
 #[derive(Debug)]
 pub struct PluginSlot {
 	id: PluginId,
-	plugin: PushSlot<PushSlot<Plugin>>,
+	plugin: PushSlot<Option<Plugin>>,
 	mix: f32,
 }
 
 impl Drop for PluginSlot {
 	fn drop(&mut self) {
-		if let Some(plugin) = self.plugin.as_mut().and_then(PushSlot::take) {
-			plugin
-				.sender
-				.send(AudioThreadMessage::Destroy(plugin.processor))
-				.unwrap();
-		}
+		self.destroy();
 	}
 }
 
 impl PluginSlot {
-	pub fn new(id: PluginId, plugin: PushSlot<PushSlot<Plugin>>) -> Self {
+	pub fn new(id: PluginId, plugin: PushSlot<Option<Plugin>>) -> Self {
 		Self {
 			id,
 			plugin,
@@ -89,11 +84,7 @@ impl PluginSlot {
 			return 0;
 		};
 
-		let plugin = match if state.render_mode == RenderMode::Realtime {
-			plugin.try_recv()
-		} else {
-			plugin.as_mut()
-		} {
+		let plugin = match plugin {
 			Some(plugin) if state.render_mode == RenderMode::Realtime => plugin,
 			Some(plugin) if plugin.processor.clap.needs_restart() => {
 				self.restart();
@@ -104,7 +95,7 @@ impl PluginSlot {
 					return 0;
 				};
 
-				match plugin.as_mut() {
+				match plugin {
 					Some(plugin) => plugin,
 					None => return 0,
 				}
@@ -176,8 +167,12 @@ impl PluginSlot {
 		}
 	}
 
+	pub fn activate(&mut self, plugin: Plugin) {
+		*self.plugin.as_mut().unwrap() = Some(plugin);
+	}
+
 	pub fn deactivate(&mut self) {
-		if let Some(plugin) = self.plugin.as_mut().and_then(PushSlot::take) {
+		if let Some(plugin) = self.plugin.as_mut().and_then(Option::take) {
 			plugin
 				.sender
 				.send(AudioThreadMessage::Deactivate(plugin.processor))
@@ -186,11 +181,20 @@ impl PluginSlot {
 	}
 
 	pub fn restart(&mut self) {
-		if self.plugin.as_mut().and_then(PushSlot::as_mut).is_some() {
-			let plugin = self.plugin.take().unwrap().take().unwrap();
+		if self.plugin.as_mut().is_some_and(|plugin| plugin.is_some()) {
+			let plugin = self.plugin.take().flatten().unwrap();
 			plugin
 				.sender
 				.send(AudioThreadMessage::Restart(plugin.processor))
+				.unwrap();
+		}
+	}
+
+	pub fn destroy(&mut self) {
+		if let Some(plugin) = self.plugin.as_mut().and_then(Option::take) {
+			plugin
+				.sender
+				.send(AudioThreadMessage::Destroy(plugin.processor))
 				.unwrap();
 		}
 	}

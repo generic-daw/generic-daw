@@ -483,20 +483,15 @@ impl Arrangement {
 		processor: Option<clap_host::AudioThread>,
 	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
 		self.node_mut(id).plugins[index].active = processor.is_some();
-		let (s1, r1) = oneshot::channel();
-		let (s2, r2) = oneshot::channel();
+		let (s, r) = oneshot::channel();
+		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s, s);
 		let (sender, receiver) = oneshot::async_channel();
-		self.node_mut(id).plugins[index].s1 = s1;
-		let s2 = std::mem::replace(&mut self.node_mut(id).plugins[index].s2, s2);
-		s2.send(PushSlot::new(
-			Some(PushSlot::new(
-				processor.map(|processor| generic_daw_core::Plugin {
-					processor: AudioProcessor::new(processor),
-					sender,
-				}),
-				r1,
-			)),
-			r2,
+		s.send(PushSlot::new(
+			Some(processor.map(|processor| generic_daw_core::Plugin {
+				processor: AudioProcessor::new(processor),
+				sender,
+			})),
+			r,
 		))
 		.unwrap();
 		receiver
@@ -509,17 +504,17 @@ impl Arrangement {
 		processor: clap_host::AudioThread,
 	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
 		self.node_mut(id).plugins[index].active = true;
-		let (s, r) = oneshot::channel();
 		let (sender, receiver) = oneshot::async_channel();
-		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s1, s);
-		s.send(PushSlot::new(
-			Some(generic_daw_core::Plugin {
-				processor: AudioProcessor::new(processor),
-				sender,
-			}),
-			r,
-		))
-		.unwrap();
+		self.node_action(
+			id,
+			NodeAction::PluginActivate(
+				index,
+				Box::new(generic_daw_core::Plugin {
+					processor: AudioProcessor::new(processor),
+					sender,
+				}),
+			),
+		);
 		receiver
 	}
 

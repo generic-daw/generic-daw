@@ -131,8 +131,9 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginInsert(usize, PluginId, Box<PushSlot<PushSlot<Plugin>>>),
+	PluginInsert(usize, PluginId, Box<PushSlot<Option<Plugin>>>),
 	PluginRemove(usize),
+	PluginActivate(usize, Box<Plugin>),
 	PluginDeactivate(usize),
 	PluginMoveTo(usize, usize),
 	PluginMixChanged(usize, f32),

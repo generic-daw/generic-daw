@@ -427,7 +427,10 @@ impl ClapHost {
 
 	pub fn view(&self, window: window::Id) -> Option<Element<'_, Message>> {
 		let id = *self.plugin_of_window.get(&window)?;
-		let plugin = &self.plugins[&id];
+		let Some(plugin) = &self.plugins.get(&id) else {
+			return Some(space().into());
+		};
+
 		debug_assert!(!plugin.has_gui());
 
 		Some(

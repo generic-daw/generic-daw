@@ -90,10 +90,11 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
-			NodeAction::PluginInsert(index, id, processor) => {
-				self.plugins.insert(index, PluginSlot::new(id, *processor));
+			NodeAction::PluginInsert(index, id, plugin) => {
+				self.plugins.insert(index, PluginSlot::new(id, *plugin));
 			}
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
+			NodeAction::PluginActivate(index, plugin) => self.plugins[index].activate(*plugin),
 			NodeAction::PluginDeactivate(index) => self.plugins[index].deactivate(),
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix_changed(mix),
