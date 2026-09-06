@@ -132,9 +132,7 @@ impl Channel {
 fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {
 	fn max_peaks<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
 		for (old, new) in old.iter_mut().zip(new) {
-			if new > *old {
-				*old = new;
-			}
+			*old = if new > *old { new } else { *old };
 		}
 		old
 	}
