@@ -1925,7 +1925,7 @@ impl ArrangementView {
 												mix.copysign(plugin.mix),
 											)
 										})
-										.radius(TEXT_HEIGHT)
+										.radius(19.44444)
 										.enabled(plugin.active && enabled)
 										.tooltip(format_mix(plugin.mix)),
 										move || container(column![
@@ -1953,7 +1953,7 @@ impl ArrangementView {
 											.wrapping(text::Wrapping::None)
 											.ellipsis(text::Ellipsis::End)
 									)
-									.padding(7)
+									.padding((35.0 - LINE_HEIGHT) / 2.0)
 									.style(button_with_radius(button_style(false), border::left(5)))
 									.width(Fill)
 									.on_press(Message::PluginShow(plugin.id)),
@@ -2080,7 +2080,7 @@ impl ArrangementView {
 								.size(13)
 								.align_x(Center)
 								.style(text_input_transparent),
-							node.pan_knob(23.0, enabled),
+							node.pan_knob(25.0, enabled),
 							row![
 								text_icon_button("M", button_style(soloed)).on_press(
 									if node.ty == NodeType::Track {
