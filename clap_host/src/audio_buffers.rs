@@ -66,6 +66,10 @@ impl AudioBuffers {
 		}
 	}
 
+	pub fn config(&self) -> PluginAudioConfiguration {
+		self.config
+	}
+
 	pub fn read_in(&mut self, buf: &[[f32; 2]]) -> u64 {
 		if let Some(input_buffer) = self.input_buffers.first_mut()
 			&& let Some(&n_channels) = self.input_config.channel_counts.first()

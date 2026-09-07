@@ -1,15 +1,12 @@
 use crate::{
-	Event, Node, PushSlot, Update,
+	Event, Node, PushSlot,
 	audio_thread::{Inject, State},
 };
 use audio_graph::Injector;
 use clap_host::{AudioThread, ClapId, RenderMode, events::EventFlags};
+use log::warn;
+use rtrb::{Consumer, Producer, RingBuffer};
 use std::collections::HashMap;
-use utils::unique_id;
-
-unique_id!(plugin);
-
-pub use plugin::Id as PluginId;
 
 #[derive(Debug)]
 pub enum AudioThreadMessage {
@@ -22,15 +19,24 @@ pub enum AudioThreadMessage {
 pub struct AudioProcessor {
 	clap: AudioThread,
 	updates: HashMap<ClapId, f32>,
+	producer: Producer<(ClapId, f32)>,
 }
 
 impl AudioProcessor {
 	#[must_use]
-	pub fn new(clap: AudioThread) -> Self {
-		Self {
-			updates: HashMap::with_capacity(clap.param_count()),
-			clap,
-		}
+	pub fn create(clap: AudioThread) -> (Self, Consumer<(ClapId, f32)>) {
+		let (producer, consumer) = RingBuffer::new(
+			(clap.param_count() * clap.config().sample_rate as usize)
+				.div_ceil(clap.config().max_frames_count as usize),
+		);
+		(
+			Self {
+				updates: HashMap::with_capacity(clap.param_count()),
+				clap,
+				producer,
+			},
+			consumer,
+		)
 	}
 
 	#[must_use]
@@ -47,7 +53,6 @@ pub struct Plugin {
 
 #[derive(Debug)]
 pub struct PluginSlot {
-	id: PluginId,
 	plugin: PushSlot<Option<Plugin>>,
 	mix: f32,
 }
@@ -59,12 +64,8 @@ impl Drop for PluginSlot {
 }
 
 impl PluginSlot {
-	pub fn new(id: PluginId, plugin: PushSlot<Option<Plugin>>) -> Self {
-		Self {
-			id,
-			plugin,
-			mix: 1.0,
-		}
+	pub fn new(plugin: PushSlot<Option<Plugin>>) -> Self {
+		Self { plugin, mix: 1.0 }
 	}
 
 	pub fn process(
@@ -104,6 +105,16 @@ impl PluginSlot {
 			None => return 0,
 		};
 
+		debug_assert_eq!(
+			plugin.processor.clap.config().sample_rate as u32,
+			state.transport.sample_rate.get()
+		);
+
+		debug_assert_eq!(
+			plugin.processor.clap.config().max_frames_count,
+			state.transport.frames.get()
+		);
+
 		plugin.processor.clap.push_all(events.drain(..));
 
 		plugin.processor.clap.process::<Event>(
@@ -127,28 +138,28 @@ impl PluginSlot {
 			self.mix,
 		);
 
-		plugin.processor.clap.latency()
+		if state.render_mode == RenderMode::Realtime {
+			for (param_id, value) in plugin.processor.updates.extract_if(|_, _| true) {
+				if plugin.processor.producer.push((param_id, value)).is_err() {
+					warn!("full ring buffer");
+					plugin.processor.updates.insert(param_id, value);
+					break;
+				}
+			}
+		}
+
+		let latency = plugin.processor.clap.latency();
+
+		if plugin.processor.clap.needs_restart() {
+			self.restart();
+		}
+
+		latency
 	}
 
 	pub fn reset(&mut self) {
 		if let Some(plugin) = self.plugin.as_mut().and_then(|slot| slot.as_mut()) {
 			plugin.processor.clap.reset();
-		}
-	}
-
-	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
-		if let Some(plugin) = self.plugin.as_mut().and_then(|slot| slot.as_mut()) {
-			updates.extend(
-				plugin
-					.processor
-					.updates
-					.drain()
-					.map(|(param_id, value)| Update::Param(self.id, param_id, value)),
-			);
-
-			if plugin.processor.clap.needs_restart() {
-				self.restart();
-			}
 		}
 	}
 
@@ -158,6 +169,7 @@ impl PluginSlot {
 
 	pub fn param_changed(&mut self, param_id: ClapId, value: f32) {
 		if let Some(plugin) = self.plugin.as_mut().and_then(|slot| slot.as_mut()) {
+			plugin.processor.updates.remove(&param_id);
 			plugin.processor.clap.push(Event::ParamValue {
 				time: 0,
 				param_id,

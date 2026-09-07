@@ -1,6 +1,6 @@
 use crate::{
 	action::Action,
-	clap_host::{self, ClapHost},
+	clap_host::{self, ClapHost, PluginId},
 	components::{icon_button, menu_entry, text_icon_button},
 	config::Config,
 	daw::{self, Tab},
@@ -25,7 +25,7 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioThread, Batch, Channels, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
-	PanMode, PluginId, Point, PullSlot, SampleId, ThreadPool,
+	PanMode, Point, PullSlot, SampleId, ThreadPool,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -247,21 +247,9 @@ impl ArrangementView {
 			}
 			Message::Batch(NoClone(msg)) => {
 				let before = self.arrangement.transport().position;
-
-				let action = Action::batch(
-					self.arrangement
-						.update(*msg)
-						.into_iter()
-						.map(daw::Message::ClapHost)
-						.map(daw::Instruction::Message)
-						.map(Action::instruction),
-				);
-
+				self.arrangement.update(*msg);
 				let after = self.arrangement.transport().position;
-
 				self.autoscroll(before, after, config, state);
-
-				return action;
 			}
 			Message::DrainQueue => _ = self.arrangement.drain_queue(),
 			Message::RequestUpdate => self.arrangement.request_update(),

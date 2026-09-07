@@ -57,6 +57,11 @@ impl AudioThread {
 	}
 
 	#[must_use]
+	pub fn config(&self) -> PluginAudioConfiguration {
+		self.audio_buffers.config()
+	}
+
+	#[must_use]
 	pub fn param_count(&self) -> usize {
 		self.param_count
 	}

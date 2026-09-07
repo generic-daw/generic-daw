@@ -35,7 +35,7 @@ pub use midi_note::{Key, MidiKey, MidiNote, MidiNoteId};
 pub use midi_pattern::{MidiPattern, MidiPatternId};
 pub use midly::num::{u4, u7};
 pub use node::Node;
-pub use plugin::{AudioProcessor, AudioThreadMessage, Plugin, PluginId};
+pub use plugin::{AudioProcessor, AudioThreadMessage, Plugin};
 pub use sample::{Sample, SampleId};
 pub use slot::{PullSlot, PushSlot};
 pub use stream::{

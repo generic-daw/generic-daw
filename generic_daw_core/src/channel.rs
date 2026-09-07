@@ -90,8 +90,8 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
-			NodeAction::PluginInsert(index, id, plugin) => {
-				self.plugins.insert(index, PluginSlot::new(id, *plugin));
+			NodeAction::PluginInsert(index, plugin) => {
+				self.plugins.insert(index, PluginSlot::new(*plugin));
 			}
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginActivate(index, plugin) => self.plugins[index].activate(*plugin),
@@ -110,10 +110,6 @@ impl Channel {
 		if peaks != self.last_peaks {
 			self.last_peaks = peaks;
 			updates.push(Update::Peaks(self.id(), peaks));
-		}
-
-		for plugin in &mut self.plugins {
-			plugin.collect_updates(updates);
 		}
 	}
 

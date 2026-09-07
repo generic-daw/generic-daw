@@ -1,5 +1,6 @@
+use crate::clap_host::PluginId;
 use generic_daw_core::{
-	PluginId, PushSlot,
+	PushSlot,
 	clap_host::{self, HostInfo, MainThreadMessage, PluginDescriptor},
 };
 use std::sync::mpsc::Receiver;

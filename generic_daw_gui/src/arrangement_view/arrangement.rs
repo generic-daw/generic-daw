@@ -10,15 +10,15 @@ use crate::{
 		sample::{Sample, SamplePair},
 		track::Track,
 	},
-	clap_host,
+	clap_host::{self, PluginId},
 	config::Config,
 	daw::{self, FREEZES_DIR, format_now},
 };
 use generic_daw_core::{
-	AudioClip, AudioPreview, AudioProcessor, AudioThread, AudioThreadMessage, Batch, Channels,
-	Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
-	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point, PullSlot, PushSlot,
-	SampleId, Streams, ThreadPool, TimedMidiAction, Transport, Update, Version, build_streams,
+	AudioClip, AudioPreview, AudioProcessor, AudioThread, Batch, Channels, Clip, ClipId, Message,
+	MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId,
+	NodeImpl as _, PanMode, Point, PullSlot, PushSlot, SampleId, Streams, ThreadPool,
+	TimedMidiAction, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -37,7 +37,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{ShiftMoveExt as _, boxed_slice, sanitize_filename_chars};
+use utils::{NoClone, ShiftMoveExt as _, boxed_slice, sanitize_filename_chars};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -183,9 +183,7 @@ impl Arrangement {
 		self.transport.frames = frames;
 	}
 
-	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
-		let mut messages = Vec::new();
-
+	pub fn update(&mut self, mut batch: Batch) {
 		let mix = self.transport.sample_rate.get() as f32 / batch.load_frames as f32;
 		let load = batch.load_duration.as_secs_f32() * mix;
 		self.load = Some(
@@ -247,11 +245,6 @@ impl Arrangement {
 						node.polyphony = polyphony;
 					}
 				}
-				Update::Param(id, param_id, value) => {
-					messages.push(clap_host::Message::PluginParamValueChange(
-						id, param_id, value,
-					));
-				}
 				Update::ConnectFailed(from, to) => _ = self.node_mut(from).outgoing.remove(&to),
 				Update::Dealloc(boxed) => drop(boxed),
 			}
@@ -266,8 +259,6 @@ impl Arrangement {
 		if batch.updates.capacity() != 0 {
 			self.send(Message::ReturnUpdate(batch.updates));
 		}
-
-		messages
 	}
 
 	fn audio_recording_interrupted(&mut self, id: impl Into<Option<NodeId>>) {
@@ -422,10 +413,7 @@ impl Arrangement {
 		let (plugin, slot, receiver) = PluginPair::new(descriptor, HOST.clone())?;
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.insert(index, plugin.gui);
-		self.node_action(
-			id,
-			NodeAction::PluginInsert(index, plugin_id, Box::new(slot)),
-		);
+		self.node_action(id, NodeAction::PluginInsert(index, Box::new(slot)));
 		Some((
 			plugin_id,
 			daw::Instruction::PluginAdd(plugin_id, plugin.core, receiver),
@@ -483,20 +471,31 @@ impl Arrangement {
 		id: NodeId,
 		index: usize,
 		processor: Option<clap_host::AudioThread>,
-	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
+	) -> Task<clap_host::Message> {
 		self.node_mut(id).plugins[index].active = processor.is_some();
 		let (s, r) = oneshot::channel();
 		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s, s);
-		let (sender, receiver) = oneshot::async_channel();
-		s.send(PushSlot::new(
-			Some(processor.map(|processor| generic_daw_core::Plugin {
-				processor: AudioProcessor::new(processor),
-				sender,
-			})),
-			r,
-		))
-		.unwrap();
-		receiver
+		if let Some(processor) = processor {
+			let (sender, receiver) = oneshot::async_channel();
+			let (processor, consumer) = AudioProcessor::create(processor);
+			s.send(PushSlot::new(
+				Some(Some(generic_daw_core::Plugin { processor, sender })),
+				r,
+			))
+			.unwrap();
+			let id = self.nodes[&id].plugins[index].id;
+			Task::batch([
+				Task::perform(receiver, move |message| {
+					clap_host::Message::AudioThread(id, NoClone(Box::new(message.unwrap())))
+				}),
+				Task::run(poll_consumer(consumer), move |(param_id, value)| {
+					clap_host::Message::PluginParamValueChange(id, param_id, value)
+				}),
+			])
+		} else {
+			s.send(PushSlot::new(Some(None), r)).unwrap();
+			Task::none()
+		}
 	}
 
 	pub fn plugin_activate(
@@ -504,20 +503,26 @@ impl Arrangement {
 		id: NodeId,
 		index: usize,
 		processor: clap_host::AudioThread,
-	) -> oneshot::AsyncReceiver<AudioThreadMessage> {
+	) -> Task<clap_host::Message> {
 		self.node_mut(id).plugins[index].active = true;
 		let (sender, receiver) = oneshot::async_channel();
+		let (processor, consumer) = AudioProcessor::create(processor);
 		self.node_action(
 			id,
 			NodeAction::PluginActivate(
 				index,
-				Box::new(generic_daw_core::Plugin {
-					processor: AudioProcessor::new(processor),
-					sender,
-				}),
+				Box::new(generic_daw_core::Plugin { processor, sender }),
 			),
 		);
-		receiver
+		let id = self.nodes[&id].plugins[index].id;
+		Task::batch([
+			Task::perform(receiver, move |message| {
+				clap_host::Message::AudioThread(id, NoClone(Box::new(message.unwrap())))
+			}),
+			Task::run(poll_consumer(consumer), move |(param_id, value)| {
+				clap_host::Message::PluginParamValueChange(id, param_id, value)
+			}),
+		])
 	}
 
 	pub fn plugin_deactivate(&mut self, id: NodeId, index: usize) {

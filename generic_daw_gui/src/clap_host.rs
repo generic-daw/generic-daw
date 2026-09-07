@@ -12,7 +12,7 @@ use crate::{
 use events::EventFlags;
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
-use generic_daw_core::{AudioThreadMessage, Event, PluginId, Transport};
+use generic_daw_core::{AudioThreadMessage, Event, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task,
@@ -29,7 +29,11 @@ use std::{
 	sync::mpsc::Receiver,
 	time::Duration,
 };
-use utils::{NoClone, NoDebug, natural_cmp};
+use utils::{NoClone, NoDebug, natural_cmp, unique_id};
+
+unique_id!(plugin);
+
+pub use plugin::Id as PluginId;
 
 #[derive(Clone, Debug)]
 pub enum Message {

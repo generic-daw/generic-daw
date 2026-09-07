@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{self, Arrangement, ArrangementView, Feedback},
-	clap_host::{self, ClapHost},
+	clap_host::{self, ClapHost, PluginId},
 	components::{menu_entry, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
@@ -18,7 +18,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	AudioThread, BpmTapper, NodeId, PluginId, PullSlot, build_streams,
+	AudioThread, BpmTapper, NodeId, PullSlot, build_streams,
 	clap_host::{
 		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 		StateContextType,
@@ -1034,32 +1034,20 @@ impl Daw {
 			}
 			Instruction::PluginActivate(id, processor) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
-					return Task::perform(
-						self.arrangement_view
-							.arrangement
-							.plugin_activate(node, index, processor),
-						move |message| {
-							Message::ClapHost(clap_host::Message::AudioThread(
-								id,
-								NoClone(Box::new(message.unwrap())),
-							))
-						},
-					);
+					return self
+						.arrangement_view
+						.arrangement
+						.plugin_activate(node, index, processor)
+						.map(Message::ClapHost);
 				}
 			}
 			Instruction::PluginRestart(id, processor) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
-					return Task::perform(
-						self.arrangement_view
-							.arrangement
-							.plugin_restart(node, index, processor),
-						move |message| {
-							Message::ClapHost(clap_host::Message::AudioThread(
-								id,
-								NoClone(Box::new(message.unwrap())),
-							))
-						},
-					);
+					return self
+						.arrangement_view
+						.arrangement
+						.plugin_restart(node, index, processor)
+						.map(Message::ClapHost);
 				}
 			}
 			Instruction::PluginParamChanged(id, param_id, value) => {

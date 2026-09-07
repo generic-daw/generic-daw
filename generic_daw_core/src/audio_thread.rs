@@ -1,7 +1,7 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
-	MidiPatternId, Node, NodeId, PanMode, Plugin, PluginId, Point, PullSlot, PushSlot, Sample,
-	SampleId, ThreadPool,
+	MidiPatternId, Node, NodeId, PanMode, Plugin, Point, PullSlot, PushSlot, Sample, SampleId,
+	ThreadPool,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -131,7 +131,7 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginInsert(usize, PluginId, Box<PushSlot<Option<Plugin>>>),
+	PluginInsert(usize, Box<PushSlot<Option<Plugin>>>),
 	PluginRemove(usize),
 	PluginActivate(usize, Box<Plugin>),
 	PluginDeactivate(usize),
@@ -160,7 +160,6 @@ pub enum Update {
 	AudioPreviewEnded(Version),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
-	Param(PluginId, ClapId, f32),
 	ConnectFailed(NodeId, NodeId),
 	Dealloc(Box<dyn Any + Send>),
 }
