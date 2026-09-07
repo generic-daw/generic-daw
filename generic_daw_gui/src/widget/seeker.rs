@@ -19,7 +19,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	border, keyboard, padding,
-	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, Shaping, Wrapping},
 	window,
 };
 use std::time::Instant;
@@ -885,8 +885,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			let bar = Text {
 				content,
 				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
+				size: renderer.text_size(),
+				line_height: renderer.line_height(),
 				font: Font::MONOSPACE,
 				align_x: Alignment::Left,
 				align_y: Vertical::Bottom,
@@ -940,8 +940,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			let bar = Text {
 				content: format!("{}:{:02}", second.second() / 60, second.second() % 60),
 				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
+				size: renderer.text_size(),
+				line_height: renderer.line_height(),
 				font: Font::MONOSPACE,
 				align_x: Alignment::Left,
 				align_y: Vertical::Top,

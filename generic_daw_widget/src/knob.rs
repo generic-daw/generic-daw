@@ -456,9 +456,9 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			.update(Text {
 				content: self.tooltip,
 				bounds,
-				size: renderer.default_size(),
+				size: renderer.text_size(),
 				line_height: LineHeight::Relative(1.0),
-				font: renderer.default_font(),
+				font: renderer.font(),
 				align_x: Alignment::Left,
 				align_y: Vertical::Top,
 				shaping: Shaping::Auto,

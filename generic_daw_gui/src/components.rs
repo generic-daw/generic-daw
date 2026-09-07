@@ -98,20 +98,20 @@ pub fn number_input<'a>(
 	.into()
 }
 
-pub fn pick_list_handle() -> pick_list::Handle<Font> {
+pub fn pick_list_handle() -> pick_list::Handle {
 	pick_list::Handle::Dynamic {
 		closed: pick_list::Icon {
 			font: LUCIDE_FONT,
 			code_point: chevron_down().glyph(),
 			size: None,
-			line_height: text::LineHeight::Relative(1.0),
+			line_height: None,
 			shaping: text::Shaping::Basic,
 		},
 		open: pick_list::Icon {
 			font: LUCIDE_FONT,
 			code_point: chevron_up().glyph(),
 			size: None,
-			line_height: text::LineHeight::Relative(1.0),
+			line_height: None,
 			shaping: text::Shaping::Basic,
 		},
 	}

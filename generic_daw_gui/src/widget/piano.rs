@@ -11,7 +11,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	mouse::Cursor,
-	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, Shaping, Wrapping},
 };
 
 const PIANO_WIDTH: f32 = 2.5 * LINE_HEIGHT;
@@ -80,9 +80,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano {
 				let note_name = Text {
 					content: key.to_string(),
 					bounds: Size::new(f32::INFINITY, 0.0),
-					size: renderer.default_size(),
-					line_height: LineHeight::default(),
-					font: renderer.default_font(),
+					size: renderer.text_size(),
+					line_height: renderer.line_height(),
+					font: renderer.font(),
 					align_x: Alignment::Right,
 					align_y: Vertical::Center,
 					shaping: Shaping::Basic,
