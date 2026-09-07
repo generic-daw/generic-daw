@@ -1,16 +1,17 @@
 use crate::{
-	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical, rotate_ccw},
-	stylefns::{
-		button_with_radius, container_with_radius, weaker_bordered_box, weakest_bordered_box,
-	},
+	components::drag_handle::drag_handle,
+	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, rotate_ccw},
+	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle, stateful::Stateful};
+use generic_daw_widget::{context_menu::ContextMenu, stateful::Stateful};
 use iced::{
-	Element, Fill, Font, Theme, border, padding,
+	Element, Fill, Font, Theme, border,
 	widget::{Button, button, container, pick_list, right, row, sensor, space, text, text_input},
 };
 use std::{cell::Cell, ops::RangeInclusive};
+
+mod drag_handle;
 
 pub fn file_tree_entry<'a, Message: 'a>(
 	i: Icon,
@@ -69,15 +70,7 @@ pub fn number_input<'a>(
 	let max_digits = (range.end() + 1).ilog10();
 	row![
 		ContextMenu::new(
-			DragHandle::new(
-				container(move_vertical())
-					.style(container_with_radius(weakest_bordered_box, radius.right(0)))
-					.padding(padding::vertical(5)),
-				range,
-				value,
-				Some
-			)
-			.default(default),
+			drag_handle(range, value, default, radius.right(0)).map(Some),
 			move || container(
 				menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),
 			)

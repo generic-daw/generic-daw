@@ -4,7 +4,6 @@ use iced_widget::core::Element;
 use std::cell::LazyCell;
 
 pub mod context_menu;
-pub mod drag_handle;
 pub mod knob;
 pub mod menu;
 pub mod menu_overlay;
