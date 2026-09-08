@@ -358,16 +358,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								}
 								playlist.status =
 									Status::FadingStartP(inner.index.0, inner.index.1);
-								shell.capture_event();
-								return;
 							}
 							(true, true, false) | (false, true, _) => {
 								if new_click.kind() == Kind::Double {
 									shell.publish((self.f)(Action::FadeEndToggleSymmetric));
 								}
 								playlist.status = Status::FadingEndP(inner.index.0, inner.index.1);
-								shell.capture_event();
-								return;
 							}
 							(false, false, _) => {
 								let bounds =
@@ -381,10 +377,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 										shell.publish((self.f)(Action::InvertPolarity));
 									}
 									playlist.status = Status::DraggingVolume(cursor.y);
-									shell.capture_event();
-									return;
 								}
 							}
+						}
+
+						if playlist.status != Status::None {
+							break 'block;
 						}
 
 						if cursor.y - clip_bounds.y > header_height + 12.0 {
@@ -420,8 +418,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						} else {
 							Status::FadingEndLen(time)
 						};
-						shell.capture_event();
-						return;
 					}
 					Inner::MidiClip(..) => {
 						if new_click.kind() == Kind::Double {
@@ -433,43 +429,47 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					Inner::AudioRecording(..) | Inner::MidiRecording(..) => unreachable!(),
 				}
 
-				let start_pixel = clip_bounds.x;
-				let end_pixel = clip_bounds.x + clip_bounds.width;
-				let start_offset = cursor.x - start_pixel;
-				let end_offset = end_pixel - cursor.x;
-				let border = 10f32.min(clip_bounds.width / 3.0);
-
-				playlist.status = match (
-					modifiers.command(),
-					modifiers.shift(),
-					start_offset < border,
-					end_offset < border,
-					cursor.y - clip_bounds.y.max(0.0) < header_height,
-				) {
-					(false, false, false, false, _) => Status::Dragging(index.0, time),
-					(false, _, true, false, _) => Status::TrimmingStart(time),
-					(false, _, false, true, _) => Status::TrimmingEnd(time),
-					(true, false, _, _, _) => {
-						clear = false;
-						let time = self.grid.maybe_snap(time, *modifiers, |time| {
-							time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
-						});
-						Status::Selecting(index.0, index.0, time, time)
+				if playlist.status == Status::None {
+					playlist.status = match (modifiers.command(), modifiers.shift()) {
+						(false, false) => {
+							let start_offset = cursor.x - clip_bounds.x;
+							let end_offset = clip_bounds.width - start_offset;
+							let border = 10f32.min(clip_bounds.width / 3.0);
+							match (start_offset < border, end_offset < border) {
+								(false, false) => Status::Dragging(index.0, time),
+								(true, false) => Status::TrimmingStart(time),
+								(false, true) => Status::TrimmingEnd(time),
+								(true, true) => unreachable!(),
+							}
+						}
+						(true, false) => {
+							clear = false;
+							let time = self.grid.maybe_snap(time, *modifiers, |time| {
+								time.round(
+									self.grid.beats_snap_step(playlist.scale, self.transport),
+								)
+							});
+							Status::Selecting(index.0, index.0, time, time)
+						}
+						(false, true) => {
+							shell.publish((self.f)(Action::Clone));
+							Status::Dragging(index.0, time)
+						}
+						(true, true) => {
+							if cursor.y - clip_bounds.y.max(0.0) < header_height {
+								let time = self.grid.maybe_snap(time, *modifiers, |time| {
+									time.round(
+										self.grid.beats_snap_step(playlist.scale, self.transport),
+									)
+								});
+								shell.publish((self.f)(Action::SplitAt(time)));
+								Status::DraggingSplit(time)
+							} else {
+								Status::DraggingSlip(time)
+							}
+						}
 					}
-					(false, true, _, _, _) => {
-						shell.publish((self.f)(Action::Clone));
-						Status::Dragging(index.0, time)
-					}
-					(true, true, _, _, false) => Status::DraggingSlip(time),
-					(true, true, _, _, true) => {
-						let time = self.grid.maybe_snap(time, *modifiers, |time| {
-							time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
-						});
-						shell.publish((self.f)(Action::SplitAt(time)));
-						Status::DraggingSplit(time)
-					}
-					(_, _, true, true, _) => unreachable!(),
-				};
+				}
 
 				shell.capture_event();
 				shell.request_redraw();
