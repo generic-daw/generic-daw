@@ -361,9 +361,10 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			);
 		}
 
+		let mut allocs = Vec::new();
 		let active = &mut Vec::<(usize, _)>::new();
 
-		let allocs = (0..128)
+		(0..128)
 			.map(|note| {
 				self.notes
 					.iter()
@@ -371,10 +372,8 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					.zip(layout.children())
 					.filter_map(move |((i, n), l)| (n.note.key.0 == note).then_some((i, l)))
 			})
-			.map(|children| {
+			.for_each(|children| {
 				active.clear();
-
-				let mut result = Vec::<Vec<_>>::new();
 
 				for (i, layout) in children {
 					let Some(bounds) = layout.bounds().intersection(viewport) else {
@@ -389,33 +388,30 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						.map_or_default(|l| l + 1);
 					active.push((layer, bounds.x + bounds.width));
 
-					if layer == result.len() {
-						result.push(Vec::new());
+					if layer == allocs.len() {
+						allocs.push(Vec::new());
 					}
 
-					result[layer].push(i);
+					allocs[layer].push(i);
 				}
+			});
 
-				result
-			})
-			.collect::<Vec<_>>();
-
-		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {
+		for (i, alloc) in allocs.into_iter().enumerate() {
 			if i != 0 {
 				renderer.start_layer(Rectangle::INFINITE);
 			}
 
-			allocs
-				.iter()
-				.filter_map(|alloc| alloc.get(i))
-				.flat_map(|alloc| {
-					alloc
-						.iter()
-						.map(|&i| ((&self.notes[i], &tree.children[i]), layout.child(i)))
-				})
-				.for_each(|((child, tree), layout)| {
-					child.draw(tree, renderer, theme, style, layout, cursor, viewport);
-				});
+			for note in alloc {
+				self.notes[note].draw(
+					&tree.children[note],
+					renderer,
+					theme,
+					style,
+					layout.child(note),
+					cursor,
+					viewport,
+				);
+			}
 
 			if i != 0 {
 				renderer.end_layer();

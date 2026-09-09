@@ -548,17 +548,17 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			);
 		}
 
+		let mut allocs = Vec::new();
 		let active = &mut Vec::<(usize, _)>::new();
 
-		let allocs = layout
+		layout
 			.children()
 			.map(|layout| layout.children().enumerate())
-			.map(|children| {
+			.enumerate()
+			.for_each(|(track, children)| {
 				active.clear();
 
-				let mut result = Vec::<Vec<_>>::new();
-
-				for (i, layout) in children {
+				for (clip, layout) in children {
 					let Some(bounds) = layout.bounds().intersection(viewport) else {
 						continue;
 					};
@@ -571,38 +571,30 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						.map_or_default(|l| l + 1);
 					active.push((layer, bounds.x + bounds.width));
 
-					if layer == result.len() {
-						result.push(Vec::new());
+					if layer == allocs.len() {
+						allocs.push(Vec::new());
 					}
 
-					result[layer].push(i);
+					allocs[layer].push((track, clip));
 				}
+			});
 
-				result
-			})
-			.collect::<Vec<_>>();
-
-		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {
+		for (i, alloc) in allocs.into_iter().enumerate() {
 			if i != 0 {
 				renderer.start_layer(Rectangle::INFINITE);
 			}
 
-			allocs
-				.iter()
-				.zip(&self.tracks)
-				.zip(&tree.children)
-				.zip(layout.children())
-				.filter_map(|(((alloc, track), tree), layout)| {
-					Some((alloc.get(i)?, track, tree, layout))
-				})
-				.flat_map(|(alloc, track, tree, layout)| {
-					alloc
-						.iter()
-						.map(move |&i| ((&track.clips[i], &tree.children[i]), layout.child(i)))
-				})
-				.for_each(|((child, tree), layout)| {
-					child.draw(tree, renderer, theme, style, layout, cursor, viewport);
-				});
+			for (track, clip) in alloc {
+				self.tracks[track].clips[clip].draw(
+					&tree.children[track].children[clip],
+					renderer,
+					theme,
+					style,
+					layout.child(track).child(clip),
+					cursor,
+					viewport,
+				);
+			}
 
 			if i != 0 {
 				renderer.end_layer();
