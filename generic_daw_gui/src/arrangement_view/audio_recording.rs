@@ -68,13 +68,15 @@ impl AudioRecording {
 	}
 
 	pub fn finalize(self) -> (BeatTime, SamplePair) {
+		let sample_rate = NonZero::new(self.writer.spec().sample_rate).unwrap();
+		self.writer.0.finalize().unwrap();
 		(
 			self.position,
 			SamplePair::from_core_and_lods(
 				Sample {
 					id: SampleId::unique(),
 					samples: NoDebug(self.samples.into()),
-					sample_rate: NonZero::new(self.writer.spec().sample_rate).unwrap(),
+					sample_rate,
 				},
 				self.lods.finalize(),
 				self.path,
