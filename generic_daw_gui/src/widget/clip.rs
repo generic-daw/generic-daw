@@ -431,12 +431,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				if playlist.status == Status::None {
 					playlist.status = match (modifiers.command(), modifiers.shift()) {
-						(false, false) => {
+						(false, shift) => {
 							let start_offset = cursor.x - clip_bounds.x;
 							let end_offset = clip_bounds.width - start_offset;
 							let border = 10f32.min(clip_bounds.width / 3.0);
 							match (start_offset < border, end_offset < border) {
-								(false, false) => Status::Dragging(index.0, time),
+								(false, false) => {
+									if shift {
+										shell.publish((self.f)(Action::Clone));
+									}
+									Status::Dragging(index.0, time)
+								}
 								(true, false) => Status::TrimmingStart(time),
 								(false, true) => Status::TrimmingEnd(time),
 								(true, true) => unreachable!(),
@@ -450,10 +455,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								)
 							});
 							Status::Selecting(index.0, index.0, time, time)
-						}
-						(false, true) => {
-							shell.publish((self.f)(Action::Clone));
-							Status::Dragging(index.0, time)
 						}
 						(true, true) => {
 							if cursor.y - clip_bounds.y.max(0.0) < header_height {

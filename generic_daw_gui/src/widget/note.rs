@@ -92,7 +92,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				);
 
 				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
-					(false, false) => {
+					(false, shift) => {
 						let start_offset = cursor.x - note_bounds.x;
 						let end_offset = note_bounds.width - start_offset;
 						let border = 10f32.min(note_bounds.width / 3.0);
@@ -107,6 +107,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 								if (vel_pixel - cursor.x).abs() < border / 2.0 {
 									Status::DraggingVelocity(self.index, self.note.velocity)
 								} else {
+									if shift {
+										shell.publish((self.f)(Action::Clone));
+									}
 									Status::Dragging(self.note.key, time)
 								}
 							}
@@ -121,10 +124,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
 						});
 						Status::Selecting(self.note.key, self.note.key, time, time)
-					}
-					(false, true) => {
-						shell.publish((self.f)(Action::Clone));
-						Status::Dragging(self.note.key, time)
 					}
 					(true, true) => {
 						let time = self.grid.maybe_snap(time, *modifiers, |time| {
