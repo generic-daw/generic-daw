@@ -49,7 +49,8 @@ struct ClipInfo {
 struct State {
 	mesh_cache: RefCell<mesh::Cache>,
 	canvas_cache: RefCell<canvas::Cache>,
-	volume_text: Plain<Paragraph>,
+	volume_text: String,
+	volume_paragraph: Plain<Paragraph>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_info: ClipInfo,
@@ -64,7 +65,8 @@ impl Default for State {
 		Self {
 			mesh_cache: RefCell::new(mesh::Cache::new(Arc::default())),
 			canvas_cache: RefCell::default(),
-			volume_text: Plain::default(),
+			volume_text: String::default(),
+			volume_paragraph: Plain::default(),
 			last_click: None,
 			last_bounds: Rectangle::default(),
 			last_info: ClipInfo::default(),
@@ -172,6 +174,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		};
 
 		if state.last_info != info {
+			if let Inner::AudioClip(inner) = self.inner
+				&& state.last_info.volume != info.volume
+			{
+				state.volume_text = format_db(inner.clip.volume);
+			}
+
 			state.last_info = info;
 			state.canvas_cache.get_mut().clear();
 			if !state.mesh_cache.get_mut().is_empty() {
@@ -190,17 +198,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		if let Inner::AudioClip(inner) = self.inner {
-			let content = format_db(inner.clip.volume);
-			tree.state.downcast_mut::<State>().volume_text.update(Text {
-				content: &*content,
+		if let Inner::AudioClip(_) = self.inner {
+			let state = tree.state.downcast_mut::<State>();
+			state.volume_paragraph.update(Text {
+				content: &state.volume_text,
 				bounds: Size::INFINITE,
 				size: renderer.text_size(),
 				line_height: LineHeight::Relative(1.0),
 				font: renderer.font(),
 				align_x: Alignment::Center,
 				align_y: Vertical::Bottom,
-				shaping: Shaping::Auto,
+				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::None,
 				hint_factor: renderer.hint_factor(),
@@ -774,8 +782,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						}
 					}
 
-					if state.show_controls || state.volume_text.content() != "0.0 dB" {
-						let size = state.volume_text.min_bounds().expand((4.0, 4.0));
+					if state.show_controls || state.volume_text != "0.0 dB" {
+						let size = state.volume_paragraph.min_bounds().expand((4.0, 4.0));
 
 						if lower_bounds.width >= size.width && lower_edge >= size.height + 5.0 {
 							let control = Point::new(lower_bounds.width / 2.0, lower_edge - 6.0);
@@ -790,7 +798,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							);
 
 							frame.fill_text(canvas::Text {
-								content: state.volume_text.content().to_owned(),
+								content: state.volume_text.clone(),
 								position: control,
 								max_width: f32::INFINITY,
 								color: theme.palette().background.strong.text,
@@ -799,7 +807,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								font: renderer.font(),
 								align_x: Alignment::Center,
 								align_y: Vertical::Bottom,
-								shaping: Shaping::Auto,
+								shaping: Shaping::Basic,
 								wrapping: Wrapping::None,
 								ellipsis: Ellipsis::None,
 							});
