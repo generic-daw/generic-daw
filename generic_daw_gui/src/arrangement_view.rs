@@ -2514,7 +2514,11 @@ impl ArrangementView {
 				0.0,
 			);
 
-			_ = self.handle_playlist_action(playlist::Action::Pan(pos_diff, 0.0), config, state);
+			_ = self.handle_playlist_action(
+				playlist::Action::Pan(pos_diff, f32::INFINITY),
+				config,
+				state,
+			);
 		}
 	}
 
