@@ -1648,50 +1648,36 @@ impl Daw {
 			},
 			if self.progress.is_some() {
 				Subscription::none()
-			} else if self.config_view.is_some() {
-				keyboard::listen().filter_map(|event| match event {
-					keyboard::Event::KeyPressed {
-						key,
-						physical_key,
-						modifiers,
-						repeat,
-						..
-					} => ConfigView::keybinds(&key, modifiers, repeat)
-						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-					_ => None,
-				})
-			} else if self.plugin_picker.is_some() {
-				keyboard::listen().filter_map(|event| match event {
-					keyboard::Event::KeyPressed {
-						key,
-						physical_key,
-						modifiers,
-						repeat,
-						..
-					} => PluginPicker::keybinds(&key, modifiers, repeat)
-						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-					_ => None,
-				})
 			} else {
 				keyboard::listen()
 					.with((
+						self.config_view.is_some(),
+						self.plugin_picker.is_some(),
 						self.project,
 						self.bottom_pane
 							.filter(|_| self.bottom_selected)
 							.unwrap_or(self.top_pane),
 					))
-					.filter_map(|((project, tab), event)| match event {
-						keyboard::Event::KeyPressed {
-							key,
-							physical_key,
-							modifiers,
-							repeat,
-							..
-						} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
-							.map(|message| Message::Arrangement(project, message(tab)))
+					.filter_map(
+						|((config_view, plugin_picker, project, tab), event)| match event {
+							keyboard::Event::KeyPressed {
+								key,
+								physical_key,
+								modifiers,
+								repeat,
+								..
+							} => if config_view {
+								ConfigView::keybinds(&key, modifiers, repeat)
+							} else if plugin_picker {
+								PluginPicker::keybinds(&key, modifiers, repeat)
+							} else {
+								ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
+									.map(|message| Message::Arrangement(project, message(tab)))
+							}
 							.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-						_ => None,
-					})
+							_ => None,
+						},
+					)
 			},
 			window::events().filter_map(|(window, event)| match event {
 				window::Event::CloseRequested => Some(Message::CloseRequested(window)),
@@ -1738,7 +1724,6 @@ impl Daw {
 			(false, true, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Stop),
 				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleBackwards),
-
 				_ => None,
 			},
 			(true, true, false, false) => match key.to_latin(physical_key) {
