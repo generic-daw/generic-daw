@@ -40,8 +40,9 @@ use iced::{
 use iced_split::{Strategy, horizontal_split, vertical_split};
 use log::{trace, warn};
 use rfd::AsyncFileDialog;
+use save::Id as Save;
 use scan::Id as Scan;
-use smol::unblock;
+use smol::{Timer, unblock};
 use std::{
 	convert::Infallible,
 	ffi::CStr,
@@ -52,6 +53,7 @@ use std::{
 };
 use utils::{NoClone, NoDebug, unique_id};
 
+unique_id!(save);
 unique_id!(scan);
 unique_id!(project);
 
@@ -139,6 +141,8 @@ pub enum Message {
 		NoClone<NoDebug<Box<AudioThread>>>,
 		Option<proto::ViewState>,
 	),
+
+	SaveFinished(Save),
 
 	ScanProgress(Scan, f32),
 	ScanStatus(Scan, Option<Arc<str>>),
@@ -298,6 +302,9 @@ pub struct Daw {
 	missing_plugins: Vec<(Arc<CStr>, oneshot::Sender<Feedback<Infallible>>)>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
+	save: Option<Save>,
+	save_status: Option<Arc<str>>,
+
 	scan: Option<Scan>,
 	scan_progress: Option<f32>,
 	scan_status: Option<Arc<str>>,
@@ -369,6 +376,9 @@ impl Daw {
 			status: None,
 			missing_plugins: Vec::new(),
 			missing_samples: Vec::new(),
+
+			save: None,
+			save_status: None,
 
 			scan: None,
 			scan_progress: None,
@@ -458,6 +468,9 @@ impl Daw {
 				self.bottom_pane = self.bottom_pane.map(|_| Tab::Mixer);
 				self.project = project;
 
+				self.save = None;
+				self.save_status = None;
+
 				arrangement
 					.replace_streams(self.arrangement_view.arrangement.replace_streams(None));
 				let mut arrangement = std::mem::replace(
@@ -476,6 +489,12 @@ impl Daw {
 					drop(p_receiver.recv().unwrap());
 				}))
 				.discard();
+			}
+			Message::SaveFinished(save) => {
+				if self.save == Some(save) {
+					self.save = None;
+					self.save_status = None;
+				}
 			}
 			Message::ScanProgress(scan, progress) => {
 				if self.scan == Some(scan) {
@@ -544,10 +563,25 @@ impl Daw {
 				.map(Message::SaveAsFile);
 			}
 			Message::SaveAsFile(path) => {
-				match std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host)) {
-					Ok(()) => return self.update(Message::OpenedFile(Some(path))),
-					Err(err) => warn!("{err}"),
+				if let Err(err) =
+					std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host))
+				{
+					warn!("{err}");
+					return Task::none();
 				}
+
+				let save = Save::unique();
+				self.save = Some(save);
+				self.save_status = path
+					.file_name()
+					.map(|name| format!("saved {}", name.display()).into());
+
+				return Task::batch([
+					self.update(Message::OpenedFile(Some(path))),
+					Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
+						Message::SaveFinished(save)
+					}),
+				]);
 			}
 			Message::AutosaveFile => {
 				let name = self
@@ -563,7 +597,19 @@ impl Daw {
 					std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host))
 				{
 					warn!("{err}");
+					return Task::none();
 				}
+
+				let save = Save::unique();
+				self.save = Some(save);
+				self.save_status = path
+					.file_name()
+					.map(|name| format!("autosaved {}", name.display()).into());
+
+				return Task::batch([Task::perform(
+					Timer::after(Duration::from_secs(4)),
+					move |_| Message::SaveFinished(save),
+				)]);
 			}
 			Message::ToggleFullscreen => {
 				let id = self.main_window_id;
@@ -759,7 +805,7 @@ impl Daw {
 								.try_send(Message::ScanStatus(
 									scan,
 									path.file_name()
-										.map(|name| name.display().to_string().into()),
+										.map(|name| format!("scanning {}", name.display()).into()),
 								))
 								.unwrap();
 
@@ -1243,21 +1289,35 @@ impl Daw {
 						},
 						5
 					)),
-					right(self.scan_progress.map(|progress| {
-						column![
-							self.scan_status
-								.as_deref()
-								.map(|status| text!("scanning {}", status)
+					right(
+						self.save_status
+							.as_deref()
+							.map(|status| Element::new(
+								text(status)
 									.size(13)
 									.wrapping(text::Wrapping::None)
-									.ellipsis(text::Ellipsis::End)),
-							progress_bar(0.0..=1.0, progress).girth(4).style(
-								progress_bar_with_radius(progress_bar::secondary, f32::INFINITY)
-							)
-						]
-						.spacing(5)
-						.width(Fill.max(200))
-					})),
+									.ellipsis(text::Ellipsis::End)
+							))
+							.or_else(|| {
+								self.scan_progress.map(|progress| {
+									column![
+										self.scan_status.as_deref().map(|status| text(status)
+											.size(13)
+											.wrapping(text::Wrapping::None)
+											.ellipsis(text::Ellipsis::End)),
+										progress_bar(0.0..=1.0, progress).girth(4).style(
+											progress_bar_with_radius(
+												progress_bar::secondary,
+												f32::INFINITY
+											)
+										)
+									]
+									.spacing(5)
+									.width(Fill.max(200))
+									.into()
+								})
+							})
+					),
 					row![
 						cpu(),
 						text!("{:.1}%", self.arrangement_view.arrangement.load() * 100.0)
