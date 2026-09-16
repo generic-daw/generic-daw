@@ -2,9 +2,7 @@ use crate::time::BeatRange;
 use std::fmt::{Debug, Display, Formatter};
 use utils::{unique_id, variants};
 
-unique_id!(midi_note_id);
-
-pub use midi_note_id::Id as MidiNoteId;
+unique_id!(MidiNoteId);
 
 variants! {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

@@ -28,9 +28,7 @@ use std::{
 };
 use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
-unique_id!(version);
-
-pub use version::Id as Version;
+unique_id!(Version);
 
 static ON_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/off_bar_click.pcm");

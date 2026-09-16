@@ -9,9 +9,7 @@ use midly::{
 use std::collections::HashMap;
 use utils::unique_id;
 
-unique_id!(midi_pattern_id);
-
-pub use midi_pattern_id::Id as MidiPatternId;
+unique_id!(MidiPatternId);
 
 #[derive(Clone, Debug)]
 pub struct MidiPattern {

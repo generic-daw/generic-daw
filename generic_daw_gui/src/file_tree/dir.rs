@@ -17,9 +17,7 @@ use iced::{
 use std::{path::Path, sync::Arc};
 use utils::{natural_cmp, unique_id};
 
-unique_id!(dir_id);
-
-pub use dir_id::Id as DirId;
+unique_id!(DirId);
 
 #[derive(Clone, Debug)]
 pub struct Dir {

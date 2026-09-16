@@ -1,21 +1,22 @@
+use std::sync::atomic::AtomicUsize;
+
+#[doc(hidden)]
+pub static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+
 #[macro_export]
 macro_rules! unique_id {
-	($mod_name:ident) => {
-		mod $mod_name {
-			use ::core::{
-				num::NonZero,
-				sync::atomic::{AtomicUsize, Ordering::Relaxed},
-			};
+	($ident:ident) => {
+		#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+		pub struct $ident(::std::num::NonZero<usize>);
 
-			static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
-
-			#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-			pub struct Id(NonZero<usize>);
-
-			impl Id {
-				pub fn unique() -> Self {
-					Self(NonZero::new(NEXT_ID.fetch_add(1, Relaxed)).unwrap())
-				}
+		impl $ident {
+			pub fn unique() -> Self {
+				Self(
+					::std::num::NonZero::new(
+						$crate::NEXT_ID.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed),
+					)
+					.unwrap(),
+				)
 			}
 		}
 	};

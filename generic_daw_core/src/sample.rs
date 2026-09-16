@@ -8,9 +8,7 @@ use symphonia::core::{
 };
 use utils::{NoDebug, unique_id};
 
-unique_id!(sample_id);
-
-pub use sample_id::Id as SampleId;
+unique_id!(SampleId);
 
 #[derive(Clone, Debug)]
 pub struct Sample {

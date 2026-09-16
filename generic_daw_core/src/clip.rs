@@ -4,9 +4,7 @@ use crate::{
 };
 use utils::unique_id;
 
-unique_id!(clip_id);
-
-pub use clip_id::Id as ClipId;
+unique_id!(ClipId);
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {

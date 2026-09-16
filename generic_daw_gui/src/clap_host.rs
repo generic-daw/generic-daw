@@ -31,9 +31,7 @@ use std::{
 };
 use utils::{NoClone, NoDebug, natural_cmp, unique_id};
 
-unique_id!(plugin);
-
-pub use plugin::Id as PluginId;
+unique_id!(PluginId);
 
 #[derive(Clone, Debug)]
 pub enum Message {

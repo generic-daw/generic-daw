@@ -13,3 +13,4 @@ pub use no_clone::NoClone;
 pub use no_debug::NoDebug;
 pub use sanitize_filename::{sanitize_filename, sanitize_filename_chars};
 pub use shift_move_ext::ShiftMoveExt;
+pub use unique_id::NEXT_ID;

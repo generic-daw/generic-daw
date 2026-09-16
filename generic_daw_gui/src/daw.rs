@@ -40,8 +40,6 @@ use iced::{
 use iced_split::{Strategy, horizontal_split, vertical_split};
 use log::{trace, warn};
 use rfd::AsyncFileDialog;
-use save::Id as Save;
-use scan::Id as Scan;
 use smol::{Timer, unblock};
 use std::{
 	convert::Infallible,
@@ -53,11 +51,9 @@ use std::{
 };
 use utils::{NoClone, NoDebug, unique_id};
 
-unique_id!(save);
-unique_id!(scan);
-unique_id!(project);
-
-pub use project::Id as Project;
+unique_id!(Save);
+unique_id!(Scan);
+unique_id!(Project);
 
 pub static CONFIG_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	let config_dir = dirs::config_dir().unwrap().join("Generic DAW").into();
