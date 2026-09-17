@@ -478,11 +478,18 @@ impl ArrangementView {
 			}
 			Message::TrackAdd => {
 				self.selected = self.arrangement.add_track();
-				return self.update(
-					Message::Connect(self.selected, self.arrangement.master().id),
-					config,
-					state,
-				);
+				return Action::batch([
+					self.update(
+						Message::Connect(self.selected, self.arrangement.master().id),
+						config,
+						state,
+					),
+					scroll_into_view(
+						"mixer",
+						self.arrangement.node(self.selected).widget_id.clone(),
+					)
+					.into(),
+				]);
 			}
 			Message::TrackInsert(node) => {
 				let node = self
@@ -2081,19 +2088,21 @@ impl ArrangementView {
 									(node.ty == NodeType::Track)
 										.then_some(Message::TrackToggleSolo(node.id)),
 								),
-								icon_button(
-									x(),
-									if enabled {
-										button::danger
-									} else {
-										button::secondary
-									},
-								)
-								.on_press_maybe(match node.ty {
-									NodeType::Master => None,
-									NodeType::Channel => Some(Message::ChannelRemove(node.id)),
-									NodeType::Track => Some(Message::TrackRemove(node.id)),
-								}),
+								select_area::Blocker::new(
+									icon_button(
+										x(),
+										if enabled {
+											button::danger
+										} else {
+											button::secondary
+										},
+									)
+									.on_press_maybe(match node.ty {
+										NodeType::Master => None,
+										NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+										NodeType::Track => Some(Message::TrackRemove(node.id)),
+									})
+								),
 							]
 							.spacing(5),
 							row![
