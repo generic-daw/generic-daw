@@ -1,7 +1,13 @@
 use iced::{
 	Task,
-	advanced::graphics::futures::MaybeSend,
-	widget::{self, operation, selector},
+	advanced::{
+		graphics::futures::MaybeSend,
+		widget::{
+			self,
+			operation::{self, scrollable},
+		},
+	},
+	widget::selector::{self, Selector as _},
 };
 
 pub fn scroll_into_view<T: MaybeSend + 'static>(
@@ -11,37 +17,47 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 	let scrollable = scrollable.into();
 	let child = child.into();
 
-	selector::find(scrollable.clone())
-		.and_then(move |s| selector::find(child.clone()).map(move |c| c.map(|c| (s.clone(), c))))
-		.and_then(move |(s, c)| {
+	widget::operate(operation::then(
+		operation::then(
+			operation::map(scrollable.clone().find(), move |s| {
+				(s.unwrap(), scrollable.clone(), child.clone())
+			}),
+			|(s, scrollable, child)| {
+				operation::map(child.find(), move |c| {
+					(s.clone(), c.unwrap(), scrollable.clone())
+				})
+			},
+		),
+		|(s, c, scrollable)| {
 			let selector::Target::Scrollable { translation, .. } = s else {
 				panic!();
 			};
 
-			operation::scroll_to(
-				scrollable.clone(),
-				operation::AbsoluteOffset {
+			scrollable::scroll_to(
+				scrollable,
+				scrollable::AbsoluteOffset {
 					x: c.visible_bounds()
 						.is_none_or(|vb| vb.width != c.bounds().width)
-						.then_some(
+						.then(|| {
 							c.bounds().x - s.bounds().x
 								+ if c.bounds().x - s.bounds().x < translation.x {
 									0.0
 								} else {
 									c.bounds().width - s.bounds().width
-								},
-						),
+								}
+						}),
 					y: c.visible_bounds()
 						.is_none_or(|vb| vb.height != c.bounds().height)
-						.then_some(
+						.then(|| {
 							c.bounds().y - s.bounds().y
 								+ if c.bounds().y - s.bounds().y < translation.y {
 									0.0
 								} else {
 									c.bounds().height - s.bounds().height
-								},
-						),
+								}
+						}),
 				},
 			)
-		})
+		},
+	))
 }
