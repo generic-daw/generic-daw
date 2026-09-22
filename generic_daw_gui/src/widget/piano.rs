@@ -18,7 +18,6 @@ const PIANO_WIDTH: f32 = 2.5 * LINE_HEIGHT;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Piano {
-	position: Vector,
 	scale: Vector,
 }
 
@@ -44,13 +43,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano {
 		_cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
 		renderer.fill_quad(
 			Quad {
-				bounds,
+				bounds: layout.bounds().intersection(viewport).unwrap_or_default(),
 				..Quad::default()
 			},
 			Color::WHITE,
@@ -58,13 +53,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano {
 
 		for key in (0..128).map(MidiKey) {
 			let note_position =
-				bounds.position() + Vector::new(0.0, key_to_px(key, self.position, self.scale));
+				layout.bounds().position() + Vector::new(0.0, key_to_px(key, self.scale));
 
 			let Some(bounds) = Rectangle::new(
 				note_position,
 				Size::new(PIANO_WIDTH - self.scale.y / 2.0, self.scale.y),
 			)
-			.intersection(&bounds) else {
+			.intersection(viewport) else {
 				continue;
 			};
 
@@ -103,8 +98,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano {
 }
 
 impl Piano {
-	pub fn new(position: Vector, scale: Vector) -> Self {
-		Self { position, scale }
+	pub fn new(scale: Vector) -> Self {
+		Self { scale }
 	}
 }
 

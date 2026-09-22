@@ -125,10 +125,10 @@ fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -
 	)
 }
 
-fn key_to_px(key: MidiKey, position: Vector, scale: Vector) -> f32 {
-	scale.y * f32::from(127 - key.0) - position.y
+fn key_to_px(key: MidiKey, scale: Vector) -> f32 {
+	scale.y * f32::from(127 - key.0)
 }
 
-fn px_to_key(px: f32, position: Vector, scale: Vector) -> MidiKey {
-	MidiKey(127u8.saturating_sub(((px + position.y) / scale.y) as u8))
+fn px_to_key(px: f32, scale: Vector) -> MidiKey {
+	MidiKey(127u8.saturating_sub((px / scale.y) as u8))
 }

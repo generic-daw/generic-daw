@@ -2390,12 +2390,24 @@ impl ArrangementView {
 		Seeker::new(
 			self.arrangement.transport(),
 			&state.grid,
-			self.piano_roll.borrow().position,
+			self.piano_roll.borrow().position
+				+ Vector::new(
+					((clip
+						.position
+						.start()
+						.to_frames(self.arrangement.transport()) as f64
+						- clip
+							.position
+							.offset()
+							.to_frames(self.arrangement.transport()) as f64)
+						/ f64::from(frames_per_px(
+							self.piano_roll.borrow().scale,
+							self.arrangement.transport(),
+						))) as f32,
+					0.0,
+				),
 			self.piano_roll.borrow().scale,
-			Piano::new(
-				self.piano_roll.borrow().position,
-				self.piano_roll.borrow().scale,
-			),
+			Piano::new(self.piano_roll.borrow().scale),
 			PianoRoll::new(
 				&self.piano_roll,
 				self.arrangement.transport(),
@@ -2426,17 +2438,6 @@ impl ArrangementView {
 					scale_diff, cursor, height, visible,
 				))
 			},
-		)
-		.with_offset(
-			(clip
-				.position
-				.start()
-				.to_frames(self.arrangement.transport()) as f32
-				- clip
-					.position
-					.offset()
-					.to_frames(self.arrangement.transport()) as f32)
-				/ frames_per_px(self.piano_roll.borrow().scale, self.arrangement.transport()),
 		)
 		.into()
 	}

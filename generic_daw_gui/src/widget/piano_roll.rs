@@ -140,15 +140,21 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			return;
 		}
 
-		let cursor = match cursor.position_in(*viewport) {
+		let cursor = match cursor.position_from(layout.position()) {
 			Some(cursor) => cursor,
 			None if state.status == Status::None => return,
 			None => {
 				shell.capture_event();
-				match cursor.land().position_from(viewport.position()) {
+				match cursor.land().position_from(layout.position()) {
 					Some(cursor) => Point::new(
-						cursor.x.clamp(0.0, viewport.width),
-						cursor.y.clamp(0.0, viewport.height),
+						cursor.x.clamp(
+							viewport.x - layout.bounds().x,
+							viewport.x - layout.bounds().x + viewport.width,
+						),
+						cursor.y.clamp(
+							viewport.y - layout.bounds().y,
+							viewport.y - layout.bounds().y + viewport.height,
+						),
 					),
 					None => return,
 				}
@@ -163,7 +169,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				button: mouse::Button::Left,
 				modifiers,
 			}) if state.status == Status::None => {
-				let key = px_to_key(cursor.y, state.position, state.scale);
+				let key = px_to_key(cursor.y, state.scale);
 
 				if modifiers.command() {
 					let time = self
@@ -197,7 +203,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
-					let end_key = px_to_key(cursor.y, state.position, state.scale);
+					let end_key = px_to_key(cursor.y, state.scale);
 
 					let end_pos = self
 						.grid
@@ -226,7 +232,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					shell.request_redraw();
 				}
 				Status::Dragging(key, time) => {
-					let new_key = px_to_key(cursor.y, state.position, state.scale);
+					let new_key = px_to_key(cursor.y, state.scale);
 
 					let abs_diff =
 						self.grid
@@ -304,7 +310,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				Status::DraggingVelocity(note, val) => {
 					if let Some(note_bounds) = layout.child(note).bounds().intersection(viewport) {
 						let border = 10f32.min(note_bounds.width / 3.0);
-						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
+						let new_val = (cursor.x - border - note_bounds.x + layout.position().x)
 							/ (note_bounds.width - 2.0 * border - 1.0);
 
 						let new_val =
@@ -345,8 +351,8 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 
 		for key in (0..127).map(MidiKey) {
 			let Some(bounds) = Rectangle::new(
-				viewport.position() + Vector::new(0.0, key_to_px(key, state.position, state.scale)),
-				Size::new(viewport.width, 1.0),
+				layout.bounds().position() + Vector::new(0.0, key_to_px(key, state.scale)),
+				Size::new(f32::INFINITY, 1.0),
 			)
 			.intersection(viewport) else {
 				continue;
@@ -424,9 +430,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			let (start_key, end_key) = (start_key.max(end_key), start_key.min(end_key));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 
-			let y = key_to_px(start_key, state.position, state.scale);
-			let height = key_to_px(end_key, state.position, state.scale) + state.scale.y - y;
-			let y = y + viewport.y;
+			let y = key_to_px(start_key, state.scale);
+			let height = key_to_px(end_key, state.scale) + state.scale.y - y;
+			let y = y + layout.position().y;
 
 			let x = time_to_px(start_pos, state.position, state.scale, self.transport);
 			let width = time_to_px(end_pos, state.position, state.scale, self.transport) - x;

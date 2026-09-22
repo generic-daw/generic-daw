@@ -1216,7 +1216,7 @@ impl Daw {
 										"{:02}:{:02}:{:03.0}",
 										transport.position.second() / 60,
 										transport.position.second() % 60,
-										(transport.position.to_float().fract() * 1000.0)
+										(transport.position.to_float().fract() * 1000.0) as u16
 									)
 								} else {
 									text!(

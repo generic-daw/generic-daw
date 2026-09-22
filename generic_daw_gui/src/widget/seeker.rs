@@ -53,7 +53,6 @@ pub struct Seeker<'a, Message> {
 	grid: &'a Grid,
 	position: Vector,
 	scale: Vector,
-	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(BeatTime) -> Message,
 	set_loop_range: fn(Option<BeatRange>) -> Message,
@@ -82,12 +81,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		let left = self.children[0]
 			.as_widget_mut()
 			.layout(&mut tree.children[0], renderer, &Limits::NONE)
-			.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y));
+			.translate(Vector::new(0.0, LINE_HEIGHT));
 
 		let right = self.children[1]
 			.as_widget_mut()
 			.layout(&mut tree.children[1], renderer, &Limits::NONE)
-			.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y))
+			.translate(Vector::new(0.0, LINE_HEIGHT))
 			.translate(Vector::new(left.size().width, 0.0));
 
 		Node::with_children(limits.max(), vec![left, right])
@@ -119,29 +118,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						cursor
 					} else {
 						cursor.levitate()
-					},
+					} + Vector::new(0.0, self.position.y),
 					renderer,
 					shell,
-					&viewport,
+					&(viewport + Vector::new(0.0, self.position.y)),
 				);
 			});
 
 		let state = tree.state.downcast_mut::<State>();
+		let top_seeker = Self::top_seeker(layout);
+		let bottom_seeker = Self::bottom_seeker(layout);
+		let left_viewport = Self::left_viewport(layout);
 		let right_viewport = Self::right_viewport(layout);
 		let height = right_viewport.height;
 
-		let right_child = layout.child(1).bounds();
-		let visible = right_child.y + right_child.height - right_viewport.y;
+		let visible = layout.child(1).bounds().height - self.position.y;
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
 			&& state.last_height != height
 		{
 			state.last_height = height;
 			shell.publish((self.pan)(Vector::ZERO, height, visible));
-			return;
-		}
-
-		if was_event_captured {
 			return;
 		}
 
@@ -153,34 +150,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		let cursor = 'block: {
-			let mut viewport = right_viewport;
-			if !shell.is_event_captured() {
-				viewport = viewport.expand(padding::vertical(LINE_HEIGHT));
-			}
+		if was_event_captured {
+			return;
+		}
 
-			if let Some(cursor) = cursor.position_in(viewport) {
+		let cursor = 'block: {
+			if let Some(cursor) = cursor.position_in(right_viewport) {
 				state.horizontal_autoscroll_start = None;
 				state.vertical_autoscroll_start = None;
 				state.last_autoscroll = None;
 				break 'block cursor;
 			}
 
-			if !shell.is_event_captured() && state.status == Status::None {
-				return;
-			}
-
-			let Some(cursor) = cursor.position_from(viewport.position()) else {
+			let Some(cursor) = cursor.position_from(right_viewport.position()) else {
 				return;
 			};
 
-			if let Status::Panning(..) = state.status {
-				break 'block cursor;
+			match state.status {
+				Status::None if !shell.is_event_captured() => break 'block cursor,
+				Status::Panning(..) => break 'block cursor,
+				_ => {}
 			}
 
 			let clamped = Point::new(
-				cursor.x.clamp(0.0, viewport.width),
-				cursor.y.clamp(0.0, viewport.height),
+				cursor.x.clamp(0.0, right_viewport.width),
+				cursor.y.clamp(0.0, right_viewport.height),
 			);
 
 			debug_assert_ne!(cursor, clamped);
@@ -229,12 +223,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		let new_time = px_to_time(
-			cursor.x + self.offset,
-			self.position,
-			self.scale,
-			self.transport,
-		);
+		let offset = Vector::new(right_viewport.x, right_viewport.y);
+
+		let new_time = px_to_time(cursor.x, self.position, self.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
@@ -397,123 +388,124 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
-			}) => {
-				if cursor.y < LINE_HEIGHT {
-					let snap_step = self.grid.beats_snap_step(self.scale, self.transport);
-					let time = self
-						.grid
-						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
-					state.status = if modifiers.command() {
-						if let Some(loop_range) = self.transport.loop_range {
-							let (start, end) = (loop_range.start(), loop_range.end());
-							if modifiers.shift() {
-								Status::DraggingLoopBeats(time)
-							} else if time
-								== self
-									.grid
-									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
-							{
-								Status::TrimmingLoopBeats(end)
-							} else if time
-								== self
-									.grid
-									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
-							{
-								Status::TrimmingLoopBeats(start)
-							} else {
-								shell.publish((self.set_loop_range)(None));
-								Status::TrimmingLoopBeats(time)
-							}
+			}) if top_seeker.contains(cursor + offset) => {
+				let snap_step = self.grid.beats_snap_step(self.scale, self.transport);
+				let time = self
+					.grid
+					.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+				state.status = if modifiers.command() {
+					if let Some(loop_range) = self.transport.loop_range {
+						let (start, end) = (loop_range.start(), loop_range.end());
+						if modifiers.shift() {
+							Status::DraggingLoopBeats(time)
+						} else if time
+							== self
+								.grid
+								.maybe_snap(start, *modifiers, |time| time.round(snap_step))
+						{
+							Status::TrimmingLoopBeats(end)
+						} else if time
+							== self
+								.grid
+								.maybe_snap(end, *modifiers, |time| time.round(snap_step))
+						{
+							Status::TrimmingLoopBeats(start)
 						} else {
+							shell.publish((self.set_loop_range)(None));
 							Status::TrimmingLoopBeats(time)
 						}
 					} else {
-						shell.publish((self.seek_to)(time));
-						Status::SeekingBeats(time)
-					};
-					shell.capture_event();
-				} else if cursor.y > layout.bounds().height - LINE_HEIGHT {
-					let snap_step = self.grid.seconds_snap_step(self.scale);
-					let time = self.grid.maybe_snap(
-						new_time.to_seconds_time(self.transport),
-						*modifiers,
-						|time| time.round(snap_step),
-					);
-					state.status = if modifiers.command() {
-						if let Some(loop_range) = self.transport.loop_range {
-							let (start, end) = (
-								loop_range.start().to_seconds_time(self.transport),
-								loop_range.end().to_seconds_time(self.transport),
-							);
-							if modifiers.shift() {
-								Status::DraggingLoopSeconds(time)
-							} else if time
-								== self
-									.grid
-									.maybe_snap(start, *modifiers, |time| time.round(snap_step))
-							{
-								Status::TrimmingLoopSeconds(end)
-							} else if time
-								== self
-									.grid
-									.maybe_snap(end, *modifiers, |time| time.round(snap_step))
-							{
-								Status::TrimmingLoopSeconds(start)
-							} else {
-								shell.publish((self.set_loop_range)(None));
-								Status::TrimmingLoopSeconds(time)
-							}
+						Status::TrimmingLoopBeats(time)
+					}
+				} else {
+					shell.publish((self.seek_to)(time));
+					Status::SeekingBeats(time)
+				};
+				shell.capture_event();
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if bottom_seeker.contains(cursor + offset) => {
+				let snap_step = self.grid.seconds_snap_step(self.scale);
+				let time = self.grid.maybe_snap(
+					new_time.to_seconds_time(self.transport),
+					*modifiers,
+					|time| time.round(snap_step),
+				);
+				state.status = if modifiers.command() {
+					if let Some(loop_range) = self.transport.loop_range {
+						let (start, end) = (
+							loop_range.start().to_seconds_time(self.transport),
+							loop_range.end().to_seconds_time(self.transport),
+						);
+						if modifiers.shift() {
+							Status::DraggingLoopSeconds(time)
+						} else if time
+							== self
+								.grid
+								.maybe_snap(start, *modifiers, |time| time.round(snap_step))
+						{
+							Status::TrimmingLoopSeconds(end)
+						} else if time
+							== self
+								.grid
+								.maybe_snap(end, *modifiers, |time| time.round(snap_step))
+						{
+							Status::TrimmingLoopSeconds(start)
 						} else {
+							shell.publish((self.set_loop_range)(None));
 							Status::TrimmingLoopSeconds(time)
 						}
 					} else {
-						shell.publish((self.seek_to)(time.to_beat_time(self.transport)));
-						Status::SeekingSeconds(time)
-					};
-				}
+						Status::TrimmingLoopSeconds(time)
+					}
+				} else {
+					shell.publish((self.seek_to)(time.to_beat_time(self.transport)));
+					Status::SeekingSeconds(time)
+				};
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Middle,
 				modifiers,
-			}) if cursor.y >= LINE_HEIGHT && cursor.y <= layout.bounds().height - LINE_HEIGHT => {
+			}) if right_viewport.contains(cursor + offset) => {
 				state.status = Status::Panning(cursor);
 			}
 			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
-				let (x, mut y) = match *delta {
+				let (x, y) = match *delta {
 					ScrollDelta::Pixels { x, y } => (-x, -y),
 					ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
 				};
 
-				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-					(false, false, false) if x != 0.0 || y != 0.0 => {
-						shell.publish((self.pan)(Vector::new(x, y), height, visible));
+				if let Some((mut x, mut y, pan)) =
+					match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+						(false, false, false) => Some((x, y, true)),
+						(true, false, false) => Some((y / 128.0, 0.0, false)),
+						(false, true, false) => Some((y, x, true)),
+						(false, false, true) => Some((0.0, y / -8.0, false)),
+						_ => None,
+					} {
+					if !(right_viewport.contains(cursor + offset)
+						|| top_seeker.contains(cursor + offset)
+						|| bottom_seeker.contains(cursor + offset))
+					{
+						x = 0.0;
+					}
+
+					if !(right_viewport.contains(cursor + offset)
+						|| left_viewport.contains(cursor + offset))
+					{
+						y = 0.0;
+					}
+
+					if x != 0.0 || y != 0.0 {
+						shell.publish(if pan {
+							(self.pan)(Vector::new(x, y), height, visible)
+						} else {
+							(self.zoom)(Vector::new(x, y), cursor, height, visible)
+						});
 						shell.capture_event();
 					}
-					(true, false, false) if y != 0.0 => {
-						y /= 128.0;
-						shell.publish((self.zoom)(
-							Vector::new(y, 0.0),
-							cursor - Vector::new(0.0, LINE_HEIGHT),
-							height,
-							visible,
-						));
-						shell.capture_event();
-					}
-					(false, true, false) if x != 0.0 || y != 0.0 => {
-						shell.publish((self.pan)(Vector::new(y, x), height, visible));
-						shell.capture_event();
-					}
-					(false, false, true) if y != 0.0 => {
-						y /= -8.0;
-						shell.publish((self.zoom)(
-							Vector::new(0.0, y),
-							cursor - Vector::new(0.0, LINE_HEIGHT),
-							height,
-							visible,
-						));
-						shell.capture_event();
-					}
-					_ => {}
 				}
 			}
 			_ => {}
@@ -541,19 +533,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					.zip(layout.children())
 					.zip(Self::viewports(layout))
 					.for_each(|(((child, tree), layout), viewport)| {
-						child.as_widget().draw(
-							tree,
-							renderer,
-							theme,
-							style,
-							layout,
-							if cursor.is_over(viewport) {
-								cursor
-							} else {
-								cursor.levitate()
-							},
-							&viewport,
-						);
+						renderer.with_translation(-Vector::new(0.0, self.position.y), |renderer| {
+							child.as_widget().draw(
+								tree,
+								renderer,
+								theme,
+								style,
+								layout,
+								if cursor.is_over(viewport) {
+									cursor
+								} else {
+									cursor.levitate()
+								} + Vector::new(0.0, self.position.y),
+								&(viewport + Vector::new(0.0, self.position.y)),
+							);
+						});
 					});
 			},
 		);
@@ -580,13 +574,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			| Status::TrimmingLoopSeconds(..) => Interaction::ResizingHorizontally,
 			Status::Panning(..) => Interaction::Move,
 			Status::None => {
-				if cursor
-					.position_in(
-						Self::right_viewport(layout).expand(padding::vertical(LINE_HEIGHT)),
-					)
-					.is_none_or(|cursor| {
-						cursor.y >= LINE_HEIGHT && cursor.y <= layout.bounds().height - LINE_HEIGHT
-					}) {
+				if cursor.is_over(Self::top_seeker(layout))
+					|| cursor.is_over(Self::bottom_seeker(layout))
+				{
+					Interaction::ResizingHorizontally
+				} else {
 					self.children
 						.iter()
 						.zip(&tree.children)
@@ -600,15 +592,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 									cursor
 								} else {
 									cursor.levitate()
-								},
-								&viewport,
+								} + Vector::new(0.0, self.position.y),
+								&(viewport + Vector::new(0.0, self.position.y)),
 								renderer,
 							)
 						})
 						.max()
 						.unwrap_or_default()
-				} else {
-					Interaction::ResizingHorizontally
 				}
 			}
 		}
@@ -629,9 +619,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.zip(layout.children())
 			.zip(Self::viewports(layout))
 			.filter_map(|(((child, tree), layout), viewport)| {
-				child
-					.as_widget_mut()
-					.overlay(tree, layout, renderer, &viewport, translation)
+				child.as_widget_mut().overlay(
+					tree,
+					layout,
+					renderer,
+					&(viewport + Vector::new(0.0, self.position.y)),
+					translation - Vector::new(0.0, self.position.y),
+				)
 			})
 			.collect::<Vec<_>>();
 
@@ -678,18 +672,12 @@ impl<'a, Message> Seeker<'a, Message> {
 			grid,
 			position,
 			scale,
-			offset: 0.0,
 			children: [left.into(), right.into()].into(),
 			seek_to,
 			set_loop_range,
 			pan,
 			zoom,
 		}
-	}
-
-	pub fn with_offset(mut self, offset: f32) -> Self {
-		self.offset = offset;
-		self
 	}
 
 	fn viewports(layout: Layout<'_>) -> [Rectangle; 2] {
@@ -708,11 +696,23 @@ impl<'a, Message> Seeker<'a, Message> {
 			.shrink(padding::left(layout.child(0).bounds().width).vertical(LINE_HEIGHT))
 	}
 
+	fn top_seeker(layout: Layout<'_>) -> Rectangle {
+		Rectangle {
+			height: LINE_HEIGHT,
+			..layout.bounds()
+		}
+		.shrink(padding::left(layout.child(0).bounds().width))
+	}
+
+	fn bottom_seeker(layout: Layout<'_>) -> Rectangle {
+		Self::top_seeker(layout) + Vector::new(0.0, layout.bounds().height - LINE_HEIGHT)
+	}
+
 	fn bottom_layer(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
-					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
+					time_to_px(time, self.position, self.scale, self.transport),
 					0.0,
 				)
 		};
@@ -721,14 +721,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			.grid
 			.beats_snap_step(self.scale + Vector::new(1.0, 0.0), self.transport);
 
-		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
-		let end_beat = px_to_time(
-			self.offset + bounds.width,
-			self.position,
-			self.scale,
-			self.transport,
-		);
-		beat = beat.floor(snap_step);
+		let mut beat = px_to_time(0.0, self.position, self.scale, self.transport).floor(snap_step);
+		let end_beat = px_to_time(bounds.width, self.position, self.scale, self.transport);
 
 		let background_step = BeatTime::new(u64::from(self.transport.numerator.get()), 0) * 8;
 		let mut background_beat = beat.round(background_step);
@@ -791,7 +785,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
-					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
+					time_to_px(time, self.position, self.scale, self.transport),
 					0.0,
 				)
 		};
@@ -861,14 +855,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			.beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
 			.beat_ceil();
 
-		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
-		let end_beat = px_to_time(
-			self.offset + bounds.width,
-			self.position,
-			self.scale,
-			self.transport,
-		);
-		beat = beat.floor(snap_step);
+		let mut beat = px_to_time(0.0, self.position, self.scale, self.transport).floor(snap_step);
 
 		while beat <= end_beat {
 			let content = if snap_step == BeatTime::BEAT {
@@ -925,16 +912,11 @@ impl<'a, Message> Seeker<'a, Message> {
 			.seconds_snap_step(self.scale + Vector::new(3.0, 0.0))
 			.second_ceil();
 
-		let mut second = px_to_time(self.offset, self.position, self.scale, self.transport)
-			.to_seconds_time(self.transport);
-		let end_second = px_to_time(
-			self.offset + bounds.width,
-			self.position,
-			self.scale,
-			self.transport,
-		)
-		.to_seconds_time(self.transport);
-		second = second.floor(snap_step).second_floor();
+		let mut second = px_to_time(0.0, self.position, self.scale, self.transport)
+			.to_seconds_time(self.transport)
+			.floor(snap_step)
+			.second_floor();
+		let end_second = end_beat.to_seconds_time(self.transport);
 
 		while second <= end_second {
 			let bar = Text {
@@ -978,7 +960,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
-					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
+					time_to_px(time, self.position, self.scale, self.transport),
 					0.0,
 				)
 		};

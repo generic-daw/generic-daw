@@ -178,21 +178,27 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			return;
 		}
 
-		let cursor = match cursor.position_in(*viewport) {
+		let cursor = match cursor.position_from(layout.position()) {
 			Some(cursor) => cursor,
 			None if let Status::None | Status::Hovering(.., None) = state.status => return,
 			None if let Status::DraggingVolume(..) | Status::DraggingSlip(..) = state.status => {
-				match cursor.land().position_from(viewport.position()) {
+				match cursor.land().position_from(layout.position()) {
 					Some(cursor) => cursor,
 					None => return,
 				}
 			}
 			None => {
 				shell.capture_event();
-				match cursor.land().position_from(viewport.position()) {
+				match cursor.land().position_from(layout.position()) {
 					Some(cursor) => Point::new(
-						cursor.x.clamp(0.0, viewport.width),
-						cursor.y.clamp(0.0, viewport.height),
+						cursor.x.clamp(
+							viewport.x - layout.bounds().x,
+							viewport.x - layout.bounds().x + viewport.width,
+						),
+						cursor.y.clamp(
+							viewport.y - layout.bounds().y,
+							viewport.y - layout.bounds().y + viewport.height,
+						),
 					),
 					None => return,
 				}
@@ -207,7 +213,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 				button: mouse::Button::Left,
 				modifiers,
 			}) if state.status == Status::None => {
-				let track = track_index(&layout, *viewport, cursor);
+				let track = track_index(&layout, cursor);
 
 				if modifiers.command() {
 					let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
@@ -248,7 +254,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
 				Status::Hovering(path, kind, time) => {
-					let track = track_index(&layout, *viewport, cursor);
+					let track = track_index(&layout, cursor);
 
 					let new_time = self
 						.grid
@@ -263,7 +269,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					}
 				}
 				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
-					let Some(end_track) = track_index(&layout, *viewport, cursor)
+					let Some(end_track) = track_index(&layout, cursor)
 						.or_else(|| layout.children().len().checked_sub(1))
 					else {
 						return;
@@ -316,7 +322,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					shell.request_redraw();
 				}
 				Status::Dragging(track, time) => {
-					let Some(new_track) = track_index(&layout, *viewport, cursor)
+					let Some(new_track) = track_index(&layout, cursor)
 						.or_else(|| layout.children().len().checked_sub(1))
 					else {
 						return;
@@ -393,9 +399,10 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					}
 				}
 				Status::DraggingVolume(last_y) => {
-					state.status = Status::DraggingVolume(cursor.y);
+					let y = cursor.y + layout.position().y;
+					state.status = Status::DraggingVolume(y);
 					shell.publish((self.action)(Action::DragVolume(
-						(last_y - cursor.y) / LINE_HEIGHT,
+						(last_y - y) / LINE_HEIGHT,
 					)));
 					shell.capture_event();
 				}
@@ -428,7 +435,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						inner.clip.fade_start.len.to_frames(self.transport) as f32 / frames_per_px;
 
 					let clip_bounds = layout.child(track).child(clip).bounds()
-						- Vector::new(viewport.position().x, viewport.position().y);
+						- Vector::new(layout.position().x, layout.position().y);
 
 					let x = ((cursor.x - clip_bounds.x) / fade_start_px).clamp(0.0, 1.0);
 					let y = ((clip_bounds.height + clip_bounds.y - cursor.y)
@@ -466,7 +473,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						inner.clip.fade_end.len.to_frames(self.transport) as f32 / -frames_per_px;
 
 					let clip_bounds = layout.child(track).child(clip).bounds()
-						- Vector::new(viewport.position().x, viewport.position().y);
+						- Vector::new(layout.position().x, layout.position().y);
 
 					let x = ((cursor.x - clip_bounds.x - clip_bounds.width) / fade_end_px)
 						.clamp(0.0, 1.0);
@@ -533,7 +540,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 		for layout in layout.children() {
 			let Some(bounds) = Rectangle::new(
 				layout.position() + Vector::new(0.0, layout.bounds().height - 1.0),
-				Size::new(layout.bounds().width, 1.0),
+				Size::new(f32::INFINITY, 1.0),
 			)
 			.intersection(viewport) else {
 				continue;
@@ -788,9 +795,8 @@ impl<'a, Message: 'a> From<Playlist<'a, Message>> for Element<'a, Message> {
 	}
 }
 
-fn track_index(layout: &Layout<'_>, viewport: Rectangle, cursor: Point) -> Option<usize> {
-	let offset = Vector::new(viewport.position().x, viewport.position().y);
-	layout
-		.children()
-		.position(|child| child.bounds().contains(cursor + offset))
+fn track_index(layout: &Layout<'_>, cursor: Point) -> Option<usize> {
+	layout.children().position(|child| {
+		(child.bounds() - Vector::new(layout.position().x, layout.position().y)).contains(cursor)
+	})
 }

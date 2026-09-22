@@ -48,7 +48,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 		let start = time_to_px(start, piano_roll.position, piano_roll.scale, self.transport);
 		let end = time_to_px(end, piano_roll.position, piano_roll.scale, self.transport);
-		let key = key_to_px(self.note.key, Vector::ZERO, piano_roll.scale);
+		let key = key_to_px(self.note.key, piano_roll.scale);
 
 		Node::new(Size::new(end - start, limits.max().height)).translate(Vector::new(start, key))
 	}
@@ -67,14 +67,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			return;
 		}
 
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			return;
-		};
-
-		let note_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
-		if !note_bounds.contains(cursor) {
+		if !cursor.is_over(*viewport) {
 			return;
 		}
+
+		let Some(cursor) = cursor.position_in(layout.bounds()) else {
+			return;
+		};
 
 		let piano_roll = &mut *self.piano_roll.borrow_mut();
 		match event {
@@ -84,23 +83,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			}) if piano_roll.status == Status::None => {
 				let mut clear = piano_roll.primary.insert(self.index);
 
-				let time = px_to_time(
-					cursor.x,
-					piano_roll.position,
-					piano_roll.scale,
-					self.transport,
-				);
+				let time = px_to_time(cursor.x, Vector::ZERO, piano_roll.scale, self.transport)
+					+ self.note.position.start();
 
 				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
 					(false, shift) => {
-						let start_offset = cursor.x - note_bounds.x;
-						let end_offset = note_bounds.width - start_offset;
-						let border = 10f32.min(note_bounds.width / 3.0);
-						match (start_offset < border, end_offset < border) {
+						let border = 10f32.min(layout.bounds().width / 3.0);
+						match (cursor.x < border, layout.bounds().width - cursor.x < border) {
 							(false, false) => {
 								let bounds =
 									layout.bounds().intersection(viewport).unwrap_or_default()
-										- Vector::new(viewport.x, viewport.y);
+										- Vector::new(layout.position().x, layout.position().y);
 								let vel_pixel = bounds.x
 									+ border + self.note.velocity
 									* (bounds.width - 2.0 * border);

@@ -281,9 +281,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		if let Inner::AudioClip(..) = self.inner {
 			let show_controls = match playlist.status {
-				Status::None => {
-					cursor.is_over(layout.bounds().intersection(viewport).unwrap_or_default())
-				}
+				Status::None => cursor.is_over(layout.bounds()) && cursor.is_over(*viewport),
 				Status::DraggingVolume(..)
 				| Status::FadingStartLen(..)
 				| Status::FadingStartP(..)
@@ -302,16 +300,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 		}
 
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			return;
-		};
-
-		let clip_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
-		if !clip_bounds.contains(cursor) {
+		if !cursor.is_over(*viewport) {
 			return;
 		}
 
-		let header_height = header_height(&layout);
+		let cursor_ = cursor;
+		let Some(cursor) = cursor.position_in(layout.bounds()) else {
+			return;
+		};
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
@@ -323,11 +319,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 				state.last_click = Some(new_click);
 
-				let time = px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
+				let header_height = header_height(&layout);
+				let time = px_to_time(cursor.x, Vector::ZERO, playlist.scale, self.transport)
+					+ match self.inner {
+						Inner::AudioClip(inner) => inner.clip.position.start(),
+						Inner::MidiClip(inner) => inner.clip.position.start(),
+						_ => unreachable!(),
+					};
 
 				match self.inner {
 					Inner::AudioClip(inner) => 'block: {
-						if cursor.y - clip_bounds.y < header_height {
+						if cursor.y + layout.position().y - viewport.y < header_height {
 							break 'block;
 						}
 
@@ -338,18 +340,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							/ -frames_per_px;
 
 						let fade_start_control = Point::new(
-							clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
-							clip_bounds.y
-								+ header_height + (1.0 - inner.clip.fade_start.p.y)
-								* (clip_bounds.height - header_height),
+							inner.clip.fade_start.p.x * fade_start_px,
+							(1.0 - inner.clip.fade_start.p.y)
+								* (layout.bounds().height - header_height)
+								+ header_height,
 						);
 
 						let fade_end_control = Point::new(
-							clip_bounds.x
-								+ clip_bounds.width + inner.clip.fade_end.p.x * fade_end_px,
-							clip_bounds.y
-								+ header_height + (1.0 - inner.clip.fade_end.p.y)
-								* (clip_bounds.height - header_height),
+							layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
+							(1.0 - inner.clip.fade_end.p.y)
+								* (layout.bounds().height - header_height)
+								+ header_height,
 						);
 
 						let fade_start_control_dist = cursor.distance(fade_start_control);
@@ -377,14 +378,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								let bounds =
 									layout.bounds().intersection(viewport).unwrap_or_default();
 								let volume_control = Point::new(
-									bounds.x + bounds.width / 2.0 - viewport.x,
-									clip_bounds.y + clip_bounds.height,
+									bounds.x + bounds.width / 2.0 - layout.position().x,
+									layout.bounds().height,
 								);
 								if bounds.width >= 8.0 && cursor.distance(volume_control) <= 10.0 {
 									if new_click.kind() == Kind::Double {
 										shell.publish((self.f)(Action::InvertPolarity));
 									}
-									playlist.status = Status::DraggingVolume(cursor.y);
+									playlist.status =
+										Status::DraggingVolume(cursor_.position().unwrap().y);
 								}
 							}
 						}
@@ -393,19 +395,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							break 'block;
 						}
 
-						if cursor.y - clip_bounds.y > header_height + 12.0 {
+						if cursor.y > header_height + 12.0 {
 							break 'block;
 						}
 
-						let fade_start_tab_dist =
-							(clip_bounds.x + fade_start_px + 4.0 - cursor.x).abs();
-						let fade_end_tab_dist = (clip_bounds.x + clip_bounds.width + fade_end_px
-							- 4.0 - cursor.x)
-							.abs();
+						let fade_start_tab_dist = (fade_start_px + 4.0 - cursor.x).abs();
+						let fade_end_tab_dist =
+							(layout.bounds().width + fade_end_px - 4.0 - cursor.x).abs();
 
-						let left_of_start_tab = clip_bounds.x + fade_start_px > cursor.x;
-						let left_of_end_tab =
-							clip_bounds.x + clip_bounds.width + fade_end_px > cursor.x;
+						let left_of_start_tab = fade_start_px > cursor.x;
+						let left_of_end_tab = layout.bounds().width + fade_end_px > cursor.x;
 
 						let use_start = match (fade_start_tab_dist <= 6.0, fade_end_tab_dist <= 6.0)
 						{
@@ -440,10 +439,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				if playlist.status == Status::None {
 					playlist.status = match (modifiers.command(), modifiers.shift()) {
 						(false, shift) => {
-							let start_offset = cursor.x - clip_bounds.x;
-							let end_offset = clip_bounds.width - start_offset;
-							let border = 10f32.min(clip_bounds.width / 3.0);
-							match (start_offset < border, end_offset < border) {
+							let border = 10f32.min(layout.bounds().width / 3.0);
+							match (cursor.x < border, layout.bounds().width - cursor.x < border) {
 								(false, false) => {
 									if shift {
 										shell.publish((self.f)(Action::Clone));
@@ -465,7 +462,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							Status::Selecting(index.0, index.0, time, time)
 						}
 						(true, true) => {
-							if cursor.y - clip_bounds.y.max(0.0) < header_height {
+							if cursor.y - 0f32.max(viewport.y - layout.bounds().y) < header_height {
 								let time = self.grid.maybe_snap(time, *modifiers, |time| {
 									time.round(
 										self.grid.beats_snap_step(playlist.scale, self.transport),
