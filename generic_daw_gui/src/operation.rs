@@ -16,24 +16,15 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 ) -> Task<T> {
 	let scrollable = scrollable.into();
 	let child = child.into();
-
-	widget::operate(operation::then(
-		operation::then(
-			operation::map(scrollable.clone().find(), move |s| {
-				(s, scrollable.clone(), child.clone())
-			}),
-			|(s, scrollable, child)| {
-				operation::map(child.find(), move |c| (s.clone(), c, scrollable.clone()))
-			},
-		),
-		|(s, c, scrollable)| {
+	widget::operate(operation::then(scrollable.clone().find(), move |s| {
+		let scrollable = scrollable.clone();
+		operation::then(child.clone().find(), move |c| {
 			let t = s.as_ref().and_then(|s| match s {
 				selector::Target::Scrollable { translation, .. } => Some(translation),
 				_ => None,
 			});
-
 			scrollable::scroll_to(
-				scrollable,
+				scrollable.clone(),
 				scrollable::AbsoluteOffset {
 					x: c.as_ref().zip(s.as_ref()).zip(t).and_then(|((c, s), t)| {
 						c.visible_bounds()
@@ -61,6 +52,6 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 					}),
 				},
 			)
-		},
-	))
+		})
+	}))
 }
