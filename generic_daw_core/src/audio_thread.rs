@@ -2,7 +2,6 @@ use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
 	MidiPatternId, Node, NodeId, PanMode, Plugin, Point, PullSlot, PushSlot, Sample, SampleId,
 	ThreadPool,
-	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use audio_graph::{
@@ -10,7 +9,7 @@ use audio_graph::{
 	thread_pool::{Injector, WorkList},
 };
 use clap_host::{
-	RenderMode, ThreadPoolExecutor,
+	ClapId, RenderMode, ThreadPoolExecutor,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
 };
 use dsp::resample_cubic;
