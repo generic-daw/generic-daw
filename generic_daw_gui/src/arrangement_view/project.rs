@@ -245,6 +245,7 @@ impl Arrangement {
 
 	pub fn start_load(
 		path: Arc<Path>,
+		current: bool,
 		input_channels: u16,
 		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
@@ -260,6 +261,7 @@ impl Arrangement {
 				tasks_sender
 					.send(Self::do_load(
 						path,
+						current,
 						input_channels,
 						output_channels,
 						sample_rate,
@@ -281,6 +283,7 @@ impl Arrangement {
 
 	fn do_load(
 		path: Arc<Path>,
+		current: bool,
 		input_channels: u16,
 		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
@@ -691,7 +694,7 @@ impl Arrangement {
 		Some(
 			Task::done(daw::Message::ProjectLoaded(Box::new((
 				project,
-				Some(path),
+				current.then_some(path),
 				NoClone(NoDebug(arrangement)),
 				NoClone(NoDebug(processor)),
 				view,

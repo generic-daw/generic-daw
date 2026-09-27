@@ -4,7 +4,8 @@ use daw::{CRASHES_DIR, Daw, format_now};
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
 use log::LevelFilter;
-use std::{backtrace::Backtrace, fs::File, io::Write as _};
+use state::State;
+use std::{backtrace::Backtrace, fs::File, io::Write as _, sync::Arc};
 
 mod action;
 mod arrangement_view;
@@ -44,14 +45,19 @@ fn install_panic_hook() {
 	let default_hook = std::panic::take_hook();
 	std::panic::set_hook(Box::new(move |info| {
 		default_hook(info);
-		if let Ok(mut file) = File::create(CRASHES_DIR.join(format!("{}.log", format_now()))) {
+		let crash_log = Arc::from(CRASHES_DIR.join(format!("{}.log", format_now())));
+		if let Ok(mut file) = File::create(&crash_log) {
 			let current_thread = std::thread::current();
 			let current_thread_name = current_thread.name().unwrap_or("<unnamed>");
 			let backtrace = Backtrace::force_capture();
-			_ = write!(
+			write!(
 				file,
 				"thread '{current_thread_name}' {info}\nstack backtrace:\n{backtrace}",
-			);
+			)
+			.unwrap();
+			let mut state = State::read();
+			state.crash_log = Some(crash_log);
+			state.write();
 		}
 	}));
 }

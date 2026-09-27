@@ -15,7 +15,7 @@ use crate::{
 		button_with_radius, container_with_radius, progress_bar_with_radius, selectable_box,
 		split_style, weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
 	},
-	widget::ALPHA_2_3,
+	widget::{ALPHA_2_3, LINE_HEIGHT},
 };
 use generic_daw_core::{
 	AudioThread, BpmTapper, NodeId, PullSlot, build_streams,
@@ -27,7 +27,9 @@ use generic_daw_core::{
 use generic_daw_project::proto;
 use generic_daw_widget::{context_menu::ContextMenu, menu::Menu, select_area::SelectArea};
 use iced::{
-	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
+	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border,
+	font::Weight,
+	keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
@@ -150,6 +152,10 @@ pub enum Message {
 
 	NewFile,
 	OpenLastFile,
+	OpenCrashLog,
+	OpenRecoveryFile,
+	CloseRecoveryView,
+	DismissRecoveryView,
 	SaveFile,
 	SaveAsFileDialog,
 	SaveAsFile(Arc<Path>),
@@ -160,7 +166,7 @@ pub enum Message {
 	Status(Option<Arc<str>>),
 
 	OpenFileDialog,
-	OpenFile(Arc<Path>),
+	OpenFile(Arc<Path>, bool),
 	CantFindPlugin(Arc<CStr>, NoClone<oneshot::Sender<Feedback<Infallible>>>),
 	CantFindSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
 	FindPlugin(usize, Feedback<Infallible>),
@@ -294,6 +300,7 @@ pub struct Daw {
 	file_tree: FileTree,
 	plugin_picker: Option<PluginPicker>,
 	config_view: Option<ConfigView>,
+	recovering: bool,
 
 	plugins: plugin_picker::State,
 	bpm_tapper: BpmTapper,
@@ -351,13 +358,8 @@ impl Daw {
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
+		let recovering = state.recovery_project.is_some() || state.crash_log.is_some();
 		let bottom_pane = state.bottom_pane_split_at != 0.0;
-
-		let open = if config.open_last_project {
-			Task::done(Message::OpenLastFile)
-		} else {
-			Task::none()
-		};
 
 		let mut this = Self {
 			config,
@@ -369,6 +371,7 @@ impl Daw {
 			file_tree,
 			config_view: None,
 			plugin_picker: None,
+			recovering: true,
 
 			plugins: plugin_picker::State::default(),
 			bpm_tapper: BpmTapper::default(),
@@ -394,7 +397,11 @@ impl Daw {
 			files_hovered: false,
 		};
 
-		let scan = this.update(Message::RescanPlugins);
+		let init = if recovering {
+			Task::none()
+		} else {
+			this.update(Message::DismissRecoveryView)
+		};
 
 		(
 			this,
@@ -405,7 +412,7 @@ impl Daw {
 					.map(NoClone)
 					.map(arrangement_view::Message::Batch)
 					.map(move |message| Message::Arrangement(project, message)),
-				scan.chain(open),
+				init,
 			]),
 		)
 	}
@@ -454,6 +461,10 @@ impl Daw {
 			}
 			Message::CloseRequested(window) => {
 				if window == self.main_window_id {
+					if !self.recovering {
+						self.state.recovery_project = None;
+						self.state.write();
+					}
 					return iced::exit();
 				}
 			}
@@ -478,8 +489,9 @@ impl Daw {
 				self.current_project.clone_from(&path);
 				if let Some(path) = path {
 					self.state.last_project = Some(path);
-					self.state.write();
 				}
+				self.state.recovery_project = None;
+				self.state.write();
 
 				arrangement
 					.replace_streams(self.arrangement_view.arrangement.replace_streams(None));
@@ -541,8 +553,38 @@ impl Daw {
 			}
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
-					return self.update(Message::OpenFile(last_project));
+					return self.update(Message::OpenFile(last_project, true));
 				}
+			}
+			Message::OpenCrashLog => {
+				if let Some(crash_log) = &self.state.crash_log
+					&& let Err(err) = open::that_detached(&**crash_log)
+				{
+					warn!("{err}");
+				}
+			}
+			Message::OpenRecoveryFile => {
+				if let Some(recovery_project) = self.state.recovery_project.clone() {
+					return self
+						.update(Message::CloseRecoveryView)
+						.chain(Task::done(Message::OpenFile(recovery_project, false)));
+				}
+			}
+			Message::CloseRecoveryView => {
+				self.recovering = false;
+				self.state.recovery_project = None;
+				self.state.crash_log = None;
+				self.state.write();
+				return self.update(Message::RescanPlugins);
+			}
+			Message::DismissRecoveryView => {
+				return self.update(Message::CloseRecoveryView).chain(
+					if self.config.open_last_project {
+						Task::done(Message::OpenLastFile)
+					} else {
+						Task::none()
+					},
+				);
 			}
 			Message::SaveFile => {
 				return self.update(
@@ -588,6 +630,7 @@ impl Daw {
 
 				self.current_project = Some(path.clone());
 				self.state.last_project = Some(path);
+				self.state.recovery_project = None;
 				self.state.write();
 
 				return Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
@@ -602,7 +645,7 @@ impl Daw {
 					.and_then(|name| name.to_str())
 					.unwrap_or("autosaved");
 
-				let path = AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now()));
+				let path = Arc::from(AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now())));
 
 				if let Err(err) =
 					std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host))
@@ -616,6 +659,9 @@ impl Daw {
 				self.save_status = path
 					.file_name()
 					.map(|name| format!("autosaved {}", name.display()).into());
+
+				self.state.recovery_project = Some(path);
+				self.state.write();
 
 				return Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
 					Message::SaveFinished(save)
@@ -660,13 +706,14 @@ impl Daw {
 				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().into())
-				.map(Message::OpenFile);
+				.map(|path| Message::OpenFile(path, true));
 			}
-			Message::OpenFile(path) => {
+			Message::OpenFile(path, current) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
 					return Arrangement::start_load(
 						path,
+						current,
 						self.arrangement_view.arrangement.transport().input_channels,
 						self.arrangement_view
 							.arrangement
@@ -1129,7 +1176,7 @@ impl Daw {
 			}
 			file_tree::Message::OpenFile(file, kind) => {
 				return if kind == FileKind::Project {
-					self.update(Message::OpenFile(file))
+					self.update(Message::OpenFile(file, true))
 				} else {
 					let project = self.project;
 					self.arrangement_view
@@ -1605,7 +1652,63 @@ impl Daw {
 				.padding(50)
 				.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
 			)
-			.interaction(Interaction::Progress))
+			.interaction(Interaction::Progress)),
+			self.recovering.then(|| opaque(
+				mouse_area(
+					center(opaque(
+						container(
+							column![
+								text("Generic DAW closed unexpectedly!")
+									.size(LINE_HEIGHT)
+									.line_height(1.0)
+									.font(Font::DEFAULT.weight(Weight::Bold)),
+								rule::horizontal(1),
+								row![
+									row![
+										self.state.crash_log.is_some().then(|| button(
+											"View crash log"
+										)
+										.style(button_with_radius(
+											button::subtle,
+											if self.state.recovery_project.is_some() {
+												border::left(5)
+											} else {
+												border::radius(5)
+											}
+										))
+										.on_press(Message::OpenCrashLog)),
+										self.state.recovery_project.is_some().then(|| button(
+											"Continue from last autosave"
+										)
+										.style(button_with_radius(
+											button::subtle,
+											if self.state.crash_log.is_some() {
+												border::right(5)
+											} else {
+												border::radius(5)
+											}
+										))
+										.on_press(Message::OpenRecoveryFile)),
+									],
+									right(
+										button("Dismiss")
+											.style(button_with_radius(button::subtle, 5))
+											.on_press(Message::DismissRecoveryView)
+									)
+								]
+								.width(Shrink)
+								.spacing(10)
+							]
+							.width(Shrink)
+							.spacing(10)
+							.padding(10)
+						)
+						.style(container_with_radius(weakest_bordered_box, 10))
+					))
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+				)
+				.on_press(Message::DismissRecoveryView),
+			))
 		]
 		.into()
 	}
@@ -1640,7 +1743,7 @@ impl Daw {
 				.with(self.project)
 				.map(|(project, message)| Message::Arrangement(project, message)),
 			self.clap_host.subscription().map(Message::ClapHost),
-			if self.config.autosave.enabled {
+			if self.config.autosave.enabled && !self.recovering {
 				every(Duration::from_secs(
 					self.config.autosave.interval.get().into(),
 				))
@@ -1648,11 +1751,10 @@ impl Daw {
 			} else {
 				Subscription::none()
 			},
-			if self.progress.is_some() {
-				Subscription::none()
-			} else {
+			if self.progress.is_none() {
 				keyboard::listen()
 					.with((
+						self.recovering,
 						self.config_view.is_some(),
 						self.plugin_picker.is_some(),
 						self.project,
@@ -1661,25 +1763,46 @@ impl Daw {
 							.unwrap_or(self.top_pane),
 					))
 					.filter_map(
-						|((config_view, plugin_picker, project, tab), event)| match event {
-							keyboard::Event::KeyPressed {
-								key,
-								physical_key,
-								modifiers,
-								repeat,
-								..
-							} => if config_view {
-								ConfigView::keybinds(&key, modifiers, repeat)
-							} else if plugin_picker {
-								PluginPicker::keybinds(&key, modifiers, repeat)
-							} else {
-								ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
-									.map(|message| Message::Arrangement(project, message(tab)))
+						|((recovering, config_view, plugin_picker, project, tab), event)| {
+							match event {
+								keyboard::Event::KeyPressed {
+									key,
+									physical_key,
+									modifiers,
+									repeat,
+									..
+								} => {
+									if recovering {
+										Self::recovering_keybinds(&key, modifiers, repeat)
+									} else {
+										if config_view {
+											ConfigView::keybinds(&key, modifiers, repeat)
+										} else if plugin_picker {
+											PluginPicker::keybinds(&key, modifiers, repeat)
+										} else {
+											ArrangementView::keybinds(
+												&key,
+												physical_key,
+												modifiers,
+												repeat,
+											)
+											.map(
+												|message| {
+													Message::Arrangement(project, message(tab))
+												},
+											)
+										}
+										.or_else(|| {
+											Self::keybinds(&key, physical_key, modifiers, repeat)
+										})
+									}
+								}
+								_ => None,
 							}
-							.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-							_ => None,
 						},
 					)
+			} else {
+				Subscription::none()
 			},
 			window::events().filter_map(|(window, event)| match event {
 				window::Event::CloseRequested => Some(Message::CloseRequested(window)),
@@ -1746,6 +1869,27 @@ impl Daw {
 				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::MovePaneUp),
 				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
 					Some(Message::MovePaneDown)
+				}
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	fn recovering_keybinds(
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+		repeat: bool,
+	) -> Option<Message> {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Escape) => {
+					Some(Message::DismissRecoveryView)
 				}
 				_ => None,
 			},

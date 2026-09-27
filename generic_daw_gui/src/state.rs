@@ -24,6 +24,8 @@ pub const DEFAULT_SPLIT_HEIGHT: f32 = 400.0;
 #[serde(default)]
 pub struct State {
 	pub last_project: Option<Arc<Path>>,
+	pub recovery_project: Option<Arc<Path>>,
+	pub crash_log: Option<Arc<Path>>,
 	pub file_tree_split_at: f32,
 	pub plugins_pane_split_at: f32,
 	pub bottom_pane_split_at: f32,
@@ -37,6 +39,8 @@ impl Default for State {
 	fn default() -> Self {
 		Self {
 			last_project: None,
+			recovery_project: None,
+			crash_log: None,
 			file_tree_split_at: DEFAULT_SPLIT_WIDTH,
 			plugins_pane_split_at: DEFAULT_SPLIT_WIDTH,
 			bottom_pane_split_at: DEFAULT_SPLIT_HEIGHT,
