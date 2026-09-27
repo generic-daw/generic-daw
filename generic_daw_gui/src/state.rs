@@ -75,7 +75,8 @@ impl Grid {
 				BeatTime::BEAT << size.ceil() as u8
 			} else {
 				BeatTime::BEAT >> -size.max(-9.0) as u8
-			}) * 2 / 3
+			}) * 2
+				/ 3
 		} else {
 			BeatTime::BEAT >> -size.max(-9.0) as u8
 		}

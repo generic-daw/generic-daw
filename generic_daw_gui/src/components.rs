@@ -31,7 +31,7 @@ pub fn file_tree_entry<'a, Message: 'a>(
 	)
 	.padding(0)
 	.height(LINE_HEIGHT + 2.0)
-	.style(button_with_radius(style, 0))
+	.style(style)
 }
 
 pub fn icon_button<'a, Message: 'a>(
@@ -56,7 +56,7 @@ pub fn menu_entry<'a, Message: 'a>(
 		]
 		.spacing(5),
 	)
-	.style(button_with_radius(button::text, 0))
+	.style(button::text)
 	.padding(5)
 }
 

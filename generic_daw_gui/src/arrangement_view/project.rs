@@ -228,12 +228,13 @@ impl Arrangement {
 		let (arrangement, processor, task) =
 			Self::create(input_channels, output_channels, sample_rate, buffer_size);
 
-		Task::done(daw::Message::ProjectLoaded(
+		Task::done(daw::Message::ProjectLoaded(Box::new((
 			project,
-			NoClone(NoDebug(Box::new(arrangement))),
-			NoClone(NoDebug(Box::new(processor))),
 			None,
-		))
+			NoClone(NoDebug(arrangement)),
+			NoClone(NoDebug(processor)),
+			None,
+		))))
 		.chain(
 			task.map(Box::new)
 				.map(NoClone)
@@ -272,7 +273,7 @@ impl Arrangement {
 			.discard(),
 			Task::stream(progress_receiver).chain(
 				Task::perform(tasks_receiver, Result::ok).and_then(|tasks| {
-					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile(None)))
+					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile))
 				}),
 			),
 		])
@@ -688,12 +689,13 @@ impl Arrangement {
 		let project = Project::unique();
 
 		Some(
-			Task::done(daw::Message::ProjectLoaded(
+			Task::done(daw::Message::ProjectLoaded(Box::new((
 				project,
-				NoClone(NoDebug(Box::new(arrangement))),
-				NoClone(NoDebug(Box::new(processor))),
+				Some(path),
+				NoClone(NoDebug(arrangement)),
+				NoClone(NoDebug(processor)),
 				view,
-			))
+			))))
 			.chain(Task::batch([
 				task.map(Box::new)
 					.map(NoClone)
@@ -702,7 +704,7 @@ impl Arrangement {
 				Task::run(stream::iter(messages), move |message| {
 					daw::Message::Arrangement(project, message)
 				})
-				.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
+				.chain(Task::done(daw::Message::OpenedFile)),
 			])),
 		)
 	}

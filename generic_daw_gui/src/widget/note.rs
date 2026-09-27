@@ -95,8 +95,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 									layout.bounds().intersection(viewport).unwrap_or_default()
 										- Vector::new(layout.position().x, layout.position().y);
 								let vel_pixel = bounds.x
-									+ border + self.note.velocity
-									* (bounds.width - 2.0 * border);
+									+ border
+									+ self.note.velocity * (bounds.width - 2.0 * border);
 								if (vel_pixel - cursor.x).abs() < border / 2.0 {
 									Status::DraggingVelocity(self.index, self.note.velocity)
 								} else {

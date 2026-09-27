@@ -132,10 +132,13 @@ pub enum Message {
 
 	CloseRequested(window::Id),
 	ProjectLoaded(
-		Project,
-		NoClone<NoDebug<Box<Arrangement>>>,
-		NoClone<NoDebug<Box<AudioThread>>>,
-		Option<proto::ViewState>,
+		Box<(
+			Project,
+			Option<Arc<Path>>,
+			NoClone<NoDebug<Arrangement>>,
+			NoClone<NoDebug<AudioThread>>,
+			Option<proto::ViewState>,
+		)>,
 	),
 
 	SaveFinished(Save),
@@ -163,7 +166,7 @@ pub enum Message {
 	FindPlugin(usize, Feedback<Infallible>),
 	FindSampleFileDialog(usize),
 	FindSampleFile(usize, Feedback<Arc<Path>>),
-	OpenedFile(Option<Arc<Path>>),
+	OpenedFile,
 
 	RenderFileDialog,
 	RenderFile(Arc<Path>),
@@ -211,7 +214,7 @@ pub enum Message {
 	OnBottomPaneDoubleClick,
 }
 
-const _: () = assert!(size_of::<Message>() == 72);
+const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Tab {
@@ -250,13 +253,15 @@ impl Tab {
 				},
 			))
 			.padding(padding::horizontal(7).vertical(5))
-			.on_press_maybe((top_pane != self && bottom_pane != Some(self)).then_some(
-				if bottom_pane.is_some() && bottom_selected {
-					Message::BottomPane(self)
-				} else {
-					Message::TopPane(self)
-				},
-			)),
+			.on_press_maybe(
+				(top_pane != self && bottom_pane != Some(self)).then_some(
+					if bottom_pane.is_some() && bottom_selected {
+						Message::BottomPane(self)
+					} else {
+						Message::TopPane(self)
+					},
+				),
+			),
 			move || {
 				container(
 					menu_entry(panel_bottom_dashed(), "Detach", "")
@@ -452,12 +457,15 @@ impl Daw {
 					return iced::exit();
 				}
 			}
-			Message::ProjectLoaded(
-				project,
-				NoClone(NoDebug(mut arrangement)),
-				NoClone(NoDebug(processor)),
-				view,
-			) => {
+			Message::ProjectLoaded(data) => {
+				let (
+					project,
+					path,
+					NoClone(NoDebug(mut arrangement)),
+					NoClone(NoDebug(processor)),
+					view,
+				) = *data;
+
 				self.plugin_picker = None;
 
 				self.top_pane = Tab::Playlist;
@@ -467,15 +475,21 @@ impl Daw {
 				self.save = None;
 				self.save_status = None;
 
+				self.current_project.clone_from(&path);
+				if let Some(path) = path {
+					self.state.last_project = Some(path);
+					self.state.write();
+				}
+
 				arrangement
 					.replace_streams(self.arrangement_view.arrangement.replace_streams(None));
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
-					ArrangementView::new(*arrangement, &self.state, view),
+					ArrangementView::new(arrangement, &self.state, view),
 				)
 				.arrangement;
 
-				let p_receiver = arrangement.request_processor(PullSlot::Full(*processor));
+				let p_receiver = arrangement.request_processor(PullSlot::Full(processor));
 
 				return Task::future(unblock(|| {
 					while !arrangement.drain_queue() {
@@ -572,12 +586,13 @@ impl Daw {
 					.file_name()
 					.map(|name| format!("saved {}", name.display()).into());
 
-				return Task::batch([
-					self.update(Message::OpenedFile(Some(path))),
-					Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
-						Message::SaveFinished(save)
-					}),
-				]);
+				self.current_project = Some(path.clone());
+				self.state.last_project = Some(path);
+				self.state.write();
+
+				return Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
+					Message::SaveFinished(save)
+				});
 			}
 			Message::AutosaveFile => {
 				let name = self
@@ -602,10 +617,9 @@ impl Daw {
 					.file_name()
 					.map(|name| format!("autosaved {}", name.display()).into());
 
-				return Task::batch([Task::perform(
-					Timer::after(Duration::from_secs(4)),
-					move |_| Message::SaveFinished(save),
-				)]);
+				return Task::perform(Timer::after(Duration::from_secs(4)), move |_| {
+					Message::SaveFinished(save)
+				});
 			}
 			Message::ToggleFullscreen => {
 				let id = self.main_window_id;
@@ -690,12 +704,7 @@ impl Daw {
 			Message::FindSampleFile(index, response) => {
 				self.missing_samples.remove(index).1.send(response).unwrap();
 			}
-			Message::OpenedFile(path) => {
-				if let Some(path) = path {
-					self.current_project = Some(path.clone());
-					self.state.last_project = Some(path);
-					self.state.write();
-				}
+			Message::OpenedFile => {
 				self.progress = None;
 				self.status = None;
 				self.missing_plugins.clear();
@@ -1355,13 +1364,15 @@ impl Daw {
 										),
 									)
 									.padding(self.bottom_pane.map_or_default(|_| 5))
-									.style(container_with_radius(
-										selectable_box(
-											container::transparent,
-											self.bottom_pane.is_some() && !self.bottom_selected,
-										),
-										self.top_pane.radius(),
-									)),
+									.style(
+										container_with_radius(
+											selectable_box(
+												container::transparent,
+												self.bottom_pane.is_some() && !self.bottom_selected,
+											),
+											self.top_pane.radius(),
+										)
+									),
 								)
 								.on_select_maybe(
 									(self.bottom_pane.is_some() && self.bottom_selected)
@@ -1380,13 +1391,15 @@ impl Daw {
 											)),
 									)
 									.padding(5)
-									.style(container_with_radius(
-										selectable_box(
-											container::transparent,
-											self.bottom_selected,
-										),
-										self.bottom_pane.unwrap().radius(),
-									)),
+									.style(
+										container_with_radius(
+											selectable_box(
+												container::transparent,
+												self.bottom_selected,
+											),
+											self.bottom_pane.unwrap().radius(),
+										)
+									),
 								)
 								.on_select_maybe(
 									(!self.bottom_selected)
@@ -1477,47 +1490,42 @@ impl Daw {
 										.map(|(name, _)| &**name)
 										.enumerate()
 										.map(|(i, name)| {
-											container(
+											row![
+												"can't find plugin",
+												container(
+													text(name.to_string_lossy())
+														.font(Font::MONOSPACE)
+														.wrapping(text::Wrapping::None)
+														.ellipsis(text::Ellipsis::Middle)
+												)
+												.padding(padding::horizontal(10).vertical(5))
+												.style(container_with_radius(
+													weakest_bordered_box,
+													5
+												)),
 												row![
-													"can't find plugin",
-													container(
-														text(name.to_string_lossy())
-															.font(Font::MONOSPACE)
-															.wrapping(text::Wrapping::None)
-															.ellipsis(text::Ellipsis::Middle)
-													)
-													.padding(padding::horizontal(10).vertical(5))
-													.style(container_with_radius(
-														weakest_bordered_box,
-														5
-													)),
-													row![
-														button("Ignore")
-															.on_press(Message::FindPlugin(
-																i,
-																Feedback::Ignore
-															))
-															.style(button_with_radius(
-																button::warning,
-																border::left(5)
-															)),
-														button("Cancel")
-															.on_press(Message::FindPlugin(
-																i,
-																Feedback::Cancel
-															))
-															.style(button_with_radius(
-																button::danger,
-																border::right(5)
-															))
-													]
+													button("Ignore")
+														.on_press(Message::FindPlugin(
+															i,
+															Feedback::Ignore
+														))
+														.style(button_with_radius(
+															button::warning,
+															border::left(5)
+														)),
+													button("Cancel")
+														.on_press(Message::FindPlugin(
+															i,
+															Feedback::Cancel
+														))
+														.style(button_with_radius(
+															button::danger,
+															border::right(5)
+														))
 												]
-												.align_y(Center)
-												.spacing(10),
-											)
-											.padding(10)
-											.style(container_with_radius(weak_bordered_box, 5))
-											.into()
+											]
+											.align_y(Center)
+											.spacing(10)
 										})
 										.chain(
 											self.missing_samples
@@ -1525,73 +1533,67 @@ impl Daw {
 												.map(|(name, _)| &**name)
 												.enumerate()
 												.map(|(i, name)| {
-													container(
+													row![
+														"can't find sample",
+														container(
+															text(name)
+																.font(Font::MONOSPACE)
+																.wrapping(text::Wrapping::None)
+																.ellipsis(text::Ellipsis::Middle)
+														)
+														.padding(
+															padding::horizontal(10).vertical(5)
+														)
+														.style(container_with_radius(
+															weakest_bordered_box,
+															5
+														)),
 														row![
-															"can't find sample",
-															container(
-																text(name)
-																	.font(Font::MONOSPACE)
-																	.wrapping(text::Wrapping::None)
-																	.ellipsis(
-																		text::Ellipsis::Middle
+															button("Pick")
+																.on_press(
+																	Message::FindSampleFileDialog(
+																		i
 																	)
-															)
-															.padding(
-																padding::horizontal(10).vertical(5)
-															)
-															.style(
-																container_with_radius(
-																	weakest_bordered_box,
-																	5
 																)
-															),
-															row![
-																button("Pick")
-																	.on_press(
-																		Message::FindSampleFileDialog(i)
-																	)
-																	.style(button_with_radius(
-																		button::success,
-																		border::left(5)
-																	)),
-																button("Ignore")
-																	.on_press(Message::FindSampleFile(
-																		i,
-																		Feedback::Ignore
-																	))
-																	.style(button_with_radius(
-																		button::warning,
-																		0
-																	)),
-																button("Cancel")
-																	.on_press(Message::FindSampleFile(
-																		i,
-																		Feedback::Cancel
-																	))
-																	.style(button_with_radius(
-																		button::danger,
-																		border::right(5)
-																	))
-															]
+																.style(button_with_radius(
+																	button::success,
+																	border::left(5)
+																)),
+															button("Ignore")
+																.on_press(Message::FindSampleFile(
+																	i,
+																	Feedback::Ignore
+																))
+																.style(button_with_radius(
+																	button::warning,
+																	0
+																)),
+															button("Cancel")
+																.on_press(Message::FindSampleFile(
+																	i,
+																	Feedback::Cancel
+																))
+																.style(button_with_radius(
+																	button::danger,
+																	border::right(5)
+																))
 														]
-														.align_y(Center)
-														.spacing(10),
-													)
-													.padding(10)
-													.style(container_with_radius(
-														weak_bordered_box,
-														5,
-													))
-													.into()
+													]
+													.align_y(Center)
+													.spacing(10)
 												})
-										),
+										)
+										.map(|widget| container(widget)
+											.padding(10)
+											.style(container_with_radius(weak_bordered_box, 10))
+											.into()),
 								)
 								.align_x(Center)
 								.spacing(10)
 							)
-							.direction(scrollable::Direction::Vertical(
-								scrollable::Scrollbar::hidden(),
-							))
+							.direction(
+								scrollable::Direction::Vertical(scrollable::Scrollbar::hidden(),)
+							)
 						]
 						.align_x(Center)
 						.spacing(20),

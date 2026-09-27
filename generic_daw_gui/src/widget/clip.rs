@@ -335,7 +335,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 						let frames_per_px = frames_per_px(playlist.scale, self.transport);
 						let fade_start_px = inner.clip.fade_start.len.to_frames(self.transport)
-							as f32 / frames_per_px;
+							as f32
+							/ frames_per_px;
 						let fade_end_px = inner.clip.fade_end.len.to_frames(self.transport) as f32
 							/ -frames_per_px;
 

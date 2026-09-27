@@ -6,22 +6,12 @@ use iced::{
 use sweeten::widget::{column, row};
 
 pub fn button_warning_text(t: &Theme, s: button::Status) -> button::Style {
-	let base = button::Style {
-		text_color: t.palette().warning.base.color,
-		..button::Style::default()
+	let mut style = button::text(t, s);
+	style.text_color = Color {
+		a: style.text_color.a,
+		..t.palette().warning.base.color
 	};
-
-	match s {
-		button::Status::Active | button::Status::Pressed => base,
-		button::Status::Hovered => button::Style {
-			text_color: base.text_color.scale_alpha(0.8),
-			..base
-		},
-		button::Status::Disabled => button::Style {
-			text_color: base.text_color.scale_alpha(0.5),
-			..base
-		},
-	}
+	style
 }
 
 pub fn button_with_radius(

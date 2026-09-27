@@ -216,13 +216,15 @@ impl PluginPicker {
 										)
 										.padding(1)
 										.height(LINE_HEIGHT + 2.0)
-										.style(container_with_radius(
-											selectable_box(
-												container::transparent,
-												i == self.hovered_option(),
+										.style(
+											container_with_radius(
+												selectable_box(
+													container::transparent,
+													i == self.hovered_option(),
+												),
+												5,
 											),
-											5,
-										)),
+										),
 									)
 									.on_enter(Message::Hover(i))
 									.on_press(Message::Select)

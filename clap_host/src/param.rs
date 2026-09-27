@@ -81,7 +81,8 @@ impl Param {
 				self.id,
 				self.value.into(),
 				&mut [0; 256],
-			) && let Ok(value_text) = str::from_utf8(value_text)
+			)
+			&& let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{
 			self.value_text = Some(value_text.into());

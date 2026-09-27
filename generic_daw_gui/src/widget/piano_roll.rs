@@ -241,11 +241,12 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 							});
 
 					if new_key != key || abs_diff != BeatTime::ZERO {
-						let key_delta = if new_key > key {
-							Delta::Positive
-						} else {
-							Delta::Negative
-						}(MidiKey(new_key.0.abs_diff(key.0)));
+						let key_delta =
+							if new_key > key {
+								Delta::Positive
+							} else {
+								Delta::Negative
+							}(MidiKey(new_key.0.abs_diff(key.0)));
 
 						let time_delta = if new_time > time {
 							Delta::Positive

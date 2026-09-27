@@ -300,7 +300,8 @@ impl ArrangementView {
 				if let DragEvent::Dropped {
 					index,
 					target_index,
-				} = event && index != target_index
+				} = event
+					&& index != target_index
 				{
 					self.arrangement.move_channel(index, target_index);
 				}
@@ -400,7 +401,8 @@ impl ArrangementView {
 				if let DragEvent::Dropped {
 					index,
 					target_index,
-				} = event && index != target_index
+				} = event
+					&& index != target_index
 				{
 					self.arrangement.plugin_move(node, index, target_index);
 				}
@@ -519,7 +521,8 @@ impl ArrangementView {
 				if let DragEvent::Dropped {
 					index,
 					target_index,
-				} = event && index != target_index
+				} = event
+					&& index != target_index
 				{
 					self.arrangement.move_track(index, target_index);
 					self.update_selection(|c| {
@@ -1657,9 +1660,9 @@ impl ArrangementView {
 																.default(1.0)
 																.radius(19.44444)
 																.enabled(enabled)
-																.tooltip(
-																	format_db(node.utility.volume)
-																),
+																.tooltip(format_db(
+																	node.utility.volume
+																)),
 																|| node.volume_context_menu(
 																	Tab::Playlist
 																)
@@ -1700,18 +1703,16 @@ impl ArrangementView {
 																"S",
 																button_style(soloed)
 															)
-															.on_press(
-																Message::TrackToggleSolo(node.id)
-															),
+															.on_press(Message::TrackToggleSolo(
+																node.id
+															)),
 															icon_button(
 																snowflake(),
 																button_style(false)
 															)
-															.on_press_maybe(
-																enabled.then_some(Message::Freeze(
-																	node.id
-																))
-															),
+															.on_press_maybe(enabled.then_some(
+																Message::Freeze(node.id)
+															)),
 														]
 														.spacing(5)
 														.wrap(),
@@ -2097,7 +2098,9 @@ impl ArrangementView {
 											button::secondary
 										},
 									)
-									.on_press_maybe(match node.ty {
+									.on_press_maybe(match node
+										.ty
+									{
 										NodeType::Master => None,
 										NodeType::Channel => Some(Message::ChannelRemove(node.id)),
 										NodeType::Track => Some(Message::TrackRemove(node.id)),
@@ -2115,10 +2118,9 @@ impl ArrangementView {
 									arrow_up_down(),
 									button_style(node.utility.volume.is_sign_negative())
 								)
-								.on_press(Message::ChannelVolumeChanged(
-									node.id,
-									-node.utility.volume
-								)),
+								.on_press(
+									Message::ChannelVolumeChanged(node.id, -node.utility.volume)
+								),
 								match node.utility.pan {
 									PanMode::Stereo(..) => icon_button(
 										chevrons_left_right_ellipsis(),
@@ -2278,9 +2280,9 @@ impl ArrangementView {
 																"Reset",
 																"Ctrl-Click",
 															)
-															.on_press(
-																Message::SetMix(from, to, 1.0),
-															),
+															.on_press(Message::SetMix(
+																from, to, 1.0,
+															)),
 														)
 														.width(160)
 														.style(container_with_radius(
@@ -2399,7 +2401,8 @@ impl ArrangementView {
 						- clip
 							.position
 							.offset()
-							.to_frames(self.arrangement.transport()) as f64)
+							.to_frames(self.arrangement.transport())
+							as f64)
 						/ f64::from(frames_per_px(
 							self.piano_roll.borrow().scale,
 							self.arrangement.transport(),

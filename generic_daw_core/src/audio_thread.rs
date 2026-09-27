@@ -221,11 +221,12 @@ impl Transport {
 					TransportFlags::IS_PLAYING
 				} else {
 					TransportFlags::empty()
-				} | if self.loop_range.is_some() {
-				TransportFlags::IS_LOOP_ACTIVE
-			} else {
-				TransportFlags::empty()
-			},
+				}
+				| if self.loop_range.is_some() {
+					TransportFlags::IS_LOOP_ACTIVE
+				} else {
+					TransportFlags::empty()
+				},
 			song_pos_beats: self.position.to_beat_time(self).to_clap(),
 			song_pos_seconds: self.position.to_clap(),
 			tempo: self.bpm.get().into(),
