@@ -134,8 +134,7 @@ fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {
 	}
 
 	let (chunks_16, rest) = audio.as_flattened().as_chunks::<16>();
-	let (chunks_2, rest) = rest.as_chunks::<2>();
-	debug_assert!(rest.is_empty());
+	let (chunks_2, _) = rest.as_chunks::<2>();
 
 	chunks_16
 		.iter()

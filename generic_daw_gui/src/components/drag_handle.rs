@@ -118,9 +118,9 @@ pub fn drag_handle<'a>(
 						position: Point { y, .. },
 						..
 					} if state.dragging.is_some() => return Action::publish(Event::Drag(*y)).and_capture(),
-					mouse::Event::WheelScrolled {
-						delta, modifiers, ..
-					} if state.dragging.is_none() && cursor.is_over(bounds) => {
+					mouse::Event::WheelScrolled { delta, modifiers }
+						if state.dragging.is_none() && cursor.is_over(bounds) =>
+					{
 						return Action::publish(Event::Scroll(
 							match delta {
 								ScrollDelta::Lines { y, .. } => *y,

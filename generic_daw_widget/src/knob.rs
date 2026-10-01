@@ -270,7 +270,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
 					modifiers,
-					..
 				} if state.dragging.is_none() && state.hovering => {
 					state.cache.clear();
 					shell.request_redraw();

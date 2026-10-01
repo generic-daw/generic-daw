@@ -245,7 +245,6 @@ impl Plugin {
 			.deactivate(processor.processor.0.into_stopped());
 	}
 
-	#[must_use]
 	pub fn params(&self) -> impl DoubleEndedIterator<Item = &Param> {
 		self.params
 			.iter()
