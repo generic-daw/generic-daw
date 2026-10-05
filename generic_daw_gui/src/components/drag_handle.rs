@@ -3,7 +3,7 @@ use crate::{
 	stylefns::{container_with_radius, weakest_bordered_box},
 };
 use iced::{
-	Element, Point, Rectangle, Renderer, border,
+	Element, Rectangle, Renderer, border,
 	mouse::{self, Cursor, Interaction, ScrollDelta},
 	padding,
 	widget::{Action, component, container, mouse_area},
@@ -101,23 +101,27 @@ pub fn drag_handle<'a>(
 					mouse::Event::ButtonPressed {
 						button: mouse::Button::Left,
 						modifiers,
-					} if state.dragging.is_none() && cursor.is_over(bounds) => {
-						let pos = cursor.position().unwrap();
+					} if state.dragging.is_none()
+						&& cursor.is_over(bounds)
+						&& let Some(cursor) = cursor.position() =>
+					{
 						return Action::publish(if modifiers.control() || modifiers.command() {
 							Event::Default
 						} else {
 							Event::Press
-						}(pos.y))
+						}(cursor.y))
 						.and_capture();
 					}
 					mouse::Event::ButtonReleased {
 						button: mouse::Button::Left,
 						..
 					} if state.dragging.is_some() => return Action::publish(Event::Release).and_capture(),
-					mouse::Event::CursorMoved {
-						position: Point { y, .. },
-						..
-					} if state.dragging.is_some() => return Action::publish(Event::Drag(*y)).and_capture(),
+					mouse::Event::CursorMoved { .. }
+						if state.dragging.is_some()
+							&& let Some(cursor) = cursor.land().position() =>
+					{
+						return Action::publish(Event::Drag(cursor.y)).and_capture();
+					}
 					mouse::Event::WheelScrolled { delta, modifiers }
 						if state.dragging.is_none() && cursor.is_over(bounds) =>
 					{

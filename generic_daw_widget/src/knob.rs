@@ -270,12 +270,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
 					modifiers,
-				} if state.dragging.is_none() && state.hovering => {
+				} if state.dragging.is_none()
+					&& state.hovering
+					&& let Some(cursor) = cursor.position() =>
+				{
 					state.cache.clear();
 					shell.request_redraw();
 
-					let pos = cursor.position().unwrap();
-					state.dragging = Some((self.info.value, pos.y));
+					state.dragging = Some((self.info.value, cursor.y));
 					state.scroll = 0.0;
 
 					if modifiers.control() || modifiers.command() {
@@ -294,13 +296,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					state.dragging = None;
 					state.scroll = 0.0;
 				}
-				mouse::Event::CursorMoved {
-					position: Point { y, .. },
-					..
-				} => {
+				mouse::Event::CursorMoved { .. } if let Some(cursor) = cursor.land().position() => {
 					if let Some((start_value, start_y)) = state.dragging {
 						let mut new_value = (start_value
-							+ (start_y - y)
+							+ (start_y - cursor.y)
 								* (self.info.range.end() - self.info.range.start())
 								* 0.005)
 							.clamp(*self.info.range.start(), *self.info.range.end());
@@ -319,10 +318,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						shell.capture_event();
 					}
 
-					if (cursor.is_over(layout.bounds())
-						&& cursor.position().unwrap().distance(
-							layout.bounds().center() + Vector::new(0.0, self.border_radius()),
-						) <= self.info.radius)
+					if (cursor.distance(
+						layout.bounds().center() + Vector::new(0.0, self.border_radius()),
+					) <= self.info.radius)
 						!= state.hovering
 					{
 						state.hovering ^= true;

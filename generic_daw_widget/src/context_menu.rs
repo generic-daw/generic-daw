@@ -120,10 +120,10 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 			button: mouse::Button::Right,
 			..
 		}) = event
-			&& let Some(position) = cursor.position()
-			&& layout.bounds().contains(position)
+			&& let Some(cursor) = cursor.position()
+			&& layout.bounds().contains(cursor)
 		{
-			tree.state.downcast_mut::<State>().position = Some(position);
+			tree.state.downcast_mut::<State>().position = Some(cursor);
 			shell.capture_event();
 			shell.request_redraw();
 
