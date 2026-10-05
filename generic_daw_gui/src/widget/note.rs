@@ -76,15 +76,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 		};
 
 		let piano_roll = &mut *self.piano_roll.borrow_mut();
+		let time = px_to_time(cursor.x, Vector::ZERO, piano_roll.scale, self.transport)
+			+ self.note.position.start();
+
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if piano_roll.status == Status::None => {
 				let mut clear = piano_roll.primary.insert(self.index);
-
-				let time = px_to_time(cursor.x, Vector::ZERO, piano_roll.scale, self.transport)
-					+ self.note.position.start();
 
 				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
 					(false, shift) => {
@@ -116,7 +116,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						let time = self.grid.maybe_snap(time, *modifiers, |time| {
 							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
 						});
-						Status::Selecting(self.note.key, self.note.key, time, time)
+						Status::Selecting(self.note.key, self.note.key, time, time, false)
 					}
 					(true, true) => {
 						let time = self.grid.maybe_snap(time, *modifiers, |time| {
@@ -137,18 +137,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
-				..
-			}) if piano_roll.status == Status::None => {
-				piano_roll.primary.clear();
+				modifiers,
+			}) if piano_roll.status == Status::None && modifiers.command() => {
 				piano_roll.primary.insert(self.index);
-				piano_roll.status = Status::Deleting;
-				shell.publish((self.f)(Action::Delete));
+
+				let time = self.grid.maybe_snap(time, *modifiers, |time| {
+					time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
+				});
+				piano_roll.status =
+					Status::Selecting(self.note.key, self.note.key, time, time, true);
+
 				shell.capture_event();
-			}
-			Event::Mouse(mouse::Event::CursorMoved { .. })
-				if piano_roll.status == Status::Deleting =>
-			{
-				piano_roll.primary.insert(self.index);
+				shell.request_redraw();
 			}
 			_ => {}
 		}

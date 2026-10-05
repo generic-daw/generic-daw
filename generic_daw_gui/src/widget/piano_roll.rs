@@ -34,13 +34,12 @@ pub enum Action {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Status {
-	Selecting(MidiKey, MidiKey, BeatTime, BeatTime),
+	Selecting(MidiKey, MidiKey, BeatTime, BeatTime, bool),
 	Dragging(MidiKey, BeatTime),
 	TrimmingStart(BeatTime),
 	TrimmingEnd(BeatTime),
 	DraggingSplit(BeatTime),
 	DraggingVelocity(usize, f32),
-	Deleting,
 	#[default]
 	None,
 }
@@ -64,8 +63,10 @@ impl State {
 	}
 
 	pub fn finish(&mut self) {
-		self.status = Status::None;
-		self.primary.extend(self.secondary.drain());
+		match std::mem::take(&mut self.status) {
+			Status::Selecting(..) => self.secondary.clear(),
+			_ => self.primary.extend(self.secondary.drain()),
+		}
 	}
 
 	pub fn clear(&mut self) {
@@ -125,18 +126,21 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				child.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
 
-		if shell.is_event_captured() {
-			return;
-		}
-
 		let state = &mut *self.state.borrow_mut();
 
 		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
 			&& state.status != Status::None
 		{
-			state.finish();
+			state.primary.extend(state.secondary.drain());
+			if let Status::Selecting(.., true) = std::mem::take(&mut state.status) {
+				shell.publish((self.action)(Action::Delete));
+			}
 			shell.capture_event();
 			shell.request_redraw();
+			return;
+		}
+
+		if shell.is_event_captured() {
 			return;
 		}
 
@@ -176,7 +180,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
-					state.status = Status::Selecting(key, key, time, time);
+					state.status = Status::Selecting(key, key, time, time, false);
 				} else {
 					let time = self
 						.grid
@@ -193,16 +197,26 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
-				..
+				modifiers,
 			}) if state.status == Status::None => {
-				state.clear();
-				state.status = Status::Deleting;
+				if modifiers.command() {
+					let key = px_to_key(cursor.y, state.scale);
+
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+
+					state.status = Status::Selecting(key, key, time, time, true);
+				} else {
+					state.clear();
+				}
+
 				shell.capture_event();
 				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {
-				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
+				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos, delete) => {
 					let end_key = px_to_key(cursor.y, state.scale);
 
 					let end_pos = self
@@ -213,7 +227,8 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						return;
 					}
 
-					state.status = Status::Selecting(start_key, end_key, start_pos, end_pos);
+					state.status =
+						Status::Selecting(start_key, end_key, start_pos, end_pos, delete);
 
 					let (start_key, end_key) = (start_key.min(end_key), start_key.max(end_key));
 					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
@@ -326,12 +341,6 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						}
 					}
 				}
-				Status::Deleting => {
-					if !state.primary.is_empty() {
-						shell.publish((self.action)(Action::Delete));
-						shell.capture_event();
-					}
-				}
 				Status::None => {}
 			},
 			_ => {}
@@ -425,7 +434,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 			}
 		}
 
-		if let Status::Selecting(start_key, end_key, start_pos, end_pos) = state.status
+		if let Status::Selecting(start_key, end_key, start_pos, end_pos, _) = state.status
 			&& start_pos != end_pos
 		{
 			let (start_key, end_key) = (start_key.max(end_key), start_key.min(end_key));
@@ -466,13 +475,13 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 		renderer: &Renderer,
 	) -> Interaction {
 		match self.state.borrow().status {
-			Status::Selecting(..) => Interaction::Idle,
+			Status::Selecting(.., false) => Interaction::Idle,
+			Status::Selecting(.., true) => Interaction::NoDrop,
 			Status::Dragging(..) => Interaction::Grabbing,
 			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
 				Interaction::ResizingHorizontally
 			}
 			Status::DraggingVelocity(..) => Interaction::Pointer,
-			Status::Deleting => Interaction::NoDrop,
 			Status::None => self
 				.notes
 				.iter()

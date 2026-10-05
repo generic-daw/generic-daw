@@ -309,6 +309,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			return;
 		};
 
+		let time = px_to_time(cursor.x, Vector::ZERO, playlist.scale, self.transport)
+			+ match self.inner {
+				Inner::AudioClip(inner) => inner.clip.position.start(),
+				Inner::MidiClip(inner) => inner.clip.position.start(),
+				_ => unreachable!(),
+			};
+
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
@@ -320,12 +327,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				state.last_click = Some(new_click);
 
 				let header_height = header_height(&layout);
-				let time = px_to_time(cursor.x, Vector::ZERO, playlist.scale, self.transport)
-					+ match self.inner {
-						Inner::AudioClip(inner) => inner.clip.position.start(),
-						Inner::MidiClip(inner) => inner.clip.position.start(),
-						_ => unreachable!(),
-					};
 
 				match self.inner {
 					Inner::AudioClip(inner) => 'block: {
@@ -460,7 +461,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 									self.grid.beats_snap_step(playlist.scale, self.transport),
 								)
 							});
-							Status::Selecting(index.0, index.0, time, time)
+							Status::Selecting(index.0, index.0, time, time, false)
 						}
 						(true, true) => {
 							if cursor.y - 0f32.max(viewport.y - layout.bounds().y) < header_height {
@@ -488,18 +489,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
-				..
-			}) if playlist.status == Status::None => {
-				playlist.primary.clear();
+				modifiers,
+			}) if playlist.status == Status::None && modifiers.command() => {
 				playlist.primary.insert(index);
-				playlist.status = Status::Deleting;
-				shell.publish((self.f)(Action::Delete));
+
+				let time = self.grid.maybe_snap(time, *modifiers, |time| {
+					time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
+				});
+				playlist.status = Status::Selecting(index.0, index.0, time, time, true);
+
 				shell.capture_event();
-			}
-			Event::Mouse(mouse::Event::CursorMoved { .. })
-				if playlist.status == Status::Deleting =>
-			{
-				playlist.primary.insert(index);
+				shell.request_redraw();
 			}
 			_ => {}
 		}

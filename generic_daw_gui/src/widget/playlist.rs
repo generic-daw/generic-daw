@@ -57,7 +57,7 @@ pub enum Action {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum Status {
 	Hovering(Arc<Path>, FileKind, Option<(Option<usize>, BeatTime)>),
-	Selecting(usize, usize, BeatTime, BeatTime),
+	Selecting(usize, usize, BeatTime, BeatTime, bool),
 	Dragging(usize, BeatTime),
 	TrimmingStart(BeatTime),
 	TrimmingEnd(BeatTime),
@@ -68,7 +68,6 @@ pub enum Status {
 	FadingEndP(usize, usize),
 	DraggingSplit(BeatTime),
 	DraggingSlip(BeatTime),
-	Deleting,
 	#[default]
 	None,
 }
@@ -92,8 +91,10 @@ impl State {
 	}
 
 	pub fn finish(&mut self) {
-		self.status = Status::None;
-		self.primary.extend(self.secondary.drain());
+		match std::mem::take(&mut self.status) {
+			Status::Selecting(..) => self.secondary.clear(),
+			_ => self.primary.extend(self.secondary.drain()),
+		}
 	}
 
 	pub fn clear(&mut self) {
@@ -158,23 +159,26 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 				child.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
 
-		if shell.is_event_captured() {
-			return;
-		}
-
 		let state = &mut *self.state.borrow_mut();
 
 		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
 			&& state.status != Status::None
 		{
-			if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
-				state.primary.clear();
-				shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+			state.primary.extend(state.secondary.drain());
+			match std::mem::take(&mut state.status) {
+				Status::Hovering(path, kind, Some((track, time))) => {
+					state.primary.clear();
+					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+				}
+				Status::Selecting(.., true) => shell.publish((self.action)(Action::Delete)),
+				_ => {}
 			}
-
-			state.finish();
 			shell.capture_event();
 			shell.request_redraw();
+			return;
+		}
+
+		if shell.is_event_captured() {
 			return;
 		}
 
@@ -225,7 +229,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
-					state.status = Status::Selecting(track, track, time, time);
+					state.status = Status::Selecting(track, track, time, time, false);
 				} else if let Some(track) = track {
 					let time = self
 						.grid
@@ -244,10 +248,24 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
-				..
+				modifiers,
 			}) if state.status == Status::None => {
-				state.primary.clear();
-				state.status = Status::Deleting;
+				if modifiers.command() {
+					let Some(track) = track_index(&layout, cursor)
+						.or_else(|| layout.children().len().checked_sub(1))
+					else {
+						return;
+					};
+
+					let time = self
+						.grid
+						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+
+					state.status = Status::Selecting(track, track, time, time, true);
+				} else {
+					state.clear();
+				}
+
 				shell.capture_event();
 				shell.request_redraw();
 			}
@@ -268,7 +286,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						shell.request_redraw();
 					}
 				}
-				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
+				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos, delete) => {
 					let Some(end_track) = track_index(&layout, cursor)
 						.or_else(|| layout.children().len().checked_sub(1))
 					else {
@@ -283,7 +301,8 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						return;
 					}
 
-					state.status = Status::Selecting(start_track, end_track, start_pos, end_pos);
+					state.status =
+						Status::Selecting(start_track, end_track, start_pos, end_pos, delete);
 
 					let (start_track, end_track) =
 						(start_track.min(end_track), start_track.max(end_track));
@@ -513,12 +532,6 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						shell.capture_event();
 					}
 				}
-				Status::Deleting => {
-					if !state.primary.is_empty() {
-						shell.publish((self.action)(Action::Delete));
-						shell.capture_event();
-					}
-				}
 				Status::None => {}
 			},
 			_ => {}
@@ -663,7 +676,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			}
-			Status::Selecting(start_track, end_track, start_pos, end_pos)
+			Status::Selecting(start_track, end_track, start_pos, end_pos, _)
 				if start_pos != end_pos =>
 			{
 				let (start_track, end_track) =
@@ -707,7 +720,8 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 	) -> Interaction {
 		match self.state.borrow().status {
 			Status::Hovering(..) => Interaction::Copy,
-			Status::Selecting(..) => Interaction::Idle,
+			Status::Selecting(.., false) => Interaction::Idle,
+			Status::Selecting(.., true) => Interaction::NoDrop,
 			Status::Dragging(..) => Interaction::Grabbing,
 			Status::TrimmingStart(..)
 			| Status::TrimmingEnd(..)
@@ -716,7 +730,6 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			Status::DraggingVolume(..) => Interaction::ResizingVertically,
 			Status::FadingStartLen(..) | Status::FadingEndLen(..) => Interaction::Pointer,
 			Status::FadingStartP(..) | Status::FadingEndP(..) => Interaction::Crosshair,
-			Status::Deleting => Interaction::NoDrop,
 			Status::None => self
 				.tracks
 				.iter()
