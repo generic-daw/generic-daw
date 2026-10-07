@@ -163,7 +163,12 @@ impl Plugin {
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {
-		self.instance.call_on_main_thread_callback();
+		if self
+			.instance
+			.access_shared_handler(|s| s.request_callback.swap(false, Relaxed))
+		{
+			self.instance.call_on_main_thread_callback();
+		}
 	}
 
 	pub fn flush_inactive<Event: EventImpl>(&mut self, events: impl FnMut(Event)) {

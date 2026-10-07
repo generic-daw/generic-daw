@@ -55,6 +55,7 @@ pub struct Shared<'a> {
 	pub audio_thread: AtomicU64,
 	pub active: AtomicBool,
 	pub request_process: AtomicBool,
+	pub request_callback: AtomicBool,
 	pub request_restart: AtomicBool,
 	pub request_flush: AtomicBool,
 }
@@ -72,6 +73,7 @@ impl<'a> Shared<'a> {
 			audio_thread: AtomicU64::new(main_thread),
 			active: AtomicBool::new(false),
 			request_process: AtomicBool::new(false),
+			request_callback: AtomicBool::new(false),
 			request_restart: AtomicBool::new(false),
 			request_flush: AtomicBool::new(false),
 		}
@@ -114,9 +116,11 @@ impl SharedHandler<'_> for Shared<'_> {
 	}
 
 	fn request_callback(&self) {
-		self.sender
-			.send(MainThreadMessage::RequestCallback)
-			.unwrap();
+		if !self.request_callback.swap(true, Relaxed) {
+			self.sender
+				.send(MainThreadMessage::RequestCallback)
+				.unwrap();
+		}
 	}
 
 	fn request_restart(&self) {
