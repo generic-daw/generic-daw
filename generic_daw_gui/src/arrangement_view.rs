@@ -852,7 +852,7 @@ impl ArrangementView {
 			},
 			Message::Escape(tab) => {
 				self.arrangement.set_audio_preview(None);
-				self.unselect_all(tab);
+				self.clear(tab);
 			}
 			Message::ToggleEnabled(tab) => match tab {
 				Tab::Playlist => {
@@ -2621,7 +2621,7 @@ impl ArrangementView {
 		}
 	}
 
-	pub fn unselect_all(&mut self, tab: Tab) {
+	pub fn clear(&mut self, tab: Tab) {
 		match tab {
 			Tab::Playlist => self.playlist.get_mut().clear(),
 			Tab::Mixer => {}

@@ -1010,7 +1010,7 @@ impl Daw {
 					&& let Some(bottom_pane) = self.bottom_pane
 				{
 					self.bottom_selected = bottom_selected;
-					self.arrangement_view.unselect_all(if self.bottom_selected {
+					self.arrangement_view.clear(if self.bottom_selected {
 						self.top_pane
 					} else {
 						bottom_pane

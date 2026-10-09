@@ -92,8 +92,9 @@ impl State {
 
 	pub fn finish(&mut self) {
 		match std::mem::take(&mut self.status) {
-			Status::Selecting(..) => self.secondary.clear(),
-			_ => self.primary.extend(self.secondary.drain()),
+			Status::Selecting(..) => self.primary.clear(),
+			Status::DraggingSplit(..) => self.primary.extend(self.secondary.drain()),
+			_ => {}
 		}
 	}
 
@@ -164,13 +165,13 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
 			&& state.status != Status::None
 		{
-			state.primary.extend(state.secondary.drain());
 			match std::mem::take(&mut state.status) {
 				Status::Hovering(path, kind, Some((track, time))) => {
 					state.primary.clear();
 					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
 				}
 				Status::Selecting(.., true) => shell.publish((self.action)(Action::Delete)),
+				Status::DraggingSplit(..) => state.primary.extend(state.secondary.drain()),
 				_ => {}
 			}
 			shell.capture_event();
@@ -218,6 +219,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 				modifiers,
 			}) if state.status == Status::None => {
 				let track = track_index(&layout, cursor);
+				state.primary.clear();
 
 				if modifiers.command() {
 					let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
@@ -235,12 +237,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
-					state.primary.clear();
 					shell.publish((self.action)(Action::Add(None, Some(track), time)));
 
 					state.status = Status::Dragging(track, new_time);
-				} else {
-					state.primary.clear();
 				}
 
 				shell.capture_event();
@@ -250,20 +249,19 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 				button: mouse::Button::Right,
 				modifiers,
 			}) if state.status == Status::None => {
-				if modifiers.command() {
-					let Some(track) = track_index(&layout, cursor)
-						.or_else(|| layout.children().len().checked_sub(1))
-					else {
-						return;
-					};
+				let Some(track) =
+					track_index(&layout, cursor).or_else(|| layout.children().len().checked_sub(1))
+				else {
+					return;
+				};
+				state.primary.clear();
 
+				if modifiers.command() {
 					let time = self
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					state.status = Status::Selecting(track, track, time, time, true);
-				} else {
-					state.clear();
 				}
 
 				shell.capture_event();
@@ -332,9 +330,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 							if (start_track..=end_track).contains(&index.0)
 								&& start_pos.max(start) < end_pos.min(end)
 							{
-								state.secondary.insert(index);
+								state.primary.insert(index);
 							} else {
-								state.secondary.remove(&index);
+								state.primary.remove(&index);
 							}
 						});
 

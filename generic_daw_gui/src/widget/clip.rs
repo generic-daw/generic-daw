@@ -315,13 +315,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				Inner::MidiClip(inner) => inner.clip.position.start(),
 				_ => unreachable!(),
 			};
+		let snap_step = self.grid.beats_snap_step(playlist.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if playlist.status == Status::None => {
-				let mut clear = playlist.primary.insert(index);
+				playlist.primary.clear();
+				playlist.primary.insert(index);
 
 				let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 				state.last_click = Some(new_click);
@@ -455,21 +457,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							}
 						}
 						(true, false) => {
-							clear = false;
-							let time = self.grid.maybe_snap(time, *modifiers, |time| {
-								time.round(
-									self.grid.beats_snap_step(playlist.scale, self.transport),
-								)
-							});
+							let time = self
+								.grid
+								.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 							Status::Selecting(index.0, index.0, time, time, false)
 						}
 						(true, true) => {
 							if cursor.y - 0f32.max(viewport.y - layout.bounds().y) < header_height {
-								let time = self.grid.maybe_snap(time, *modifiers, |time| {
-									time.round(
-										self.grid.beats_snap_step(playlist.scale, self.transport),
-									)
-								});
+								let time = self
+									.grid
+									.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
 							} else {
@@ -481,21 +478,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				shell.capture_event();
 				shell.request_redraw();
-
-				if clear {
-					playlist.primary.clear();
-					playlist.primary.insert(index);
-				}
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
 				modifiers,
 			}) if playlist.status == Status::None && modifiers.command() => {
+				playlist.primary.clear();
 				playlist.primary.insert(index);
 
-				let time = self.grid.maybe_snap(time, *modifiers, |time| {
-					time.round(self.grid.beats_snap_step(playlist.scale, self.transport))
-				});
+				let time = self
+					.grid
+					.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 				playlist.status = Status::Selecting(index.0, index.0, time, time, true);
 
 				shell.capture_event();

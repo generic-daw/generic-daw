@@ -78,13 +78,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 		let piano_roll = &mut *self.piano_roll.borrow_mut();
 		let time = px_to_time(cursor.x, Vector::ZERO, piano_roll.scale, self.transport)
 			+ self.note.position.start();
+		let snap_step = self.grid.beats_snap_step(piano_roll.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if piano_roll.status == Status::None => {
-				let mut clear = piano_roll.primary.insert(self.index);
+				piano_roll.primary.clear();
+				piano_roll.primary.insert(self.index);
 
 				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
 					(false, shift) => {
@@ -112,16 +114,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						}
 					}
 					(true, false) => {
-						clear = false;
-						let time = self.grid.maybe_snap(time, *modifiers, |time| {
-							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
-						});
+						let time = self
+							.grid
+							.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 						Status::Selecting(self.note.key, self.note.key, time, time, false)
 					}
 					(true, true) => {
-						let time = self.grid.maybe_snap(time, *modifiers, |time| {
-							time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
-						});
+						let time = self
+							.grid
+							.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 						shell.publish((self.f)(Action::SplitAt(time)));
 						Status::DraggingSplit(time)
 					}
@@ -129,21 +130,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 				shell.capture_event();
 				shell.request_redraw();
-
-				if clear {
-					piano_roll.primary.clear();
-					piano_roll.primary.insert(self.index);
-				}
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Right,
 				modifiers,
 			}) if piano_roll.status == Status::None && modifiers.command() => {
+				piano_roll.primary.clear();
 				piano_roll.primary.insert(self.index);
 
-				let time = self.grid.maybe_snap(time, *modifiers, |time| {
-					time.round(self.grid.beats_snap_step(piano_roll.scale, self.transport))
-				});
+				let time = self
+					.grid
+					.maybe_snap(time, *modifiers, |time| time.round(snap_step));
 				piano_roll.status =
 					Status::Selecting(self.note.key, self.note.key, time, time, true);
 

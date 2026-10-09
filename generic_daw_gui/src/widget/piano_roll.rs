@@ -64,8 +64,9 @@ impl State {
 
 	pub fn finish(&mut self) {
 		match std::mem::take(&mut self.status) {
-			Status::Selecting(..) => self.secondary.clear(),
-			_ => self.primary.extend(self.secondary.drain()),
+			Status::Selecting(..) => self.primary.clear(),
+			Status::DraggingSplit(..) => self.primary.extend(self.secondary.drain()),
+			_ => {}
 		}
 	}
 
@@ -131,9 +132,10 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
 			&& state.status != Status::None
 		{
-			state.primary.extend(state.secondary.drain());
-			if let Status::Selecting(.., true) = std::mem::take(&mut state.status) {
-				shell.publish((self.action)(Action::Delete));
+			match std::mem::take(&mut state.status) {
+				Status::Selecting(.., true) => shell.publish((self.action)(Action::Delete)),
+				Status::DraggingSplit(..) => state.primary.extend(state.secondary.drain()),
+				_ => {}
 			}
 			shell.capture_event();
 			shell.request_redraw();
@@ -174,6 +176,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				modifiers,
 			}) if state.status == Status::None => {
 				let key = px_to_key(cursor.y, state.scale);
+				state.primary.clear();
 
 				if modifiers.command() {
 					let time = self
@@ -186,7 +189,6 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
-					state.primary.clear();
 					shell.publish((self.action)(Action::Add(key, time)));
 
 					state.status = Status::Dragging(key, new_time);
@@ -199,16 +201,15 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 				button: mouse::Button::Right,
 				modifiers,
 			}) if state.status == Status::None => {
-				if modifiers.command() {
-					let key = px_to_key(cursor.y, state.scale);
+				let key = px_to_key(cursor.y, state.scale);
+				state.primary.clear();
 
+				if modifiers.command() {
 					let time = self
 						.grid
 						.maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					state.status = Status::Selecting(key, key, time, time, true);
-				} else {
-					state.clear();
 				}
 
 				shell.capture_event();
@@ -238,9 +239,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 							&& start_pos.max(note.note.position.start())
 								< end_pos.min(note.note.position.end())
 						{
-							state.secondary.insert(note.index);
+							state.primary.insert(note.index);
 						} else {
-							state.secondary.remove(&note.index);
+							state.primary.remove(&note.index);
 						}
 					});
 
