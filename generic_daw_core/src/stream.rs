@@ -379,20 +379,17 @@ fn build_audio_input_stream(
 
 		macro_rules! build_audio_input_stream {
 			($($pat:pat => $ty:ty),*$(,)?) => {
-				if sample_format == SampleFormat::F32 {
-					device.build_input_stream(config, callback, |err| error!("{err}"), None)
-				} else {
-					match sample_format {
-						$(
-							$pat => device.build_input_stream(
-								config,
-								bridge_audio_input_callback::<$ty>(frames, channels, callback),
-								|err| error!("{err}"),
-								None,
-							),
-						)*
-						sample_format => panic!("unsupported sample format {sample_format}"),
-					}
+				match sample_format {
+					SampleFormat::F32 => device.build_input_stream(config, callback, |err| error!("{err}"), None),
+					$(
+						$pat => device.build_input_stream(
+							config,
+							bridge_audio_input_callback::<$ty>(frames, channels, callback),
+							|err| error!("{err}"),
+							None,
+						),
+					)*
+					sample_format => panic!("unsupported sample format {sample_format}"),
 				}
 			}
 		}
@@ -500,20 +497,17 @@ fn build_audio_output_stream(
 
 	macro_rules! build_audio_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			if sample_format == SampleFormat::F32 {
-				device.build_output_stream(config, callback(), |err| error!("{err}"), None)
-			} else {
-				match sample_format {
-					$(
-						$pat => device.build_output_stream(
-							config,
-							bridge_audio_output_callback::<$ty>(frames, channels, callback()),
-							|err| error!("{err}"),
-							None,
-						),
-					)*
-					sample_format => panic!("unsupported sample format {sample_format}"),
-				}
+			match sample_format {
+				SampleFormat::F32 => device.build_output_stream(config, callback(), |err| error!("{err}"), None),
+				$(
+					$pat => device.build_output_stream(
+						config,
+						bridge_audio_output_callback::<$ty>(frames, channels, callback()),
+						|err| error!("{err}"),
+						None,
+					),
+				)*
+				sample_format => panic!("unsupported sample format {sample_format}"),
 			}
 		}
 	}
