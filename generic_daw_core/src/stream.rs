@@ -3,8 +3,8 @@ use crate::{
 	TimedMidiAction,
 };
 use cpal::{
-	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
-	SampleFormat, Stream, StreamConfig, SupportedBufferSize, U24,
+	BufferSize, Device, I24, Sample as _, SampleFormat, Stream, StreamConfig, SupportedBufferSize,
+	U24,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, warn};
@@ -283,19 +283,17 @@ fn build_midi_input_connection(
 
 		let (producer, consumer) = RingBuffer::new(31250 + 313);
 
-		Some((
-			input
-				.connect(
-					&port,
-					"Generic DAW",
-					build_midi_input_callback(producer),
-					(),
-				)
-				.inspect_err(|err| warn!("{err}"))
-				.ok()?
-				.into(),
-			consumer,
-		))
+		let midi_input = input
+			.connect(
+				&port,
+				"Generic DAW",
+				build_midi_input_callback(producer),
+				(),
+			)
+			.inspect_err(|err| warn!("{err}"))
+			.ok()?;
+
+		Some((midi_input.into(), consumer))
 	}
 
 	let Some((stream, consumer)) = build_midi_input_connection(port) else {
@@ -373,45 +371,47 @@ fn build_audio_input_stream(
 			RingBuffer::new(usize::from(channels.get()) * sample_rate.get() as usize);
 
 		let frames = frames.or(NonZero::new(2048)).unwrap();
-		let sample_format = device.default_input_config().unwrap().sample_format();
+		let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(channels.get())];
 
-		let callback = build_audio_input_callback(producer);
+		let mut callback = build_audio_input_callback(producer);
 
-		macro_rules! build_audio_input_stream {
-			($($pat:pat => $ty:ty),*$(,)?) => {
-				match sample_format {
-					SampleFormat::F32 => device.build_input_stream(config, callback, |err| error!("{err}"), None),
-					$(
-						$pat => device.build_input_stream(
-							config,
-							bridge_audio_input_callback::<$ty>(frames, channels, callback),
-							|err| error!("{err}"),
-							None,
-						),
-					)*
+		let audio_input = device.build_input_stream_raw(
+			config,
+			device.default_input_config().unwrap().sample_format(),
+			move |data, _| {
+				macro_rules! bridge {
+					($ty:ty) => {{
+						let buf = data.as_slice::<$ty>().unwrap();
+						for buf in buf.chunks(audio_in.len()) {
+							for (buf, input) in buf.iter().zip(&mut *audio_in) {
+								*input = f32::from_sample(*buf);
+							}
+							callback(&audio_in[..buf.len()]);
+						}
+					}};
+				}
+
+				match data.sample_format() {
+					SampleFormat::I8 => bridge!(i8),
+					SampleFormat::I16 => bridge!(i16),
+					SampleFormat::I24 => bridge!(I24),
+					SampleFormat::I32 => bridge!(i32),
+					SampleFormat::I64 => bridge!(i64),
+					SampleFormat::U8 => bridge!(u8),
+					SampleFormat::U16 => bridge!(u16),
+					SampleFormat::U24 => bridge!(U24),
+					SampleFormat::U32 => bridge!(u32),
+					SampleFormat::U64 => bridge!(u64),
+					SampleFormat::F32 => callback(data.as_slice().unwrap()),
+					SampleFormat::F64 => bridge!(f64),
 					sample_format => panic!("unsupported sample format {sample_format}"),
 				}
-			}
-		}
+			},
+			|err| error!("{err}"),
+			None,
+		)?;
 
-		Ok((
-			build_audio_input_stream! {
-				SampleFormat::I8 => i8,
-				SampleFormat::I16 => i16,
-				SampleFormat::I24 => I24,
-				SampleFormat::I32 => i32,
-				SampleFormat::I64 => i64,
-				SampleFormat::U8 => u8,
-				SampleFormat::U16 => u16,
-				SampleFormat::U24 => U24,
-				SampleFormat::U32 => u32,
-				SampleFormat::U64 => u64,
-				SampleFormat::F64 => f64,
-			}?
-			.into(),
-			channels,
-			consumer,
-		))
+		Ok((audio_input.into(), channels, consumer))
 	}
 
 	let Ok((stream, channels, consumer)) = build_audio_input_stream(device, sample_rate, frames)
@@ -423,34 +423,12 @@ fn build_audio_input_stream(
 	(Some(stream), channels.get(), consumer)
 }
 
-fn build_audio_input_callback(
-	mut producer: Producer<f32>,
-) -> impl FnMut(&[f32], &InputCallbackInfo) {
-	move |audio_in, _| {
+fn build_audio_input_callback(mut producer: Producer<f32>) -> impl FnMut(&[f32]) {
+	move |audio_in| {
 		if let (_, rest) = producer.push_partial_slice(audio_in)
 			&& !rest.is_empty()
 		{
 			warn!("full ring buffer");
-		}
-	}
-}
-
-fn bridge_audio_input_callback<T: Sample>(
-	frames: NonZero<u32>,
-	channels: NonZero<u16>,
-	mut callback: impl FnMut(&[f32], &InputCallbackInfo),
-) -> impl FnMut(&[T], &InputCallbackInfo)
-where
-	f32: FromSample<T>,
-{
-	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
-	let mut audio_in = boxed_slice![0.0; chunk_size.get() as usize];
-	move |buf, info| {
-		for buf in buf.chunks(chunk_size.get() as usize) {
-			for (buf, input) in buf.iter().zip(&mut audio_in) {
-				*input = f32::from_sample(*buf);
-			}
-			callback(&audio_in[..buf.len()], info);
 		}
 	}
 }
@@ -480,56 +458,59 @@ fn build_audio_output_stream(
 	};
 
 	let frames = frames.or(NonZero::new(2048)).unwrap();
-	let sample_format = device.default_output_config().unwrap().sample_format();
+	let mut audio_out = boxed_slice![0.0; frames.get() as usize * usize::from(channels.get())];
 
-	let callback = || {
-		build_audio_output_callback(
-			sample_rate,
-			frames,
-			input_channels,
-			channels,
-			processor,
-			midi_output,
-			midi_consumer,
-			audio_consumer,
-		)
-	};
-
-	macro_rules! build_audio_output_stream {
-		($($pat:pat => $ty:ty),*$(,)?) => {
-			match sample_format {
-				SampleFormat::F32 => device.build_output_stream(config, callback(), |err| error!("{err}"), None),
-				$(
-					$pat => device.build_output_stream(
-						config,
-						bridge_audio_output_callback::<$ty>(frames, channels, callback()),
-						|err| error!("{err}"),
-						None,
-					),
-				)*
-				sample_format => panic!("unsupported sample format {sample_format}"),
-			}
-		}
-	}
-
-	(
-		build_audio_output_stream! {
-			SampleFormat::I8 => i8,
-			SampleFormat::I16 => i16,
-			SampleFormat::I24 => I24,
-			SampleFormat::I32 => i32,
-			SampleFormat::I64 => i64,
-			SampleFormat::U8 => u8,
-			SampleFormat::U16 => u16,
-			SampleFormat::U24 => U24,
-			SampleFormat::U32 => u32,
-			SampleFormat::U64 => u64,
-			SampleFormat::F64 => f64,
-		}
-		.unwrap()
-		.into(),
+	let mut callback = build_audio_output_callback(
+		sample_rate,
+		frames,
+		input_channels,
 		channels,
-	)
+		processor,
+		midi_output,
+		midi_consumer,
+		audio_consumer,
+	);
+
+	let audio_output = device
+		.build_output_stream_raw(
+			config,
+			device.default_output_config().unwrap().sample_format(),
+			move |data, _| {
+				macro_rules! bridge {
+					($ty:ty) => {{
+						let buf = data.as_slice_mut::<$ty>().unwrap();
+						for buf in buf.chunks_mut(audio_out.len()) {
+							audio_out[..buf.len()].fill(0.0);
+							callback(&mut audio_out[..buf.len()]);
+							for (audio_out, buf) in audio_out.iter().zip(buf) {
+								*buf = <$ty>::from_sample(*audio_out);
+							}
+						}
+					}};
+				}
+
+				match data.sample_format() {
+					SampleFormat::I8 => bridge!(i8),
+					SampleFormat::I16 => bridge!(i16),
+					SampleFormat::I24 => bridge!(I24),
+					SampleFormat::I32 => bridge!(i32),
+					SampleFormat::I64 => bridge!(i64),
+					SampleFormat::U8 => bridge!(u8),
+					SampleFormat::U16 => bridge!(u16),
+					SampleFormat::U24 => bridge!(U24),
+					SampleFormat::U32 => bridge!(u32),
+					SampleFormat::U64 => bridge!(u64),
+					SampleFormat::F32 => callback(data.as_slice_mut().unwrap()),
+					SampleFormat::F64 => bridge!(f64),
+					sample_format => panic!("unsupported sample format {sample_format}"),
+				}
+			},
+			|err| error!("{err}"),
+			None,
+		)
+		.unwrap();
+
+	(audio_output.into(), channels)
 }
 
 fn build_audio_output_callback(
@@ -541,13 +522,13 @@ fn build_audio_output_callback(
 	mut midi_output: Option<MidiOutputConnection>,
 	mut midi_consumer: Consumer<TimedMidiAction<u64>>,
 	mut audio_consumer: Consumer<f32>,
-) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
+) -> impl FnMut(&mut [f32]) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
 	let mut midi_in = boxed_slice![MaybeUninit::uninit(); ((31250 + 313) * frames.get() as usize).div_ceil(sample_rate.get() as usize)];
 	let mut audio_in = boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
 	let mut frames_in = None;
 
-	move |audio_out, _| {
+	move |audio_out| {
 		for audio_out in audio_out.chunks_mut(chunk_size.get() as usize) {
 			let frames = audio_out.len() / usize::from(output_channels.get());
 			let input_len = frames * usize::from(input_channels);
@@ -583,24 +564,6 @@ fn build_audio_output_callback(
 				&audio_in[..input_len],
 				audio_out,
 			);
-		}
-	}
-}
-
-fn bridge_audio_output_callback<T: Sample + FromSample<f32>>(
-	frames: NonZero<u32>,
-	channels: NonZero<u16>,
-	mut callback: impl FnMut(&mut [f32], &OutputCallbackInfo),
-) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
-	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
-	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
-	move |buf, info| {
-		for buf in buf.chunks_mut(chunk_size.get() as usize) {
-			audio_out[..buf.len()].fill(0.0);
-			callback(&mut audio_out[..buf.len()], info);
-			for (audio_out, buf) in audio_out.iter().zip(buf) {
-				*buf = T::from_sample(*audio_out);
-			}
 		}
 	}
 }
