@@ -795,8 +795,9 @@ impl AudioThread {
 
 				let output_channels = state.transport.output_channels.get();
 				if output.enable_audio && output.fits_in(output_channels) {
-					for (frame, &[l, r]) in
-						audio_output.chunks_mut(output_channels.into()).zip(audio)
+					for (frame, &[l, r]) in audio_output
+						.chunks_exact_mut(output_channels.into())
+						.zip(audio)
 					{
 						if output.left == output.right {
 							frame[usize::from(output.left)] += (l + r) / 2.0;
