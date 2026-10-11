@@ -322,8 +322,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if playlist.status == Status::None => {
-				playlist.primary.clear();
-				playlist.primary.insert(index);
+				if playlist.primary.insert(index) {
+					playlist.primary.clear();
+					playlist.primary.insert(index);
+				}
 
 				let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 				state.last_click = Some(new_click);
@@ -457,6 +459,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							}
 						}
 						(true, false) => {
+							playlist.primary.clear();
+							playlist.primary.insert(index);
+
 							let time = self
 								.grid
 								.maybe_snap(time, *modifiers, |time| time.round(snap_step));

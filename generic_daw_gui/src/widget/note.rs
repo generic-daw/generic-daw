@@ -85,8 +85,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if piano_roll.status == Status::None => {
-				piano_roll.primary.clear();
-				piano_roll.primary.insert(self.index);
+				if piano_roll.primary.insert(self.index) {
+					piano_roll.primary.clear();
+					piano_roll.primary.insert(self.index);
+				}
 
 				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
 					(false, shift) => {
@@ -114,6 +116,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						}
 					}
 					(true, false) => {
+						piano_roll.primary.clear();
+						piano_roll.primary.insert(self.index);
+
 						let time = self
 							.grid
 							.maybe_snap(time, *modifiers, |time| time.round(snap_step));
