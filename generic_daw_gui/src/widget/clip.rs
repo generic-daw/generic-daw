@@ -334,7 +334,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				match self.inner {
 					Inner::AudioClip(inner) => 'block: {
-						if cursor.y + layout.position().y - viewport.y < header_height {
+						if cursor.y - 0f32.max(viewport.y - layout.position().y) < header_height {
 							break 'block;
 						}
 
@@ -984,7 +984,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		match self.inner {
 			Inner::AudioClip(inner) => 'block: {
-				if cursor.y + layout.position().y - viewport.y < header_height {
+				if cursor.y - 0f32.max(viewport.y - layout.position().y) < header_height {
 					break 'block;
 				}
 
