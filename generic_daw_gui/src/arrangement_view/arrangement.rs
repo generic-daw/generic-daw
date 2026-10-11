@@ -826,20 +826,18 @@ impl Arrangement {
 		let track = self.track_of(id).unwrap();
 		let new_id = self.insert_track(track + 1);
 		let instructions = self.copy_node(id, new_id);
-		for clip in self.tracks[track].clips.clone() {
-			self.add_clip(
-				track + 1,
-				match clip {
-					Clip::Audio(clip) => Clip::Audio(AudioClip {
-						id: ClipId::unique(),
-						..clip
-					}),
-					Clip::Midi(clip) => Clip::Midi(MidiClip {
-						id: ClipId::unique(),
-						..clip
-					}),
-				},
-			);
+		for clip in 0..self.tracks[track].clips.len() {
+			let clip = match self.tracks[track].clips[clip] {
+				Clip::Audio(clip) => Clip::Audio(AudioClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+				Clip::Midi(clip) => Clip::Midi(MidiClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+			};
+			self.add_clip(track + 1, clip);
 		}
 		(new_id, instructions)
 	}
@@ -1061,20 +1059,17 @@ impl Arrangement {
 	}
 
 	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
-		self.insert_clip(
-			track,
-			match self.tracks[track].clips[clip] {
-				Clip::Audio(clip) => Clip::Audio(AudioClip {
-					id: ClipId::unique(),
-					..clip
-				}),
-				Clip::Midi(clip) => Clip::Midi(MidiClip {
-					id: ClipId::unique(),
-					..clip
-				}),
-			},
-			clip + 1,
-		)
+		let clip = match self.tracks[track].clips[clip] {
+			Clip::Audio(clip) => Clip::Audio(AudioClip {
+				id: ClipId::unique(),
+				..clip
+			}),
+			Clip::Midi(clip) => Clip::Midi(MidiClip {
+				id: ClipId::unique(),
+				..clip
+			}),
+		};
+		self.add_clip(track, clip)
 	}
 
 	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, index: usize) -> usize {
@@ -1318,14 +1313,11 @@ impl Arrangement {
 	}
 
 	pub fn duplicate_note(&mut self, pattern: MidiPatternId, note: usize) -> usize {
-		self.insert_note(
-			pattern,
-			MidiNote {
-				id: MidiNoteId::unique(),
-				..self.midi_patterns[&pattern].notes[note]
-			},
-			note + 1,
-		)
+		let note = MidiNote {
+			id: MidiNoteId::unique(),
+			..self.midi_patterns[&pattern].notes[note]
+		};
+		self.add_note(pattern, note)
 	}
 
 	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, index: usize) -> usize {

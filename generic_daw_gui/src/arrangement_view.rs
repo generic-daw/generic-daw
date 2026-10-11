@@ -1279,8 +1279,6 @@ impl ArrangementView {
 				}
 			}
 			playlist::Action::SplitAt(mut pos) => {
-				let mut extra = HashMap::<_, usize>::new();
-
 				let mut sorted = primary
 					.drain()
 					.filter(|&(track, clip)| {
@@ -1292,10 +1290,7 @@ impl ArrangementView {
 					.collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| c);
 
-				for (track, mut lhs) in sorted {
-					let extra = extra.entry(track).or_default();
-					lhs += *extra;
-
+				for (track, lhs) in sorted {
 					let clip = self.arrangement.tracks()[track].clips[lhs];
 					if clip.end(self.arrangement.transport()) == pos {
 						primary.insert((track, lhs));
@@ -1314,7 +1309,6 @@ impl ArrangementView {
 						self.arrangement.clip_trim_start_to(track, rhs, pos);
 						primary.insert((track, lhs));
 						secondary.insert((track, rhs));
-						*extra += 1;
 					}
 				}
 			}
@@ -1457,8 +1451,6 @@ impl ArrangementView {
 				}
 			}
 			piano_roll::Action::SplitAt(mut pos) => {
-				let mut extra = 0;
-
 				let mut sorted = primary
 					.drain()
 					.filter(|&lhs| {
@@ -1468,9 +1460,7 @@ impl ArrangementView {
 					.collect::<Vec<_>>();
 				sorted.sort_unstable();
 
-				for mut lhs in sorted {
-					lhs += extra;
-
+				for lhs in sorted {
 					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[lhs];
 					if note.position.end() == pos {
 						primary.insert(lhs);
@@ -1485,7 +1475,6 @@ impl ArrangementView {
 						self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 						primary.insert(lhs);
 						secondary.insert(rhs);
-						extra += 1;
 					}
 				}
 			}
