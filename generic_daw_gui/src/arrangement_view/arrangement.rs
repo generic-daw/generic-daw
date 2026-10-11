@@ -231,7 +231,7 @@ impl Arrangement {
 						&& version == ended
 					{
 						self.audio_preview = None;
-						self.samples.get_mut(&sample).unwrap().refs -= 1;
+						self.remove_ref_sample(sample);
 						self.gc_sample(sample);
 					}
 				}
@@ -555,14 +555,14 @@ impl Arrangement {
 		}
 
 		if let Some(sample) = sample {
-			self.samples.get_mut(&sample).unwrap().refs += 1;
+			self.add_ref_sample(sample);
 		}
 
 		let audio_preview = sample.map(AudioPreview::new);
 		self.send(Message::AudioPreview(audio_preview));
 
 		if let Some((_, sample)) = self.audio_preview {
-			self.samples.get_mut(&sample).unwrap().refs -= 1;
+			self.remove_ref_sample(sample);
 			self.gc_sample(sample);
 		}
 
@@ -812,10 +812,7 @@ impl Arrangement {
 		let track = self.tracks.remove(index);
 		self.remove(id);
 		for clip in track.clips {
-			match clip {
-				Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
-				Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1,
-			}
+			self.remove_ref(clip);
 			self.gc(clip);
 		}
 		index
@@ -830,6 +827,16 @@ impl Arrangement {
 		let new_id = self.insert_track(track + 1);
 		let instructions = self.copy_node(id, new_id);
 		for clip in self.tracks[track].clips.clone() {
+			let clip = match clip {
+				Clip::Audio(clip) => Clip::Audio(AudioClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+				Clip::Midi(clip) => Clip::Midi(MidiClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+			};
 			self.add_clip(track + 1, clip);
 		}
 		(new_id, instructions)
@@ -872,12 +879,7 @@ impl Arrangement {
 				self.channels.insert(0, Channel::new(id));
 
 				for clip in track.clips {
-					match clip {
-						Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
-						Clip::Midi(clip) => {
-							self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1;
-						}
-					}
+					self.remove_ref(clip);
 					self.gc(clip);
 				}
 
@@ -951,11 +953,33 @@ impl Arrangement {
 		self.send(Message::NodeDisconnect(from, to));
 	}
 
-	pub fn gc(&mut self, clip: impl Into<Clip>) {
-		match clip.into() {
+	fn add_ref(&mut self, clip: Clip) {
+		match clip {
+			Clip::Audio(clip) => self.add_ref_sample(clip.sample),
+			Clip::Midi(clip) => self.add_ref_midi_pattern(clip.pattern),
+		}
+	}
+
+	fn remove_ref(&mut self, clip: Clip) {
+		match clip {
+			Clip::Audio(clip) => self.remove_ref_sample(clip.sample),
+			Clip::Midi(clip) => self.remove_ref_midi_pattern(clip.pattern),
+		}
+	}
+
+	pub fn gc(&mut self, clip: Clip) {
+		match clip {
 			Clip::Audio(clip) => self.gc_sample(clip.sample),
 			Clip::Midi(clip) => self.gc_midi_pattern(clip.pattern),
 		}
+	}
+
+	fn add_ref_sample(&mut self, sample: SampleId) {
+		self.samples.get_mut(&sample).unwrap().refs += 1;
+	}
+
+	fn remove_ref_sample(&mut self, sample: SampleId) {
+		self.samples.get_mut(&sample).unwrap().refs -= 1;
 	}
 
 	fn gc_sample(&mut self, sample: SampleId) {
@@ -966,6 +990,14 @@ impl Arrangement {
 				Box::new(MaybeUninit::uninit()),
 			));
 		}
+	}
+
+	fn add_ref_midi_pattern(&mut self, pattern: MidiPatternId) {
+		self.midi_patterns.get_mut(&pattern).unwrap().refs += 1;
+	}
+
+	fn remove_ref_midi_pattern(&mut self, pattern: MidiPatternId) {
+		self.midi_patterns.get_mut(&pattern).unwrap().refs -= 1;
 	}
 
 	fn gc_midi_pattern(&mut self, pattern: MidiPatternId) {
@@ -1037,15 +1069,12 @@ impl Arrangement {
 				..clip
 			}),
 		};
-		self.insert_clip(track, clip, self.tracks[track].clips.len())
+		self.add_clip(track, clip)
 	}
 
 	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, index: usize) -> usize {
 		let clip = clip.into();
-		match clip {
-			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs += 1,
-			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs += 1,
-		}
+		self.add_ref(clip);
 		self.tracks[track].clips.insert(index, clip);
 		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(Box::new(clip)));
 		index
@@ -1054,10 +1083,7 @@ impl Arrangement {
 	pub fn remove_clip(&mut self, track: usize, clip: usize) -> Clip {
 		let clip = self.tracks[track].clips.remove(clip);
 		self.node_action(self.tracks[track].id, NodeAction::ClipRemove(clip.id()));
-		match clip {
-			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
-			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1,
-		}
+		self.remove_ref(clip);
 		clip
 	}
 
@@ -1291,7 +1317,7 @@ impl Arrangement {
 			id: MidiNoteId::unique(),
 			..self.midi_patterns[&pattern].notes[note]
 		};
-		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
+		self.add_note(pattern, note)
 	}
 
 	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, index: usize) -> usize {
