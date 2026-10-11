@@ -827,17 +827,19 @@ impl Arrangement {
 		let new_id = self.insert_track(track + 1);
 		let instructions = self.copy_node(id, new_id);
 		for clip in self.tracks[track].clips.clone() {
-			let clip = match clip {
-				Clip::Audio(clip) => Clip::Audio(AudioClip {
-					id: ClipId::unique(),
-					..clip
-				}),
-				Clip::Midi(clip) => Clip::Midi(MidiClip {
-					id: ClipId::unique(),
-					..clip
-				}),
-			};
-			self.add_clip(track + 1, clip);
+			self.add_clip(
+				track + 1,
+				match clip {
+					Clip::Audio(clip) => Clip::Audio(AudioClip {
+						id: ClipId::unique(),
+						..clip
+					}),
+					Clip::Midi(clip) => Clip::Midi(MidiClip {
+						id: ClipId::unique(),
+						..clip
+					}),
+				},
+			);
 		}
 		(new_id, instructions)
 	}
@@ -1059,17 +1061,20 @@ impl Arrangement {
 	}
 
 	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
-		let clip = match self.tracks[track].clips[clip] {
-			Clip::Audio(clip) => Clip::Audio(AudioClip {
-				id: ClipId::unique(),
-				..clip
-			}),
-			Clip::Midi(clip) => Clip::Midi(MidiClip {
-				id: ClipId::unique(),
-				..clip
-			}),
-		};
-		self.add_clip(track, clip)
+		self.insert_clip(
+			track,
+			match self.tracks[track].clips[clip] {
+				Clip::Audio(clip) => Clip::Audio(AudioClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+				Clip::Midi(clip) => Clip::Midi(MidiClip {
+					id: ClipId::unique(),
+					..clip
+				}),
+			},
+			clip + 1,
+		)
 	}
 
 	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, index: usize) -> usize {
@@ -1313,11 +1318,14 @@ impl Arrangement {
 	}
 
 	pub fn duplicate_note(&mut self, pattern: MidiPatternId, note: usize) -> usize {
-		let note = MidiNote {
-			id: MidiNoteId::unique(),
-			..self.midi_patterns[&pattern].notes[note]
-		};
-		self.add_note(pattern, note)
+		self.insert_note(
+			pattern,
+			MidiNote {
+				id: MidiNoteId::unique(),
+				..self.midi_patterns[&pattern].notes[note]
+			},
+			note + 1,
+		)
 	}
 
 	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, index: usize) -> usize {
