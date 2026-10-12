@@ -40,12 +40,14 @@ use iced::{
 	window,
 };
 use iced_split::{Strategy, horizontal_split, vertical_split};
-use log::{trace, warn};
+use log::{info, trace, warn};
 use rfd::AsyncFileDialog;
 use smol::{Timer, unblock};
 use std::{
 	convert::Infallible,
 	ffi::CStr,
+	fs::File,
+	io::{BufReader, Read},
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock, mpsc::Receiver},
@@ -645,11 +647,23 @@ impl Daw {
 					.and_then(|name| name.to_str())
 					.unwrap_or("autosaved");
 
-				let path = Arc::from(AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now())));
+				let path =
+					Arc::<Path>::from(AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now())));
+				let gdp = self.arrangement_view.save(&mut self.clap_host);
 
-				if let Err(err) =
-					std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host))
+				if let Some(last_path) = self
+					.state
+					.recovery_project
+					.as_deref()
+					.or(self.current_project.as_deref())
+					&& let Ok(last_project) = File::open(last_path)
+					&& read_eq(last_project, &*gdp)
 				{
+					info!("skipped autosave of {}", path.display());
+					return Task::none();
+				}
+
+				if let Err(err) = std::fs::write(&path, gdp) {
 					warn!("{err}");
 					return Task::none();
 				}
@@ -1896,4 +1910,11 @@ impl Daw {
 			_ => None,
 		}
 	}
+}
+
+fn read_eq(l: impl Read, r: impl Read) -> bool {
+	BufReader::new(l)
+		.bytes()
+		.zip(BufReader::new(r).bytes())
+		.all(|(l, r)| l.is_ok_and(|l| r.is_ok_and(|r| l == r)))
 }
