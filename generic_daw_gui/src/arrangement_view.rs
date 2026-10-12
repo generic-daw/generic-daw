@@ -898,13 +898,8 @@ impl ArrangementView {
 						.get_mut()
 						.primary
 						.iter()
-						.map(|&(track, clip)| {
-							(
-								self.arrangement.tracks()[track].clips[clip].start(),
-								self.arrangement.tracks()[track].clips[clip]
-									.end(self.arrangement.transport()),
-							)
-						})
+						.map(|&(track, clip)| self.arrangement.tracks()[track].clips[clip])
+						.map(|clip| (clip.start(), clip.end(self.arrangement.transport())))
 						.reduce(|old, new| (old.0.min(new.0), old.1.max(new.1)))
 					{
 						self.playlist.get_mut().finish();
@@ -919,6 +914,8 @@ impl ArrangementView {
 								state,
 							),
 						]);
+					} else if self.arrangement.node(self.selected).ty == NodeType::Track {
+						return self.update(Message::TrackDuplicate(self.selected), config, state);
 					}
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected).ty {
