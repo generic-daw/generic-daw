@@ -47,7 +47,7 @@ use std::{
 	convert::Infallible,
 	ffi::CStr,
 	fs::File,
-	io::{BufReader, Read},
+	io::{BufReader, Read as _},
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock, mpsc::Receiver},
@@ -656,8 +656,11 @@ impl Daw {
 					.recovery_project
 					.as_deref()
 					.or(self.current_project.as_deref())
-					&& let Ok(last_project) = File::open(last_path)
-					&& read_eq(last_project, &*gdp)
+					&& let Ok(last_file) = File::open(last_path)
+					&& BufReader::new(last_file)
+						.bytes()
+						.zip(&gdp)
+						.all(|(l, &r)| l.is_ok_and(|l| l == r))
 				{
 					info!("skipped autosave of {}", path.display());
 					return Task::none();
@@ -1910,11 +1913,4 @@ impl Daw {
 			_ => None,
 		}
 	}
-}
-
-fn read_eq(l: impl Read, r: impl Read) -> bool {
-	BufReader::new(l)
-		.bytes()
-		.zip(BufReader::new(r).bytes())
-		.all(|(l, r)| l.is_ok_and(|l| r.is_ok_and(|r| l == r)))
 }
