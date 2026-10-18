@@ -9,7 +9,7 @@ pub fn resample_cubic(
 		frame += samples.len() as f64;
 	}
 
-	std::iter::from_fn(move || {
+	std::iter::repeat_with(move || {
 		let fract = frame.fract() as f32;
 		let idx = frame as usize;
 		frame += resample_ratio;
@@ -22,10 +22,10 @@ pub fn resample_cubic(
 		let [l2, r2] = samples.get(idx + 1).copied().unwrap_or_default();
 		let [l3, r3] = samples.get(idx + 2).copied().unwrap_or_default();
 
-		Some([
+		[
 			interp_cubic(l0, l1, l2, l3, fract),
 			interp_cubic(r0, r1, r2, r3, fract),
-		])
+		]
 	})
 }
 
