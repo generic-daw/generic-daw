@@ -294,7 +294,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 			tree: second,
 			state: &mut state.position,
 			bounds: Rectangle::new(
-				layout.position() + Vector::new(0.0, layout.bounds().height),
+				layout.position() + translation + Vector::new(0.0, layout.bounds().height),
 				Size::new(
 					layout.bounds().width + self.spacing,
 					-layout.bounds().height - self.spacing,
