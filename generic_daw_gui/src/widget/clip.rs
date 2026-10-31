@@ -7,7 +7,10 @@ use crate::{
 		px_to_time, time_to_px,
 	},
 };
-use generic_daw_core::{Transition, Transport, time::BeatTime};
+use generic_daw_core::{
+	MidiPatternId, SampleId, Transition, Transport,
+	time::{BeatTime, SecondsTime},
+};
 use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -37,13 +40,23 @@ use std::{
 };
 
 #[derive(Default, PartialEq)]
-struct ClipInfo {
-	offset: BeatTime,
-	stretch: f32,
-	volume: f32,
-	fade_start: Transition,
-	fade_end: Transition,
-	addr: usize,
+enum ClipInfo {
+	AudioClip {
+		sample: SampleId,
+		offset: SecondsTime,
+		stretch: f64,
+		fade_start: Transition,
+		fade_end: Transition,
+		volume: f32,
+	},
+	MidiClip {
+		pattern: MidiPatternId,
+		offset: BeatTime,
+	},
+	AudioRecording,
+	MidiRecording,
+	#[default]
+	Default,
 }
 
 struct State {
@@ -132,47 +145,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	fn diff(&mut self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		let info = ClipInfo {
-			offset: match self.inner {
-				Inner::AudioClip(inner) => {
-					inner.clip.position.offset().to_beat_time(self.transport)
-				}
-				Inner::MidiClip(inner) => inner.clip.position.offset(),
-				Inner::AudioRecording(..) | Inner::MidiRecording(..) => BeatTime::ZERO,
+		let info = match self.inner {
+			Inner::AudioClip(inner) => ClipInfo::AudioClip {
+				sample: inner.clip.sample,
+				offset: inner.clip.position.offset(),
+				volume: inner.clip.volume,
+				fade_start: inner.clip.fade_start,
+				fade_end: inner.clip.fade_end,
+				stretch: inner.clip.stretch,
 			},
-			stretch: match self.inner {
-				Inner::AudioClip(inner) => inner.clip.stretch as f32,
-				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => 1.0,
+			Inner::MidiClip(inner) => ClipInfo::MidiClip {
+				pattern: inner.clip.pattern,
+				offset: inner.clip.position.offset(),
 			},
-			volume: match self.inner {
-				Inner::AudioClip(inner) => inner.clip.volume,
-				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => 1.0,
-			},
-			fade_start: match self.inner {
-				Inner::AudioClip(inner) => inner.clip.fade_start,
-				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
-					Transition::default()
-				}
-			},
-			fade_end: match self.inner {
-				Inner::AudioClip(inner) => inner.clip.fade_end,
-				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
-					Transition::default()
-				}
-			},
-			addr: match self.inner {
-				Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
-				Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
-				Inner::AudioRecording(inner) => std::ptr::from_ref(inner).addr(),
-				Inner::MidiRecording(inner) => std::ptr::from_ref(inner).addr(),
-			},
+			Inner::AudioRecording(..) => ClipInfo::AudioRecording,
+			Inner::MidiRecording(..) => ClipInfo::MidiRecording,
 		};
 
 		if state.last_info != info {
-			if let Inner::AudioClip(inner) = self.inner
-				&& state.last_info.volume != info.volume
+			if let ClipInfo::AudioClip { volume, .. } = info
+				&& !matches!(state.last_info, ClipInfo::AudioClip { volume: last_volume, .. } if last_volume == volume)
 			{
-				state.volume_text = format_db(inner.clip.volume);
+				state.volume_text = format_db(volume);
 			}
 
 			state.last_info = info;
