@@ -132,8 +132,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	fn diff(&mut self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		let playlist = self.playlist.borrow();
-
 		let info = ClipInfo {
 			offset: match self.inner {
 				Inner::AudioClip(inner) => {
@@ -143,11 +141,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				Inner::AudioRecording(..) | Inner::MidiRecording(..) => BeatTime::ZERO,
 			},
 			stretch: match self.inner {
-				Inner::AudioClip(inner) => {
-					frames_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
-				}
-				Inner::MidiClip(..) | Inner::MidiRecording(..) => 1.0,
-				Inner::AudioRecording(..) => frames_per_px(playlist.scale, self.transport),
+				Inner::AudioClip(inner) => inner.clip.stretch as f32,
+				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => 1.0,
 			},
 			volume: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.volume,
