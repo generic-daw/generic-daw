@@ -48,14 +48,14 @@ enum ClipInfo {
 		fade_start: Transition,
 		fade_end: Transition,
 		volume: f32,
-		y_scale: f32,
+		scale: Vector,
 	},
 	MidiClip {
 		pattern: MidiPatternId,
 		offset: BeatTime,
 	},
 	AudioRecording {
-		y_scale: f32,
+		scale: Vector,
 	},
 	MidiRecording,
 	#[default]
@@ -158,14 +158,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				fade_start: inner.clip.fade_start,
 				fade_end: inner.clip.fade_end,
 				stretch: inner.clip.stretch,
-				y_scale: playlist.scale.y,
+				scale: playlist.scale,
 			},
 			Inner::MidiClip(inner) => ClipInfo::MidiClip {
 				pattern: inner.clip.pattern,
 				offset: inner.clip.position.offset(),
 			},
 			Inner::AudioRecording(..) => ClipInfo::AudioRecording {
-				y_scale: playlist.scale.y,
+				scale: playlist.scale,
 			},
 			Inner::MidiRecording(..) => ClipInfo::MidiRecording,
 		};
