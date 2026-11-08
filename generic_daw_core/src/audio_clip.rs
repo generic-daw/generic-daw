@@ -1,4 +1,6 @@
-use crate::{ClipId, SampleId, Transition, audio_thread::State, time::OffsetBeatSpan};
+use crate::{
+	ClipId, Sample, SampleId, Transition, Transport, audio_thread::State, time::OffsetBeatSpan,
+};
 use dsp::resample_cubic;
 
 #[derive(Clone, Copy, Debug)]
@@ -29,21 +31,30 @@ impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [[f32; 2]]) {
 		debug_assert!(state.transport.playing);
 
-		let position = state.transport.position.to_frames(&state.transport);
+		let sample = &state.samples[&self.sample];
+		state.transport.split_loop(audio.len(), |split, transport| {
+			self.process_split(
+				&mut audio[split.offset..][..split.frames],
+				transport,
+				sample,
+			);
+		});
+	}
 
-		let (start, end) = self.position.beat_span().to_frames(&state.transport);
+	fn process_split(&self, audio: &mut [[f32; 2]], transport: &Transport, sample: &Sample) {
+		let position = transport.position.to_frames(transport);
+
+		let (start, end) = self.position.beat_span().to_frames(transport);
 		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
-
-		let sample = &state.samples[&self.sample];
 
 		let play_pos = position.saturating_sub(start);
 		let write_start = start.saturating_sub(position);
 		let len = end - start;
 
-		let resample_ratio = sample.resample_ratio(&state.transport);
-		let offset = (self.position.offset() / resample_ratio).to_frames(&state.transport);
+		let resample_ratio = sample.resample_ratio(transport);
+		let offset = (self.position.offset() / resample_ratio).to_frames(transport);
 		let read_len = sample.samples.len() - offset;
 
 		let resample_ratio = self.stretch / resample_ratio;
@@ -53,8 +64,8 @@ impl AudioClip {
 			0
 		};
 
-		let fade_start = self.fade_start.len.to_frames(&state.transport);
-		let fade_end = self.fade_end.len.to_frames(&state.transport);
+		let fade_start = self.fade_start.len.to_frames(transport);
+		let fade_end = self.fade_end.len.to_frames(transport);
 
 		let mut iter = resample_cubic(
 			&sample.samples[read_start..][..read_len],

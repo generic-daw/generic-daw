@@ -1,6 +1,8 @@
 use crate::{
-	ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_thread::State,
-	time::OffsetBeatRange, voice_alloc::VoiceAlloc,
+	ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern, MidiPatternId, Transport,
+	audio_thread::{LoopSplit, State},
+	time::OffsetBeatRange,
+	voice_alloc::VoiceAlloc,
 };
 use clap_host::events::{EventFlags, Match};
 
@@ -26,7 +28,6 @@ impl MidiClip {
 	pub fn diff(
 		&self,
 		state: &State,
-		audio: &[[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
@@ -35,7 +36,7 @@ impl MidiClip {
 		let position = state.transport.position.to_frames(&state.transport);
 
 		let (start, end) = self.position.beat_range().to_frames(&state.transport);
-		if !(start < position + audio.len() && end >= position) {
+		if !(start < position && end >= position) {
 			return;
 		}
 
@@ -68,14 +69,28 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
-		let position = state.transport.position.to_frames(&state.transport);
+		let pattern = &state.midi_patterns[&self.pattern];
+		state.transport.split_loop(audio.len(), |split, transport| {
+			self.process_split(events, voice_alloc, transport, pattern, split);
+		});
+	}
 
-		let (start, end) = self.position.beat_range().to_frames(&state.transport);
-		if !(start < position + audio.len() && end >= position) {
+	fn process_split(
+		&self,
+		events: &mut Vec<Event>,
+		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
+		transport: &Transport,
+		midi_pattern: &MidiPattern,
+		split: &LoopSplit,
+	) {
+		let position = transport.position.to_frames(transport);
+
+		let (start, end) = self.position.beat_range().to_frames(transport);
+		if !(start < position + split.frames && end >= position) {
 			return;
 		}
 
-		state.midi_patterns[&self.pattern]
+		midi_pattern
 			.notes
 			.values()
 			.filter_map(|&(mut note)| {
@@ -85,24 +100,29 @@ impl MidiClip {
 				Some(note)
 			})
 			.for_each(|note| {
-				let (start, end) = note.position.to_frames(&state.transport);
+				let (start, end) = note.position.to_frames(transport);
 
 				if let Some(time) = start.checked_sub(position)
-					&& time < audio.len()
+					&& time < split.frames
 				{
 					alloc_or_steal(
 						events,
 						voice_alloc,
 						(self.id, note.id, note.key),
 						note,
-						time,
+						time + split.offset,
 					);
 				}
 
 				if let Some(time) = end.checked_sub(position)
-					&& time < audio.len()
+					&& time < split.frames
 				{
-					dealloc(events, voice_alloc, (self.id, note.id, note.key), time);
+					dealloc(
+						events,
+						voice_alloc,
+						(self.id, note.id, note.key),
+						time + split.offset,
+					);
 				}
 			});
 	}

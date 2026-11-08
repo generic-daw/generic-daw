@@ -52,7 +52,7 @@ impl Track {
 
 		if state.transport.playing {
 			for clip in self.clips.values_mut() {
-				clip.diff(state, audio, events, &mut self.voice_alloc);
+				clip.diff(state, events, &mut self.voice_alloc);
 			}
 		}
 

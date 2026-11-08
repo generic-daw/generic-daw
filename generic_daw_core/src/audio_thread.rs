@@ -172,6 +172,13 @@ pub struct Batch {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct LoopSplit {
+	pub offset: usize,
+	pub frames: usize,
+	pub going_to_wrap_to: Option<SecondsTime>,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Transport {
 	pub version: Version,
 	pub input_channels: u16,
@@ -248,6 +255,41 @@ impl Transport {
 			time_signature_numerator: self.numerator.get().into(),
 			time_signature_denominator: 4,
 		}
+	}
+
+	#[expect(clippy::return_self_not_must_use)]
+	pub fn split_loop(mut self, frames: usize, mut f: impl FnMut(&LoopSplit, &Self)) -> Self {
+		let mut split = LoopSplit {
+			offset: 0,
+			frames,
+			going_to_wrap_to: None,
+		};
+
+		while split.offset < frames {
+			(split.frames, split.going_to_wrap_to) = if self.playing
+				&& let Some(loop_range) = self.loop_range
+				&& let end = loop_range.end().to_seconds_time(&self)
+				&& let Some(len) = end.checked_sub(self.position)
+				&& let len = len.to_frames(&self)
+				&& len <= frames
+			{
+				(len, Some(loop_range.start().to_seconds_time(&self)))
+			} else {
+				(frames, None)
+			};
+
+			f(&split, &self);
+
+			if let Some(position) = split.going_to_wrap_to {
+				self.position = position;
+			} else {
+				self.position += SecondsTime::from_frames(frames, &self);
+			}
+
+			split.offset += frames;
+		}
+
+		self
 	}
 }
 
@@ -535,9 +577,9 @@ impl AudioThread {
 		&mut self,
 		pool: &mut ThreadPool,
 		midi_input: &[TimedMidiAction<u64>],
-		mut midi_output: Option<&mut MidiOutputConnection>,
-		mut audio_input: &[f32],
-		mut audio_output: &mut [f32],
+		midi_output: Option<&mut MidiOutputConnection>,
+		audio_input: &[f32],
+		audio_output: &mut [f32],
 	) -> Option<Action> {
 		let start = Instant::now();
 		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
@@ -554,75 +596,13 @@ impl AudioThread {
 			self.updates = self.update_buffers.pop().unwrap_or_default();
 		}
 
-		self.state_mut().midi_input.clear();
-		for &action in midi_input {
-			trace!("{action:?}");
+		self.read_in(midi_input, audio_input);
 
-			match action.action {
-				MidiAction::NoteOn(channel, key, velocity) => {
-					if let Some(velocity) =
-						self.state_mut().playing.insert((channel, key), velocity)
-					{
-						self.state_mut().midi_input.push(TimedMidiAction {
-							ts: action.ts,
-							action: MidiAction::NoteOff(channel, key, velocity),
-						});
-					}
+		self.audio_graph.process_all(pool, frames);
+		self.metronome(frames);
+		self.audio_preview(frames);
 
-					self.state_mut().midi_input.push(action);
-				}
-				MidiAction::NoteOff(channel, key, _) => {
-					if self.state_mut().playing.remove(&(channel, key)).is_some() {
-						self.state_mut().midi_input.push(action);
-					}
-				}
-			}
-		}
-
-		while !audio_output.is_empty() {
-			let (looped, frames) = if self.transport().playing
-				&& let Some(loop_range) = self.transport().loop_range
-				&& let end = loop_range.end().to_seconds_time(self.transport())
-				&& let Some(len) = end.checked_sub(self.transport().position)
-				&& let len = len.to_frames(self.transport())
-				&& len <= audio_output.len() / usize::from(self.transport().output_channels.get())
-			{
-				(Some(loop_range.start()), len)
-			} else {
-				(
-					None,
-					audio_output.len() / usize::from(self.transport().output_channels.get()),
-				)
-			};
-
-			let in_len = usize::from(self.transport().input_channels) * frames;
-			self.state_mut().audio_input[..in_len].copy_from_slice(&audio_input[..in_len]);
-
-			self.audio_graph.process_all(pool, frames);
-			self.metronome(frames);
-			self.audio_preview(frames);
-
-			let out_len = usize::from(self.transport().output_channels.get()) * frames;
-			self.write_out(midi_output.as_deref_mut(), &mut audio_output[..out_len]);
-
-			if let Some(position) = looped {
-				self.transport_mut().position = position.to_seconds_time(self.transport());
-			} else if self.transport().playing {
-				let len = SecondsTime::from_frames(frames, self.transport());
-				self.transport_mut().position += len;
-			}
-
-			if self.transport().playing {
-				self.updates.push(Update::Recorded(frames));
-				if looped.is_some() {
-					let position = self.transport().position;
-					self.updates.push(Update::RecordingInterrupted(position));
-				}
-			}
-
-			audio_input = &audio_input[in_len..];
-			audio_output = &mut audio_output[out_len..];
-		}
+		self.write_out(midi_output, audio_output);
 
 		self.audio_graph
 			.for_each_node_mut(|node, _, _, _| node.collect_updates(&mut self.updates));
@@ -668,21 +648,25 @@ impl AudioThread {
 			return;
 		}
 
+		self.transport().split_loop(frames, |split, transport| {
+			self.metronome_split(split, transport);
+		});
+	}
+
+	fn metronome_split(&mut self, split: &LoopSplit, transport: &Transport) {
 		let latency = self.audio_graph.latency(self.master);
 
-		let position = self.transport().position.to_frames(self.transport());
+		let position = transport.position.to_frames(transport);
 
 		let mut click_beat =
-			BeatTime::from_frames(position.saturating_sub(latency), self.transport()).beat_floor();
+			BeatTime::from_frames(position.saturating_sub(latency), transport).beat_floor();
 
-		let end_beat = BeatTime::from_frames(
-			(position + frames).saturating_sub(latency),
-			self.transport(),
-		)
-		.beat_ceil();
+		let end_beat =
+			BeatTime::from_frames((position + split.frames).saturating_sub(latency), transport)
+				.beat_ceil();
 
 		while click_beat < end_beat {
-			let numerator = self.transport().numerator.get();
+			let numerator = transport.numerator.get();
 			let click = if click_beat.beat().is_multiple_of(numerator.into()) {
 				&ON_BAR_CLICK
 			} else {
@@ -691,16 +675,16 @@ impl AudioThread {
 			.as_chunks()
 			.0;
 
-			let start = click_beat.to_frames(self.transport()) + latency;
+			let start = click_beat.to_frames(transport) + latency;
 
 			let write_start = start.saturating_sub(position);
-			if write_start >= frames {
+			if write_start >= split.frames {
 				return;
 			}
 
 			click_beat += BeatTime::BEAT;
 
-			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
+			let resample_ratio = 44100.0 / f64::from(transport.sample_rate.get());
 
 			let len = (click.len() as f64 / resample_ratio) as usize;
 
@@ -713,7 +697,7 @@ impl AudioThread {
 				.for_node_mut(self.master, |_, _, audio, _| {
 					resample_cubic(click, resample_ratio, play_pos)
 						.take(len - play_pos)
-						.zip(&mut audio[write_start..])
+						.zip(&mut audio[split.offset..][write_start..])
 						.for_each(|([l, r], audio)| {
 							audio[0] += l;
 							audio[1] += r;
@@ -754,6 +738,35 @@ impl AudioThread {
 			self.updates
 				.push(Update::AudioPreviewEnded(audio_preview.version()));
 			self.audio_preview = None;
+		}
+	}
+
+	fn read_in(&mut self, midi_input: &[TimedMidiAction<u64>], audio_input: &[f32]) {
+		self.state_mut().audio_input[..audio_input.len()].copy_from_slice(audio_input);
+
+		self.state_mut().midi_input.clear();
+		for &action in midi_input {
+			trace!("{action:?}");
+
+			match action.action {
+				MidiAction::NoteOn(channel, key, velocity) => {
+					if let Some(velocity) =
+						self.state_mut().playing.insert((channel, key), velocity)
+					{
+						self.state_mut().midi_input.push(TimedMidiAction {
+							ts: action.ts,
+							action: MidiAction::NoteOff(channel, key, velocity),
+						});
+					}
+
+					self.state_mut().midi_input.push(action);
+				}
+				MidiAction::NoteOff(channel, key, _) => {
+					if self.state_mut().playing.remove(&(channel, key)).is_some() {
+						self.state_mut().midi_input.push(action);
+					}
+				}
+			}
 		}
 	}
 
@@ -808,6 +821,18 @@ impl AudioThread {
 					}
 				}
 			});
+
+		if self.transport().playing {
+			*self.transport_mut() = self.transport().split_loop(
+				audio_output.len() / self.transport().output_channels.get() as usize,
+				|split, _| {
+					self.updates.push(Update::Recorded(split.frames));
+					if let Some(position) = split.going_to_wrap_to {
+						self.updates.push(Update::RecordingInterrupted(position));
+					}
+				},
+			);
+		}
 	}
 
 	pub fn render(

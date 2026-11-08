@@ -58,13 +58,12 @@ impl Clip {
 	pub fn diff(
 		&self,
 		state: &State,
-		audio: &[[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
 		match self {
 			Self::Audio(..) => {}
-			Self::Midi(clip) => clip.diff(state, audio, events, voice_alloc),
+			Self::Midi(clip) => clip.diff(state, events, voice_alloc),
 		}
 	}
 
