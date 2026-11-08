@@ -1109,13 +1109,6 @@ impl Arrangement {
 	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].start() != pos {
 			self.tracks[track].clips[clip].trim_start_to(pos, &self.transport);
-			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.fade_start.len = audio.fade_start.len.min(audio.position.len());
-				audio.fade_end.len = audio
-					.fade_end
-					.len
-					.min(audio.position.len() - audio.fade_start.len);
-			}
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimStartTo(self.tracks[track].clips[clip].id(), pos),
@@ -1135,13 +1128,6 @@ impl Arrangement {
 
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			self.tracks[track].clips[clip].trim_end_to(pos, &self.transport);
-			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.fade_end.len = audio.fade_end.len.min(audio.position.len());
-				audio.fade_start.len = audio
-					.fade_start
-					.len
-					.min(audio.position.len() - audio.fade_end.len);
-			}
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimEndTo(self.tracks[track].clips[clip].id(), pos),
@@ -1230,40 +1216,21 @@ impl Arrangement {
 
 	pub fn clip_stretch_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].start() != pos {
-			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				let len = audio.position.len() * audio.stretch.abs();
-				let end = audio.position.end(&self.transport);
-				audio.position.move_to(pos.min(end - BeatTime::TICK));
-				audio.position.trim_end_to(end, &self.transport);
-				let stretch = audio.stretch;
-				audio.stretch = (len / audio.position.len()).copysign(stretch);
-				audio.fade_start.len = audio.fade_start.len * stretch / audio.stretch;
-				audio.fade_end.len = audio.fade_end.len * stretch / audio.stretch;
-				let id = audio.id;
-				self.node_action(
-					self.tracks[track].id,
-					NodeAction::ClipStretchStartTo(id, pos),
-				);
-			} else {
-				self.clip_trim_start_to(track, clip, pos);
-			}
+			self.tracks[track].clips[clip].stretch_start_to(pos, &self.transport);
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipStretchStartTo(self.tracks[track].clips[clip].id(), pos),
+			);
 		}
 	}
 
 	pub fn clip_stretch_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
-			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				let len = audio.position.len() * audio.stretch.abs();
-				audio.position.trim_end_to(pos, &self.transport);
-				let stretch = audio.stretch;
-				audio.stretch = (len / audio.position.len()).copysign(audio.stretch);
-				audio.fade_start.len = audio.fade_start.len * stretch / audio.stretch;
-				audio.fade_end.len = audio.fade_end.len * stretch / audio.stretch;
-				let id = audio.id;
-				self.node_action(self.tracks[track].id, NodeAction::ClipStretchEndTo(id, pos));
-			} else {
-				self.clip_trim_end_to(track, clip, pos);
-			}
+			self.tracks[track].clips[clip].stretch_end_to(pos, &self.transport);
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipStretchEndTo(self.tracks[track].clips[clip].id(), pos),
+			);
 		}
 	}
 

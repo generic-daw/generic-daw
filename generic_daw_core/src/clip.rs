@@ -43,7 +43,7 @@ impl Clip {
 			Self::Audio(clip) => {
 				(clip.position.offset() / clip.stretch.abs()).to_beat_time(transport)
 			}
-			Self::Midi(clip) => clip.position.offset(),
+			Self::Midi(clip) => clip.position.offset() / clip.stretch.abs(),
 		}
 	}
 
@@ -52,6 +52,14 @@ impl Clip {
 		match self {
 			Self::Audio(clip) => clip.position.len().to_beat_time(transport),
 			Self::Midi(clip) => clip.position.len(),
+		}
+	}
+
+	#[must_use]
+	pub fn stretch(&self) -> f64 {
+		match self {
+			Self::Audio(clip) => clip.stretch,
+			Self::Midi(clip) => clip.stretch,
 		}
 	}
 
@@ -85,14 +93,26 @@ impl Clip {
 			Self::Audio(clip) => {
 				clip.position
 					.trim_start_to(new_start, transport, clip.stretch.abs());
+				clip.fade_start.len = clip.fade_start.len.min(clip.position.len());
+				clip.fade_end.len = clip
+					.fade_end
+					.len
+					.min(clip.position.len() - clip.fade_start.len);
 			}
-			Self::Midi(clip) => clip.position.trim_start_to(new_start),
+			Self::Midi(clip) => clip.position.trim_start_to(new_start, clip.stretch.abs()),
 		}
 	}
 
 	pub fn trim_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
 		match self {
-			Self::Audio(clip) => clip.position.trim_end_to(new_end, transport),
+			Self::Audio(clip) => {
+				clip.position.trim_end_to(new_end, transport);
+				clip.fade_end.len = clip.fade_end.len.min(clip.position.len());
+				clip.fade_start.len = clip
+					.fade_start
+					.len
+					.min(clip.position.len() - clip.fade_end.len);
+			}
 			Self::Midi(clip) => clip.position.trim_end_to(new_end),
 		}
 	}
@@ -104,12 +124,44 @@ impl Clip {
 		}
 	}
 
+	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
+		let len = self.len(transport) * self.stretch().abs();
+		let end = self.end(transport);
+		self.move_to(new_start.min(end - BeatTime::TICK));
+		self.trim_end_to(end, transport);
+		let new_stretch = (len / self.len(transport)).copysign(self.stretch());
+		match self {
+			Self::Audio(clip) => {
+				let old_stretch = clip.stretch;
+				clip.stretch = new_stretch;
+				clip.fade_start.len = clip.fade_start.len * old_stretch / clip.stretch;
+				clip.fade_end.len = clip.fade_end.len * old_stretch / clip.stretch;
+			}
+			Self::Midi(clip) => clip.stretch = new_stretch,
+		}
+	}
+
+	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
+		let len = self.len(transport) * self.stretch().abs();
+		self.trim_end_to(new_end, transport);
+		let new_stretch = (len / self.len(transport)).copysign(self.stretch());
+		match self {
+			Self::Audio(clip) => {
+				let old_stretch = clip.stretch;
+				clip.stretch = new_stretch;
+				clip.fade_start.len = clip.fade_start.len * old_stretch / clip.stretch;
+				clip.fade_end.len = clip.fade_end.len * old_stretch / clip.stretch;
+			}
+			Self::Midi(clip) => clip.stretch = new_stretch,
+		}
+	}
+
 	pub fn slip_to(&mut self, new_offset: BeatTime, transport: &Transport) {
 		match self {
 			Self::Audio(clip) => clip
 				.position
 				.slip_to(new_offset * clip.stretch.abs(), transport),
-			Self::Midi(clip) => clip.position.slip_to(new_offset),
+			Self::Midi(clip) => clip.position.slip_to(new_offset * clip.stretch.abs()),
 		}
 	}
 }

@@ -13,6 +13,7 @@ pub struct MidiClip {
 	pub id: ClipId,
 	pub pattern: MidiPatternId,
 	pub position: OffsetBeatRange,
+	pub stretch: f64,
 }
 
 impl MidiClip {
@@ -22,6 +23,7 @@ impl MidiClip {
 			id: ClipId::unique(),
 			pattern,
 			position: OffsetBeatRange::default(),
+			stretch: 1.0,
 		}
 	}
 
@@ -44,7 +46,7 @@ impl MidiClip {
 			.notes
 			.values()
 			.filter_map(|&(mut note)| {
-				note.position = (note.position + self.position.start())
+				note.position = (note.position / self.stretch + self.position.start())
 					.saturating_sub(self.position.offset())?
 					.clamp(self.position.beat_range())?;
 				Some(note)
@@ -94,7 +96,7 @@ impl MidiClip {
 			.notes
 			.values()
 			.filter_map(|&(mut note)| {
-				note.position = (note.position + self.position.start())
+				note.position = (note.position / self.stretch + self.position.start())
 					.saturating_sub(self.position.offset())?
 					.clamp(self.position.beat_range())?;
 				Some(note)

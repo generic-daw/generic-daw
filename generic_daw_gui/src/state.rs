@@ -89,11 +89,12 @@ impl Grid {
 	pub fn seconds_snap_step(self, scale: Vector) -> SecondsTime {
 		let size = self.size + scale.x;
 		if size > 0.0 {
-			let seconds = [2, 3, 4, 5, 6, 10, 12, 15, 20, 30]
+			let seconds = (0..)
+				.flat_map(|i| [2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60].map(|j| 60u64.pow(i) * j))
 				.into_iter()
-				.find(|&step| size < f32::from(step).log2())
-				.unwrap_or(60u8);
-			SecondsTime::new(seconds.into(), 0)
+				.find(|&step| size < (step as f32).log2())
+				.unwrap();
+			SecondsTime::new(seconds, 0)
 		} else {
 			SecondsTime::SECOND >> -size.max(-9.0) as u8
 		}

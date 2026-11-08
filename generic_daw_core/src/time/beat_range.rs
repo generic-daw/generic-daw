@@ -1,5 +1,5 @@
 use crate::{Transport, time::BeatTime};
-use std::ops::Add;
+use std::ops::{Add, Div};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BeatRange {
@@ -135,6 +135,16 @@ impl Add<BeatTime> for BeatRange {
 	fn add(mut self, rhs: BeatTime) -> Self::Output {
 		self.start += rhs;
 		self.end += rhs;
+		self
+	}
+}
+
+impl Div<f64> for BeatRange {
+	type Output = Self;
+
+	fn div(mut self, rhs: f64) -> Self::Output {
+		self.start /= rhs;
+		self.end /= rhs;
 		self
 	}
 }

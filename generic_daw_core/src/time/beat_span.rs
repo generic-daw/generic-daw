@@ -2,7 +2,6 @@ use crate::{
 	Transport,
 	time::{BeatTime, SecondsTime},
 };
-use std::ops::Add;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BeatSpan {
@@ -62,14 +61,5 @@ impl BeatSpan {
 
 	pub const fn move_to(&mut self, new_start: BeatTime) {
 		self.start = new_start;
-	}
-}
-
-impl Add<BeatTime> for BeatSpan {
-	type Output = Self;
-
-	fn add(mut self, rhs: BeatTime) -> Self::Output {
-		self.start += rhs;
-		self
 	}
 }

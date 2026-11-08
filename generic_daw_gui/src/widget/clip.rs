@@ -843,13 +843,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						.start()
 						.saturating_sub(inner.clip.position.offset())
 						.to_frames(self.transport) as f32
-						/ frames_per_px;
+						/ (frames_per_px * inner.clip.stretch as f32);
 					let end_pixel = note
 						.position
 						.end()
 						.saturating_sub(inner.clip.position.offset())
 						.to_frames(self.transport) as f32
-						/ frames_per_px;
+						/ (frames_per_px * inner.clip.stretch as f32);
 
 					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
 

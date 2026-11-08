@@ -2380,9 +2380,7 @@ impl ArrangementView {
 			&state.grid,
 			self.piano_roll.borrow().position
 				+ Vector::new(
-					((clip
-						.position
-						.start()
+					(((clip.position.start() * clip.stretch.abs())
 						.to_frames(self.arrangement.transport()) as f64
 						- clip
 							.position
@@ -2395,7 +2393,7 @@ impl ArrangementView {
 						))) as f32,
 					0.0,
 				),
-			self.piano_roll.borrow().scale,
+			self.piano_roll.borrow().scale - Vector::new(f64::log2(clip.stretch) as f32, 0.0),
 			Piano::new(self.piano_roll.borrow().scale),
 			PianoRoll::new(
 				&self.piano_roll,

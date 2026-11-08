@@ -123,6 +123,7 @@ impl Arrangement {
 								},
 								offset: clip.position.offset().to_bits(),
 							},
+							stretch: clip.stretch,
 						}
 						.into(),
 					}),
@@ -642,6 +643,7 @@ impl Arrangement {
 								),
 								BeatTime::from_bits(clip.position.offset),
 							),
+							stretch: clip.stretch,
 						}),
 					},
 				);

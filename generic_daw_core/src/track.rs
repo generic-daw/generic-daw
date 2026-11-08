@@ -168,28 +168,16 @@ impl Track {
 				debug_assert!(clip.is_some());
 			}
 			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
-			NodeAction::ClipTrimStartTo(id, pos) => {
-				let clip = self.clips.get_mut(&id).unwrap();
-				clip.trim_start_to(pos, &state.transport);
-				if let Clip::Audio(audio) = clip {
-					audio.fade_start.len = audio.fade_start.len.min(audio.position.len());
-					audio.fade_end.len = audio
-						.fade_end
-						.len
-						.min(audio.position.len() - audio.fade_start.len);
-				}
-			}
-			NodeAction::ClipTrimEndTo(id, pos) => {
-				let clip = self.clips.get_mut(&id).unwrap();
-				clip.trim_end_to(pos, &state.transport);
-				if let Clip::Audio(audio) = clip {
-					audio.fade_end.len = audio.fade_end.len.min(audio.position.len());
-					audio.fade_start.len = audio
-						.fade_start
-						.len
-						.min(audio.position.len() - audio.fade_end.len);
-				}
-			}
+			NodeAction::ClipTrimStartTo(id, pos) => self
+				.clips
+				.get_mut(&id)
+				.unwrap()
+				.trim_start_to(pos, &state.transport),
+			NodeAction::ClipTrimEndTo(id, pos) => self
+				.clips
+				.get_mut(&id)
+				.unwrap()
+				.trim_end_to(pos, &state.transport),
 			NodeAction::ClipVolumeChanged(id, volume) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
@@ -232,30 +220,16 @@ impl Track {
 				};
 				clip.fade_end.symmetric ^= true;
 			}
-			NodeAction::ClipStretchStartTo(id, pos) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
-					panic!();
-				};
-				let len = clip.position.len() * clip.stretch.abs();
-				let end = clip.position.end(&state.transport);
-				clip.position.move_to(pos.min(end - BeatTime::TICK));
-				clip.position.trim_end_to(end, &state.transport);
-				let stretch = clip.stretch;
-				clip.stretch = (len / clip.position.len()).copysign(stretch);
-				clip.fade_start.len = clip.fade_start.len * stretch / clip.stretch;
-				clip.fade_end.len = clip.fade_end.len * stretch / clip.stretch;
-			}
-			NodeAction::ClipStretchEndTo(id, pos) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
-					panic!();
-				};
-				let len = clip.position.len() * clip.stretch.abs();
-				clip.position.trim_end_to(pos, &state.transport);
-				let stretch = clip.stretch;
-				clip.stretch = (len / clip.position.len()).copysign(clip.stretch);
-				clip.fade_start.len = clip.fade_start.len * stretch / clip.stretch;
-				clip.fade_end.len = clip.fade_end.len * stretch / clip.stretch;
-			}
+			NodeAction::ClipStretchStartTo(id, pos) => self
+				.clips
+				.get_mut(&id)
+				.unwrap()
+				.stretch_start_to(pos, &state.transport),
+			NodeAction::ClipStretchEndTo(id, pos) => self
+				.clips
+				.get_mut(&id)
+				.unwrap()
+				.stretch_end_to(pos, &state.transport),
 			NodeAction::ClipReverse(id) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
@@ -267,12 +241,11 @@ impl Track {
 				);
 				(clip.fade_start, clip.fade_end) = (clip.fade_end, clip.fade_start);
 			}
-			NodeAction::ClipSlipTo(id, pos) => {
-				self.clips
-					.get_mut(&id)
-					.unwrap()
-					.slip_to(pos, &state.transport);
-			}
+			NodeAction::ClipSlipTo(id, pos) => self
+				.clips
+				.get_mut(&id)
+				.unwrap()
+				.slip_to(pos, &state.transport),
 			NodeAction::InputSetChannels(input) => {
 				if (self.input.left != input.left || self.input.right != input.right)
 					&& self.audio_producer.is_some()

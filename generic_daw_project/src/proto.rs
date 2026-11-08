@@ -213,6 +213,8 @@ pub struct MidiClip {
 	pub pattern: MidiPatternIndex,
 	#[prost(message, required)]
 	pub position: OffsetBeatRange,
+	#[prost(double, default = 1.0)]
+	pub stretch: f64,
 }
 
 #[derive(Clone, Copy, Message)]

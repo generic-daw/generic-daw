@@ -44,12 +44,12 @@ impl OffsetBeatRange {
 		self.position.len()
 	}
 
-	pub fn trim_start_to(&mut self, new_start: BeatTime) {
+	pub fn trim_start_to(&mut self, new_start: BeatTime, stretch: f64) {
 		let old_start = self.start();
-		let min_start = old_start.saturating_sub(self.offset());
+		let min_start = old_start.saturating_sub(self.offset() / stretch);
 		self.position.trim_start_to(new_start.max(min_start));
 		let new_start = self.start();
-		let diff = new_start.abs_diff(old_start);
+		let diff = new_start.abs_diff(old_start) * stretch;
 		if old_start < new_start {
 			self.offset += diff;
 		} else {
