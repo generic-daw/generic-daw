@@ -48,12 +48,15 @@ enum ClipInfo {
 		fade_start: Transition,
 		fade_end: Transition,
 		volume: f32,
+		y_scale: f32,
 	},
 	MidiClip {
 		pattern: MidiPatternId,
 		offset: BeatTime,
 	},
-	AudioRecording,
+	AudioRecording {
+		y_scale: f32,
+	},
 	MidiRecording,
 	#[default]
 	Default,
@@ -145,6 +148,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	fn diff(&mut self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
+		let playlist = self.playlist.borrow();
+
 		let info = match self.inner {
 			Inner::AudioClip(inner) => ClipInfo::AudioClip {
 				sample: inner.clip.sample,
@@ -153,12 +158,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				fade_start: inner.clip.fade_start,
 				fade_end: inner.clip.fade_end,
 				stretch: inner.clip.stretch,
+				y_scale: playlist.scale.y,
 			},
 			Inner::MidiClip(inner) => ClipInfo::MidiClip {
 				pattern: inner.clip.pattern,
 				offset: inner.clip.position.offset(),
 			},
-			Inner::AudioRecording(..) => ClipInfo::AudioRecording,
+			Inner::AudioRecording(..) => ClipInfo::AudioRecording {
+				y_scale: playlist.scale.y,
+			},
 			Inner::MidiRecording(..) => ClipInfo::MidiRecording,
 		};
 
