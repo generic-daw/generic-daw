@@ -127,9 +127,19 @@ impl Clip {
 	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
 		let len = self.len(transport) * self.stretch().abs();
 		let end = self.end(transport);
+
 		self.move_to(new_start.min(end - BeatTime::TICK));
 		self.trim_end_to(end, transport);
-		let new_stretch = (len / self.len(transport)).copysign(self.stretch());
+
+		let new_stretch = (len / self.len(transport))
+			.clamp(0.001, 1000.0)
+			.copysign(self.stretch());
+
+		let new_start = end - len / new_stretch.abs();
+
+		self.move_to(new_start);
+		self.trim_end_to(end, transport);
+
 		match self {
 			Self::Audio(clip) => {
 				let old_stretch = clip.stretch;
@@ -143,8 +153,17 @@ impl Clip {
 
 	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
 		let len = self.len(transport) * self.stretch().abs();
+
 		self.trim_end_to(new_end, transport);
-		let new_stretch = (len / self.len(transport)).copysign(self.stretch());
+
+		let new_stretch = (len / self.len(transport))
+			.clamp(0.001, 1000.0)
+			.copysign(self.stretch());
+
+		let new_end = self.start() + len / new_stretch.abs();
+
+		self.trim_end_to(new_end, transport);
+
 		match self {
 			Self::Audio(clip) => {
 				let old_stretch = clip.stretch;
