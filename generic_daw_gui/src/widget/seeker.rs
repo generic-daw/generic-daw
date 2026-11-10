@@ -22,7 +22,7 @@ use iced::{
 	widget::text::{Alignment, Ellipsis, Shaping, Wrapping},
 	window,
 };
-use std::time::Instant;
+use std::{cmp::Ordering, time::Instant};
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -746,15 +746,13 @@ impl<'a, Message> Seeker<'a, Message> {
 		}
 
 		while beat <= end_beat {
-			let color = if snap_step >= BeatTime::BEAT {
-				if beat.beat_in_bar(self.transport) == 0
-					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
-				{
-					theme.palette().background.strongest.color
-				} else {
-					theme.palette().background.weak.color
-				}
-			} else if beat.tick() == 0 {
+			let color = if match snap_step.cmp(&BeatTime::BEAT) {
+				Ordering::Less => beat.tick() == 0,
+				Ordering::Equal => beat.beat_in_bar(self.transport) == 0,
+				Ordering::Greater => beat
+					.bar(self.transport)
+					.is_multiple_of(4 * snap_step.bar(self.transport)),
+			} {
 				theme.palette().background.strongest.color
 			} else {
 				theme.palette().background.weak.color
@@ -769,6 +767,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				},
 				color,
 			);
+
 			beat += snap_step;
 		}
 
