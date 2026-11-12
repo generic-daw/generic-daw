@@ -8,9 +8,6 @@ pub fn natural_cmp(mut a: &[u8], mut b: &[u8]) -> Ordering {
 		(a_cut, a) = cut(a, u8::is_ascii_digit);
 		(b_cut, b) = cut(b, u8::is_ascii_digit);
 
-		a_cut = a_cut.trim_ascii();
-		b_cut = b_cut.trim_ascii();
-
 		match a_cut
 			.iter()
 			.map(u8::to_ascii_lowercase)
@@ -41,5 +38,5 @@ pub fn natural_cmp(mut a: &[u8], mut b: &[u8]) -> Ordering {
 }
 
 fn cut(s: &[u8], f: impl Fn(&u8) -> bool) -> (&[u8], &[u8]) {
-	s.iter().position(f).map_or((s, &[]), |i| s.split_at(i))
+	s.split_at(s.iter().position(f).unwrap_or(s.len()))
 }

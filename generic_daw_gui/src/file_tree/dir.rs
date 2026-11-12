@@ -62,7 +62,7 @@ impl Dir {
 			Some(match action.take().unwrap() {
 				Action::ToggleOpen => {
 					if let Status::Loaded { open, .. } = &mut self.children {
-						*open ^= true;
+						open.toggle();
 						Task::none()
 					} else {
 						self.children = Status::Loading;

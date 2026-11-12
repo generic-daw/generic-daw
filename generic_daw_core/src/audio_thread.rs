@@ -20,7 +20,6 @@ use rtrb::{Consumer, Producer, PushError};
 use std::{
 	any::Any,
 	collections::HashMap,
-	convert::Infallible,
 	mem::MaybeUninit,
 	num::NonZero,
 	time::{Duration, Instant},
@@ -330,7 +329,7 @@ pub struct Inject<'a>(pub ThreadPoolExecutor<'a>);
 impl WorkList for Inject<'_> {
 	type Item = u32;
 	type Scratch = ();
-	type Inject = Infallible;
+	type Inject = !;
 
 	fn next_item(&self) -> Option<Self::Item> {
 		self.0.next_task()
@@ -515,7 +514,9 @@ impl AudioThread {
 					}
 				}
 				Message::NodeAdd(node) => {
-					let node = self.audio_graph.insert(*node);
+					let (node, uninit) = Box::take(node);
+					self.updates.push(Update::Dealloc(uninit));
+					let node = self.audio_graph.insert(node);
 					debug_assert!(node.is_none());
 				}
 				Message::NodeRemove(node, boxed) => {
@@ -540,11 +541,11 @@ impl AudioThread {
 				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => {
-					self.transport_mut().playing ^= true;
+					self.transport_mut().playing.toggle();
 					let position = self.transport().position;
 					self.updates.push(Update::RecordingInterrupted(position));
 				}
-				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
+				Message::ToggleMetronome => self.transport_mut().metronome.toggle(),
 				Message::Position(version, position) => {
 					self.transport_mut().version = version;
 					self.transport_mut().position = position;
@@ -562,10 +563,14 @@ impl AudioThread {
 					self.update_buffers.push(update);
 				}
 				Message::RequestProcessor(sender, slot) => {
-					return Some(Action::SendProcessor(sender, *slot));
+					let (slot, uninit) = Box::take(slot);
+					self.updates.push(Update::Dealloc(uninit));
+					return Some(Action::SendProcessor(sender, slot));
 				}
 				Message::RequestProcessorAndPool(sender, slot) => {
-					return Some(Action::SendProcessorAndPool(sender, *slot));
+					let (slot, uninit) = Box::take(slot);
+					self.updates.push(Update::Dealloc(uninit));
+					return Some(Action::SendProcessorAndPool(sender, slot));
 				}
 			}
 		}

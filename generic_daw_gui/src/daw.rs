@@ -44,7 +44,6 @@ use log::{info, trace, warn};
 use rfd::AsyncFileDialog;
 use smol::{Timer, unblock};
 use std::{
-	convert::Infallible,
 	ffi::CStr,
 	fs::File,
 	io::{BufReader, Read as _},
@@ -169,9 +168,9 @@ pub enum Message {
 
 	OpenFileDialog,
 	OpenFile(Arc<Path>, bool),
-	CantFindPlugin(Arc<CStr>, NoClone<oneshot::Sender<Feedback<Infallible>>>),
+	CantFindPlugin(Arc<CStr>, NoClone<oneshot::Sender<Feedback<!>>>),
 	CantFindSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
-	FindPlugin(usize, Feedback<Infallible>),
+	FindPlugin(usize, Feedback<!>),
 	FindSampleFileDialog(usize),
 	FindSampleFile(usize, Feedback<Arc<Path>>),
 	OpenedFile,
@@ -309,7 +308,7 @@ pub struct Daw {
 
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
-	missing_plugins: Vec<(Arc<CStr>, oneshot::Sender<Feedback<Infallible>>)>,
+	missing_plugins: Vec<(Arc<CStr>, oneshot::Sender<Feedback<!>>)>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	save: Option<Save>,
@@ -703,11 +702,11 @@ impl Daw {
 				return self.update(Message::ChangedGridSize(self.state.grid.size + 1.0));
 			}
 			Message::ToggleGridTriplets => {
-				self.state.grid.triplets ^= true;
+				self.state.grid.triplets.toggle();
 				self.state.write();
 			}
 			Message::ToggleGrid => {
-				self.state.grid.enabled ^= true;
+				self.state.grid.enabled.toggle();
 				self.state.write();
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
@@ -923,16 +922,16 @@ impl Daw {
 					.autoscroll(before, after, &self.config, &mut self.state);
 			}
 			Message::ToggleShowSeconds => {
-				self.state.show_seconds ^= true;
+				self.state.show_seconds.toggle();
 				self.state.write();
 			}
 			Message::ToggleMetronome => {
 				self.arrangement_view.arrangement.toggle_metronome();
-				self.state.metronome ^= true;
+				self.state.metronome.toggle();
 				self.state.write();
 			}
 			Message::ToggleAutoscroll => {
-				self.state.autoscroll ^= true;
+				self.state.autoscroll.toggle();
 				self.state.write();
 			}
 			Message::TappedBpm => {
@@ -1008,7 +1007,7 @@ impl Daw {
 				let fut = if self.top_pane == bottom_pane {
 					if let Some(bottom_pane) = self.bottom_pane {
 						self.top_pane = bottom_pane;
-						self.bottom_selected ^= true;
+						self.bottom_selected.toggle();
 						Task::none()
 					} else {
 						self.bottom_selected = true;

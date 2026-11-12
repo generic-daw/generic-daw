@@ -1,5 +1,5 @@
 use crate::{AudioGraph, EventImpl, NodeId};
-use std::{convert::Infallible, marker::PhantomData};
+use std::marker::PhantomData;
 use thread_pool::{Erased, WorkList};
 
 pub type ThreadPool<Node> = thread_pool::ThreadPool<AudioGraph<Node>>;
@@ -10,7 +10,7 @@ pub struct Inject<Node: NodeImpl>(PhantomData<Node>);
 
 impl<Node: NodeImpl> Erased for Inject<Node> {
 	type Scratch = ();
-	type Inject = Infallible;
+	type Inject = !;
 	type WorkList<'a> = Node::Inject<'a>;
 }
 
@@ -18,7 +18,7 @@ pub trait NodeImpl: Send + Sized + 'static {
 	type Event: EventImpl;
 	type State: Sync;
 	type Scratch: Send;
-	type Inject<'a>: WorkList<Scratch = (), Inject = Infallible>;
+	type Inject<'a>: WorkList<Scratch = (), Inject = !>;
 	#[must_use]
 	fn process(
 		&mut self,

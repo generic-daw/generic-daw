@@ -83,15 +83,17 @@ impl Channel {
 		}
 	}
 
-	pub fn apply(&mut self, action: NodeAction) {
+	pub fn apply(&mut self, action: NodeAction, updates: &mut Vec<Update>) {
 		match action {
 			NodeAction::OutputSetChannels(output) => self.output = output,
-			NodeAction::ChannelToggleEnabled => self.enabled ^= true,
-			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
+			NodeAction::ChannelToggleEnabled => self.enabled.toggle(),
+			NodeAction::ChannelToggleBypassed => self.bypassed.toggle(),
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
 			NodeAction::PluginInsert(index, plugin) => {
-				self.plugins.insert(index, PluginSlot::new(*plugin));
+				let (plugin, uninit) = Box::take(plugin);
+				updates.push(Update::Dealloc(uninit));
+				self.plugins.insert(index, PluginSlot::new(plugin));
 			}
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginActivate(index, plugin) => self.plugins[index].activate(*plugin),

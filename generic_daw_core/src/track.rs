@@ -160,7 +160,9 @@ impl Track {
 	pub fn apply(&mut self, action: NodeAction, state: &State, updates: &mut Vec<Update>) {
 		match action {
 			NodeAction::ClipAdd(clip) => {
-				let clip = self.clips.insert(clip.id(), *clip);
+				let (clip, uninit) = Box::take(clip);
+				updates.push(Update::Dealloc(uninit));
+				let clip = self.clips.insert(clip.id(), clip);
 				debug_assert!(clip.is_none());
 			}
 			NodeAction::ClipRemove(id) => {
@@ -200,7 +202,7 @@ impl Track {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
 				};
-				clip.fade_start.symmetric ^= true;
+				clip.fade_start.symmetric.toggle();
 			}
 			NodeAction::ClipFadeEndLen(id, len) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
@@ -218,7 +220,7 @@ impl Track {
 				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
 					panic!();
 				};
-				clip.fade_end.symmetric ^= true;
+				clip.fade_end.symmetric.toggle();
 			}
 			NodeAction::ClipStretchStartTo(id, pos) => self
 				.clips
@@ -301,7 +303,7 @@ impl Track {
 					updates.push(Update::MidiRecordingInterrupted(self.channel.id()));
 				}
 			}
-			action => self.channel.apply(action),
+			action => self.channel.apply(action, updates),
 		}
 	}
 

@@ -323,7 +323,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					) <= self.info.radius)
 						!= state.hovering
 					{
-						state.hovering ^= true;
+						state.hovering.toggle();
 						state.cache.clear();
 						shell.request_redraw();
 					}

@@ -369,12 +369,12 @@ impl Arrangement {
 	}
 
 	pub fn channel_toggle_enabled(&mut self, id: NodeId) {
-		self.node_mut(id).enabled ^= true;
+		self.node_mut(id).enabled.toggle();
 		self.node_action(id, NodeAction::ChannelToggleEnabled);
 	}
 
 	pub fn channel_toggle_bypassed(&mut self, id: NodeId) {
-		self.node_mut(id).bypassed ^= true;
+		self.node_mut(id).bypassed.toggle();
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
@@ -598,12 +598,12 @@ impl Arrangement {
 	}
 
 	pub fn toggle_playback(&mut self) {
-		self.transport.playing ^= true;
+		self.transport.playing.toggle();
 		self.send(Message::TogglePlayback);
 	}
 
 	pub fn toggle_metronome(&mut self) {
-		self.transport.metronome ^= true;
+		self.transport.metronome.toggle();
 		self.send(Message::ToggleMetronome);
 	}
 
@@ -1172,7 +1172,7 @@ impl Arrangement {
 
 	pub fn clip_fade_start_toggle_symmetric(&mut self, track: usize, clip: usize) {
 		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-			audio.fade_start.symmetric ^= true;
+			audio.fade_start.symmetric.toggle();
 			let id = audio.id;
 			self.node_action(
 				self.tracks[track].id,
@@ -1205,7 +1205,7 @@ impl Arrangement {
 
 	pub fn clip_fade_end_toggle_symmetric(&mut self, track: usize, clip: usize) {
 		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-			audio.fade_end.symmetric ^= true;
+			audio.fade_end.symmetric.toggle();
 			let id = audio.id;
 			self.node_action(
 				self.tracks[track].id,

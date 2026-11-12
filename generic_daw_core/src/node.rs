@@ -56,7 +56,7 @@ impl NodeImpl for Node {
 impl Node {
 	pub fn apply(&mut self, action: NodeAction, state: &State, updates: &mut Vec<Update>) {
 		match self {
-			Self::Channel(node) => node.apply(action),
+			Self::Channel(node) => node.apply(action, updates),
 			Self::Track(node) => node.apply(action, state, updates),
 			Self::None => unreachable!(),
 		}

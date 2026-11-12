@@ -2,7 +2,6 @@
 
 use crossbeam_utils::{Backoff, CachePadded};
 use std::{
-	convert::Infallible,
 	num::NonZero,
 	sync::{
 		Arc,
@@ -17,7 +16,7 @@ use std::{
 pub trait WorkList: Sync {
 	type Item;
 	type Scratch: Send;
-	type Inject: Erased<Scratch = (), Inject = Infallible>;
+	type Inject: Erased<Scratch = (), Inject = !>;
 	#[must_use]
 	fn next_item(&self) -> Option<Self::Item>;
 	#[must_use]
@@ -31,7 +30,7 @@ pub trait WorkList: Sync {
 
 pub trait Erased: 'static {
 	type Scratch: Send;
-	type Inject: Erased<Scratch = (), Inject = Infallible>;
+	type Inject: Erased<Scratch = (), Inject = !>;
 	type WorkList<'a>: WorkList<Scratch = Self::Scratch, Inject = Self::Inject>;
 }
 
@@ -41,7 +40,7 @@ impl<T: WorkList + 'static> Erased for T {
 	type WorkList<'a> = T;
 }
 
-impl WorkList for Infallible {
+impl WorkList for ! {
 	type Item = Self;
 	type Scratch = ();
 	type Inject = Self;
@@ -60,13 +59,13 @@ impl WorkList for Infallible {
 	}
 }
 
-pub struct ThreadPool<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> {
+pub struct ThreadPool<W: Erased<Inject: Erased<Scratch = (), Inject = !>>> {
 	shared: Arc<Shared<W>>,
 	threads: Box<[JoinHandle<()>]>,
 	scratch: W::Scratch,
 }
 
-impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallible>>> Default
+impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = !>>> Default
 	for ThreadPool<W>
 {
 	fn default() -> Self {
@@ -74,7 +73,7 @@ impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallibl
 	}
 }
 
-impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W> {
+impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = !>>> ThreadPool<W> {
 	#[must_use]
 	pub fn new() -> Self {
 		Self::new_with_threads(Self::default_threads())
@@ -86,7 +85,7 @@ impl<W: Erased<Scratch: Default, Inject: Erased<Scratch = (), Inject = Infallibl
 	}
 }
 
-impl<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W> {
+impl<W: Erased<Inject: Erased<Scratch = (), Inject = !>>> ThreadPool<W> {
 	#[must_use]
 	pub fn default_threads() -> NonZero<usize> {
 		if let Ok(threads) = available_parallelism()
@@ -148,7 +147,7 @@ impl<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W>
 	}
 }
 
-impl<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> Drop for ThreadPool<W> {
+impl<W: Erased<Inject: Erased<Scratch = (), Inject = !>>> Drop for ThreadPool<W> {
 	fn drop(&mut self) {
 		self.shared.main.stop.store(true, Relaxed);
 		self.shared.main.epoch.fetch_add(1, Release);
@@ -163,7 +162,7 @@ impl<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> Drop for Thre
 	}
 }
 
-struct Shared<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> {
+struct Shared<W: Erased<Inject: Erased<Scratch = (), Inject = !>>> {
 	main: CachePadded<Injector<W>>,
 	inject: CachePadded<Injector<W::Inject>>,
 }
@@ -336,7 +335,7 @@ impl<W: Erased> Injector<W> {
 	}
 }
 
-impl<W: Erased<Scratch = (), Inject = Infallible>> Injector<W> {
+impl<W: Erased<Scratch = (), Inject = !>> Injector<W> {
 	pub fn inject(&self, work_list: &W::WorkList<'_>, mut to_do: usize) {
 		let mut reserved = None;
 		while to_do != 0 {

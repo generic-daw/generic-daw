@@ -215,13 +215,13 @@ impl ConfigView {
 			Message::ChangedBufferSize(buffer_size) => self.config.audio.buffer_size = buffer_size,
 			Message::ChangedMidiInput(input) => self.config.midi.input = input,
 			Message::ChangedMidiOutput(output) => self.config.midi.output = output,
-			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
+			Message::ToggledAutosave => self.config.autosave.enabled.toggle(),
 			Message::ChangedAutosaveInterval(interval) => {
 				if let Some(interval) = interval {
 					self.config.autosave.interval = NonZero::new(interval.clamp(1, 999)).unwrap();
 				}
 			}
-			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
+			Message::ToggledOpenLastProject => self.config.open_last_project.toggle(),
 			Message::ChangedTheme(theme) => self.config.theme = theme,
 			Message::ChangedScaleFactor(scale_factor) => {
 				self.config.scale_factor = scale_factor;
