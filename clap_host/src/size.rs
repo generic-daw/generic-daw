@@ -8,12 +8,12 @@ pub enum Size {
 
 impl Size {
 	#[must_use]
-	pub fn from_logical((width, height): (f32, f32)) -> Self {
+	pub const fn from_logical((width, height): (f32, f32)) -> Self {
 		Self::Logical { width, height }
 	}
 
 	#[must_use]
-	pub fn to_logical(self, scale_factor: f32) -> (f32, f32) {
+	pub const fn to_logical(self, scale_factor: f32) -> (f32, f32) {
 		match self {
 			Self::Logical { width, height } => (width, height),
 			Self::Physical { width, height } => (width / scale_factor, height / scale_factor),
@@ -21,12 +21,12 @@ impl Size {
 	}
 
 	#[must_use]
-	pub fn from_physical((width, height): (f32, f32)) -> Self {
+	pub const fn from_physical((width, height): (f32, f32)) -> Self {
 		Self::Physical { width, height }
 	}
 
 	#[must_use]
-	pub fn to_physical(self, scale_factor: f32) -> (f32, f32) {
+	pub const fn to_physical(self, scale_factor: f32) -> (f32, f32) {
 		match self {
 			Self::Logical { width, height } => (width * scale_factor, height * scale_factor),
 			Self::Physical { width, height } => (width, height),
@@ -52,7 +52,7 @@ impl Size {
 	}
 
 	#[must_use]
-	pub fn approx_eq(self, other: Self, scale_factor: f32) -> bool {
+	pub const fn approx_eq(self, other: Self, scale_factor: f32) -> bool {
 		let (lw, lh) = self.to_logical(scale_factor);
 		let (rw, rh) = other.to_logical(scale_factor);
 		(lw - rw).abs() <= 1.0 && (lh - rh).abs() <= 1.0

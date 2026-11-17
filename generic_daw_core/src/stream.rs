@@ -43,27 +43,27 @@ impl Channels {
 	}
 
 	#[must_use]
-	pub fn fits_in(self, channels: u16) -> bool {
+	pub const fn fits_in(self, channels: u16) -> bool {
 		self.left < channels && self.right < channels
 	}
 
 	#[must_use]
-	pub fn left(self, left: u16) -> Self {
+	pub const fn left(self, left: u16) -> Self {
 		Self { left, ..self }
 	}
 
 	#[must_use]
-	pub fn right(self, right: u16) -> Self {
+	pub const fn right(self, right: u16) -> Self {
 		Self { right, ..self }
 	}
 
 	#[must_use]
-	pub fn midi(self, midi: u16) -> Self {
+	pub const fn midi(self, midi: u16) -> Self {
 		Self { midi, ..self }
 	}
 
 	#[must_use]
-	pub fn enable_audio(self, enable_audio: bool) -> Self {
+	pub const fn enable_audio(self, enable_audio: bool) -> Self {
 		Self {
 			enable_audio,
 			..self
@@ -71,7 +71,7 @@ impl Channels {
 	}
 
 	#[must_use]
-	pub fn enable_midi(self, enable_midi: bool) -> Self {
+	pub const fn enable_midi(self, enable_midi: bool) -> Self {
 		Self {
 			enable_midi,
 			..self

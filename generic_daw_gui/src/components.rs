@@ -1,9 +1,9 @@
 use crate::{
-	components::drag_handle::drag_handle,
 	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, rotate_ccw},
 	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
+use drag_handle::drag_handle;
 use generic_daw_widget::{context_menu::ContextMenu, stateful::Stateful};
 use iced::{
 	Element, Fill, Font, Theme, border,

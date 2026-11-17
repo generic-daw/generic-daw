@@ -83,16 +83,23 @@ pub enum MidiAction {
 
 impl MidiAction {
 	#[must_use]
-	pub fn channel(self) -> u4 {
+	pub const fn channel(self) -> u4 {
 		match self {
 			Self::NoteOn(channel, _, _) | Self::NoteOff(channel, _, _) => channel,
 		}
 	}
 
 	#[must_use]
-	pub fn key(self) -> u7 {
+	pub const fn key(self) -> u7 {
 		match self {
 			Self::NoteOn(_, key, _) | Self::NoteOff(_, key, _) => key,
+		}
+	}
+
+	#[must_use]
+	pub const fn velocity(self) -> u7 {
+		match self {
+			Self::NoteOn(_, _, velocity) | Self::NoteOff(_, _, velocity) => velocity,
 		}
 	}
 }
