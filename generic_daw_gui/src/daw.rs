@@ -111,7 +111,7 @@ pub static RECORDINGS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 });
 
 pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
-	jiff::Zoned::now().strftime("%F %H-%M-%S")
+	jiff::ZonedDateTime::now().strftime("%F %H-%M-%S")
 }
 
 pub enum Instruction {

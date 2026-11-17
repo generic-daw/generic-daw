@@ -8,5 +8,5 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-prost = "0.14.4"
+prost = "0.14.6"
 yazi = "0.2.2"
