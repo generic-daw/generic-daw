@@ -90,9 +90,7 @@ impl AudioBuffers {
 			}
 		}
 
-		let steady_time = self.steady_time;
-		self.steady_time += buf.len() as u64;
-		steady_time
+		self.steady_time
 	}
 
 	pub fn prepare(&mut self, len: usize) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
@@ -150,33 +148,33 @@ impl AudioBuffers {
 		}
 	}
 
-	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
+	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) -> u64 {
+		self.steady_time += buf.len() as u64;
+
 		self.delay_line.advance_mut(buf);
 
-		let Some(output_buffer) = self.output_buffers.first() else {
-			return;
-		};
+		if let Some(output_buffer) = self.output_buffers.first()
+			&& let Some(&n_channels) = self.output_config.channel_counts.first()
+		{
+			let buf_mix = 1f32.copysign(mix_level) - mix_level;
+			let sample_mix = mix_level.abs();
 
-		let Some(&n_channels) = self.output_config.channel_counts.first() else {
-			return;
-		};
+			if n_channels == 1 {
+				output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
+					buf[0] = buf[0] * buf_mix + sample * sample_mix;
+					buf[1] = buf[1] * buf_mix + sample * sample_mix;
+				});
+			} else if n_channels != 0 {
+				let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
 
-		let buf_mix = 1f32.copysign(mix_level) - mix_level;
-		let sample_mix = mix_level.abs();
-
-		if n_channels == 1 {
-			output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
-				buf[0] = buf[0] * buf_mix + sample * sample_mix;
-				buf[1] = buf[1] * buf_mix + sample * sample_mix;
-			});
-		} else if n_channels != 0 {
-			let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
-
-			l.iter().zip(r).zip(buf).for_each(|((l, r), buf)| {
-				buf[0] = buf[0] * buf_mix + l * sample_mix;
-				buf[1] = buf[1] * buf_mix + r * sample_mix;
-			});
+				l.iter().zip(r).zip(buf).for_each(|((l, r), buf)| {
+					buf[0] = buf[0] * buf_mix + l * sample_mix;
+					buf[1] = buf[1] * buf_mix + r * sample_mix;
+				});
+			}
 		}
+
+		self.steady_time
 	}
 
 	pub fn latency(&self) -> usize {
