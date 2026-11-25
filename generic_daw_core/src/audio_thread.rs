@@ -271,17 +271,17 @@ impl Transport {
 			going_to_wrap_to: None,
 		};
 
-		while split.offset < frames {
+		while frames > split.offset {
 			(split.frames, split.going_to_wrap_to) = if self.playing
 				&& let Some(loop_range) = self.loop_range
 				&& let end = loop_range.end().to_seconds_time(&self)
 				&& let Some(len) = end.checked_sub(self.position)
 				&& let len = len.to_frames(&self)
-				&& len <= frames
+				&& len <= frames - split.offset
 			{
 				(len, Some(loop_range.start().to_seconds_time(&self)))
 			} else {
-				(frames, None)
+				(frames - split.offset, None)
 			};
 
 			f(&split, &self);
@@ -289,10 +289,10 @@ impl Transport {
 			if let Some(position) = split.going_to_wrap_to {
 				self.position = position;
 			} else {
-				self.position += SecondsTime::from_frames(frames, &self);
+				self.position += SecondsTime::from_frames(split.frames, &self);
 			}
 
-			split.offset += frames;
+			split.offset += split.frames;
 		}
 
 		self
