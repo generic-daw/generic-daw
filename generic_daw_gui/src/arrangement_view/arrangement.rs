@@ -1128,8 +1128,9 @@ impl Arrangement {
 		if let Clip::Audio(audio) = &self.tracks[track].clips[clip] {
 			pos = pos.min(
 				audio.position.start()
-					+ (self.samples[&audio.sample].len(&self.transport) / audio.stretch.abs()
+					+ ((self.samples[&audio.sample].len(&self.transport)
 						- audio.position.offset())
+						/ audio.stretch.abs())
 					.to_beat_time(&self.transport),
 			);
 		}
