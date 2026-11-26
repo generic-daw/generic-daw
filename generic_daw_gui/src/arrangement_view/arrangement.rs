@@ -477,7 +477,11 @@ impl Arrangement {
 		let s = std::mem::replace(&mut self.node_mut(id).plugins[index].s, s);
 		if let Some(processor) = processor {
 			let (sender, receiver) = oneshot::async_channel();
-			let (processor, consumer) = AudioProcessor::create(processor);
+			let (producer, consumer) = RingBuffer::new(
+				(processor.param_count() * processor.config().sample_rate as usize)
+					.div_ceil(processor.config().max_frames_count as usize),
+			);
+			let processor = AudioProcessor::new(processor, producer);
 			s.send(PushSlot::new(
 				Some(Some(generic_daw_core::Plugin { processor, sender })),
 				r,
@@ -506,7 +510,11 @@ impl Arrangement {
 	) -> Task<clap_host::Message> {
 		self.node_mut(id).plugins[index].active = true;
 		let (sender, receiver) = oneshot::async_channel();
-		let (processor, consumer) = AudioProcessor::create(processor);
+		let (producer, consumer) = RingBuffer::new(
+			(processor.param_count() * processor.config().sample_rate as usize)
+				.div_ceil(processor.config().max_frames_count as usize),
+		);
+		let processor = AudioProcessor::new(processor, producer);
 		self.node_action(
 			id,
 			NodeAction::PluginActivate(

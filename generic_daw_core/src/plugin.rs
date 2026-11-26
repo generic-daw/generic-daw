@@ -5,7 +5,7 @@ use crate::{
 use audio_graph::Injector;
 use clap_host::{AudioThread, ClapId, RenderMode, events::EventFlags};
 use log::warn;
-use rtrb::{Consumer, Producer, RingBuffer};
+use rtrb::Producer;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -24,19 +24,12 @@ pub struct AudioProcessor {
 
 impl AudioProcessor {
 	#[must_use]
-	pub fn create(clap: AudioThread) -> (Self, Consumer<(ClapId, f32)>) {
-		let (producer, consumer) = RingBuffer::new(
-			(clap.param_count() * clap.config().sample_rate as usize)
-				.div_ceil(clap.config().max_frames_count as usize),
-		);
-		(
-			Self {
-				updates: HashMap::with_capacity(clap.param_count()),
-				clap,
-				producer,
-			},
-			consumer,
-		)
+	pub fn new(clap: AudioThread, producer: Producer<(ClapId, f32)>) -> Self {
+		Self {
+			updates: HashMap::with_capacity(clap.param_count()),
+			clap,
+			producer,
+		}
 	}
 
 	#[must_use]
