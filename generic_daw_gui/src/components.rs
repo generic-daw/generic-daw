@@ -1,17 +1,21 @@
 use crate::{
-	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, rotate_ccw},
-	stylefns::{button_with_radius, container_with_radius, weaker_bordered_box},
+	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical, rotate_ccw},
+	stylefns::{
+		button_with_radius, container_with_radius, weaker_bordered_box, weakest_bordered_box,
+	},
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use drag_handle::drag_handle;
-use generic_daw_widget::{context_menu::ContextMenu, stateful::Stateful};
+use generic_daw_widget::context_menu::ContextMenu;
 use iced::{
-	Element, Fill, Font, Theme, border,
-	widget::{Button, button, container, pick_list, right, row, sensor, space, text, text_input},
+	Element, Fill, Font, Length, Rectangle, Renderer, Size, Theme, border,
+	mouse::{self, Cursor, Interaction, ScrollDelta},
+	padding,
+	widget::{
+		Action, Button, button, component, container, mouse_area, pick_list, right, row, sensor,
+		space, text, text_input,
+	},
 };
 use std::{cell::Cell, ops::RangeInclusive};
-
-mod drag_handle;
 
 pub fn file_tree_entry<'a, Message: 'a>(
 	i: Icon,
@@ -66,18 +70,156 @@ pub fn number_input<'a>(
 	default: usize,
 	radius: impl Into<border::Radius>,
 ) -> Element<'a, Option<usize>> {
+	struct DragHandle {
+		range: RangeInclusive<usize>,
+		value: usize,
+		default: usize,
+		radius: border::Radius,
+	}
+
+	#[derive(Default)]
+	struct State {
+		dragging: Option<(usize, f32)>,
+		scroll: f32,
+	}
+
+	#[derive(Clone)]
+	enum Event {
+		Default,
+		Press(f32),
+		Drag(f32),
+		Release,
+		Scroll(f32),
+	}
+
+	impl<'a> component::Component<'a, usize> for DragHandle {
+		type State = State;
+		type Event = Event;
+
+		fn update(
+			&mut self,
+			state: &mut Self::State,
+			event: Self::Event,
+			_renderer: &Renderer,
+		) -> Option<usize> {
+			match event {
+				Event::Default => Some(self.default),
+				Event::Press(y) => {
+					state.dragging = Some((self.value, y));
+					state.scroll = 0.0;
+					None
+				}
+				Event::Drag(y) => state.dragging.and_then(|(start_value, start_y)| {
+					let new_value = ((start_value as f32
+						+ (start_y - y) * (self.range.end() - self.range.start()) as f32 * 0.0001)
+						.round() as usize)
+						.clamp(*self.range.start(), *self.range.end());
+					(new_value != self.value).then_some(new_value)
+				}),
+				Event::Release => {
+					state.dragging = None;
+					state.scroll = 0.0;
+					None
+				}
+				Event::Scroll(y) => {
+					let mut diff = y + state.scroll;
+					state.scroll = diff - diff.round();
+					diff = diff.round();
+					let new_value = ((self.value as f32 + diff).round() as usize)
+						.clamp(*self.range.start(), *self.range.end());
+					(new_value != self.value).then_some(new_value)
+				}
+			}
+		}
+
+		fn view(&self, _state: &Self::State) -> Element<'a, Self::Event> {
+			ContextMenu::new(
+				mouse_area(
+					container(move_vertical())
+						.style(container_with_radius(weakest_bordered_box, self.radius))
+						.padding(padding::vertical(5)),
+				)
+				.interaction(Interaction::ResizingVertically),
+				move || {
+					container(
+						menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Event::Default),
+					)
+					.width(160)
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into()
+				},
+			)
+			.into()
+		}
+
+		fn listen(
+			&self,
+			state: &Self::State,
+			event: &iced::Event,
+			bounds: Rectangle,
+			cursor: Cursor,
+		) -> Action<Self::Event> {
+			match event {
+				iced::Event::Mouse(mouse::Event::ButtonPressed {
+					button: mouse::Button::Left,
+					modifiers,
+				}) if state.dragging.is_none()
+					&& cursor.is_over(bounds)
+					&& let Some(cursor) = cursor.position() =>
+				{
+					return Action::publish(if modifiers.control() || modifiers.command() {
+						Event::Default
+					} else {
+						Event::Press(cursor.y)
+					})
+					.and_capture();
+				}
+				iced::Event::Mouse(mouse::Event::ButtonReleased {
+					button: mouse::Button::Left,
+					..
+				}) if state.dragging.is_some() => return Action::publish(Event::Release),
+				iced::Event::Mouse(mouse::Event::CursorMoved { .. })
+					if state.dragging.is_some()
+						&& let Some(cursor) = cursor.land().position() =>
+				{
+					return Action::publish(Event::Drag(cursor.y)).and_capture();
+				}
+				iced::Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers })
+					if state.dragging.is_none() && cursor.is_over(bounds) =>
+				{
+					return Action::publish(Event::Scroll(
+						match delta {
+							ScrollDelta::Lines { y, .. } => *y,
+							ScrollDelta::Pixels { y, .. } => y / 60.0,
+						} * if modifiers.command() { 10.0 } else { 1.0 },
+					))
+					.and_capture();
+				}
+				_ => {}
+			}
+
+			Action::none()
+		}
+
+		fn mouse_interaction(&self, state: &Self::State) -> Interaction {
+			if state.dragging.is_some() {
+				Interaction::ResizingVertically
+			} else {
+				Interaction::default()
+			}
+		}
+	}
+
 	let radius = radius.into();
 	let max_digits = (range.end() + 1).ilog10();
 	row![
-		ContextMenu::new(
-			drag_handle(range, value, default, radius.right(0)).map(Some),
-			move || container(
-				menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),
-			)
-			.width(160)
-			.style(container_with_radius(weaker_bordered_box, 5))
-			.into()
-		),
+		component(DragHandle {
+			range,
+			value,
+			default,
+			radius
+		})
+		.map(Some),
 		text_input("", value)
 			.style(move |t, s| {
 				let mut style = text_input::default(t, s);
@@ -129,24 +271,45 @@ pub fn text_icon_button<'a, Message: 'a>(
 pub fn virtualized<'a, Message: 'static>(
 	f: impl Fn() -> Element<'a, Message> + 'a,
 ) -> Element<'a, Message> {
-	let cache = f();
-	let size = cache.as_widget().size();
-	let cache = Cell::new(Some(cache));
-	Stateful::new(
-		|state, event: Option<_>| {
+	struct Virtualized<'a, Message> {
+		cache: Cell<Option<Element<'a, Message>>>,
+		size: Size<Length>,
+		f: Box<dyn Fn() -> Element<'a, Message> + 'a>,
+	}
+
+	impl<'a, Message: 'static> component::Component<'a, Message> for Virtualized<'a, Message> {
+		type State = bool;
+		type Event = Option<Message>;
+
+		fn update(
+			&mut self,
+			state: &mut Self::State,
+			event: Self::Event,
+			_renderer: &Renderer,
+		) -> Option<Message> {
 			*state ^= event.is_none();
 			event
-		},
-		move |state| {
+		}
+
+		fn view(&self, state: &Self::State) -> Element<'a, Self::Event> {
 			sensor(if *state {
-				cache.take().unwrap_or_else(&f).map(Some)
+				self.cache.take().unwrap_or_else(&self.f).map(Some)
 			} else {
-				space().width(size.width).height(size.height).into()
+				space()
+					.width(self.size.width)
+					.height(self.size.height)
+					.into()
 			})
 			.on_show(|_| None)
 			.on_hide(None)
 			.into()
-		},
-	)
-	.into()
+		}
+	}
+
+	let cache = f();
+	component(Virtualized {
+		size: cache.as_widget().size(),
+		cache: Cell::new(Some(cache)),
+		f: Box::new(f),
+	})
 }

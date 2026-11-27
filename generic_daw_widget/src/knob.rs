@@ -263,97 +263,98 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			return;
 		}
 
-		if let Event::Mouse(event) = event {
-			let state = tree.state.downcast_mut::<State>();
+		let state = tree.state.downcast_mut::<State>();
 
-			match event {
-				mouse::Event::ButtonPressed {
-					button: mouse::Button::Left,
-					modifiers,
-				} if state.dragging.is_none()
-					&& state.hovering
-					&& let Some(cursor) = cursor.position() =>
-				{
+		match event {
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if state.dragging.is_none()
+				&& state.hovering
+				&& let Some(cursor) = cursor.position() =>
+			{
+				if modifiers.control() || modifiers.command() {
+					shell.publish((self.f)(self.info.default));
+				} else {
 					state.cache.clear();
 					shell.request_redraw();
 
 					state.dragging = Some((self.info.value, cursor.y));
 					state.scroll = 0.0;
+				}
 
-					if modifiers.control() || modifiers.command() {
-						shell.publish((self.f)(self.info.default));
+				shell.capture_event();
+			}
+			Event::Mouse(mouse::Event::ButtonReleased {
+				button: mouse::Button::Left,
+				..
+			}) if state.dragging.is_some() => {
+				state.cache.clear();
+				shell.request_redraw();
+
+				state.dragging = None;
+				state.scroll = 0.0;
+			}
+			Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+				if let Some(cursor) = cursor.land().position()
+					&& let Some((start_value, start_y)) = state.dragging
+				{
+					let mut new_value = (start_value
+						+ (start_y - cursor.y)
+							* (self.info.range.end() - self.info.range.start())
+							* 0.005)
+						.clamp(*self.info.range.start(), *self.info.range.end());
+
+					if self.info.stepped {
+						new_value = new_value.round();
+					}
+
+					if new_value != self.info.value
+						|| (new_value < 0.0 && new_value == *self.info.range.start())
+						|| (new_value > 0.0 && new_value == *self.info.range.end())
+					{
+						shell.publish((self.f)(new_value));
 					}
 
 					shell.capture_event();
 				}
-				mouse::Event::ButtonReleased {
-					button: mouse::Button::Left,
-					..
-				} if state.dragging.is_some() => {
+
+				if cursor.position().is_some_and(|cursor| {
+					cursor
+						.distance(layout.bounds().center() + Vector::new(0.0, self.border_radius()))
+						<= self.info.radius
+				}) != state.hovering
+				{
+					state.hovering.toggle();
 					state.cache.clear();
 					shell.request_redraw();
-
-					state.dragging = None;
-					state.scroll = 0.0;
 				}
-				mouse::Event::CursorMoved { .. } if let Some(cursor) = cursor.land().position() => {
-					if let Some((start_value, start_y)) = state.dragging {
-						let mut new_value = (start_value
-							+ (start_y - cursor.y)
-								* (self.info.range.end() - self.info.range.start())
-								* 0.005)
-							.clamp(*self.info.range.start(), *self.info.range.end());
-
-						if self.info.stepped {
-							new_value = new_value.round();
-						}
-
-						if new_value != self.info.value
-							|| (new_value < 0.0 && new_value == *self.info.range.start())
-							|| (new_value > 0.0 && new_value == *self.info.range.end())
-						{
-							shell.publish((self.f)(new_value));
-						}
-
-						shell.capture_event();
-					}
-
-					if (cursor.distance(
-						layout.bounds().center() + Vector::new(0.0, self.border_radius()),
-					) <= self.info.radius)
-						!= state.hovering
-					{
-						state.hovering.toggle();
-						state.cache.clear();
-						shell.request_redraw();
-					}
-				}
-				mouse::Event::WheelScrolled { delta, modifiers }
-					if state.dragging.is_none() && state.hovering =>
-				{
-					let mut diff = match delta {
-						ScrollDelta::Lines { y, .. } => *y,
-						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} * ((self.info.range.end() - self.info.range.start()) / 100.0)
-						* if modifiers.command() { 10.0 } else { 1.0 }
-						+ state.scroll;
-
-					if self.info.stepped {
-						state.scroll = diff - diff.round();
-						diff = diff.round();
-					}
-
-					let new_value = (self.info.value + diff)
-						.clamp(*self.info.range.start(), *self.info.range.end());
-					if new_value != self.info.value {
-						shell.publish((self.f)(new_value));
-						shell.capture_event();
-					} else if diff != 0.0 {
-						shell.capture_event();
-					}
-				}
-				_ => {}
 			}
+			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers })
+				if state.dragging.is_none() && state.hovering =>
+			{
+				let mut diff = match delta {
+					ScrollDelta::Lines { y, .. } => *y,
+					ScrollDelta::Pixels { y, .. } => y / 60.0,
+				} * ((self.info.range.end() - self.info.range.start()) / 100.0)
+					* if modifiers.command() { 10.0 } else { 1.0 }
+					+ state.scroll;
+
+				if self.info.stepped {
+					state.scroll = diff - diff.round();
+					diff = diff.round();
+				}
+
+				let new_value = (self.info.value + diff)
+					.clamp(*self.info.range.start(), *self.info.range.end());
+				if new_value != self.info.value {
+					shell.publish((self.f)(new_value));
+					shell.capture_event();
+				} else if diff != 0.0 {
+					shell.capture_event();
+				}
+			}
+			_ => {}
 		}
 	}
 

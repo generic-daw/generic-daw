@@ -9,7 +9,6 @@ pub mod menu;
 pub mod menu_overlay;
 pub mod peak_meter;
 pub mod select_area;
-pub mod stateful;
 
 type LazyElement<'a, Message, Theme, Renderer> = LazyCell<
 	Element<'a, Message, Theme, Renderer>,
